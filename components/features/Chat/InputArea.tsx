@@ -1,19 +1,33 @@
 
-import React, { useState } from 'react';
-import GameButton from '../../ui/GameButton';
+import React, { useRef, useState } from 'react';
 
 interface Props {
     onSend: (content: string, isStreaming: boolean) => void;
     onStop: () => void;
-    onRegenerate: () => void;
+    onRegenerate: () => string | null;
+    onQuickRestart?: () => void;
     loading: boolean;
+    canReroll?: boolean;
+    canQuickRestart?: boolean;
     options?: unknown[]; // Quick actions from the last turn
 }
 
-const InputArea: React.FC<Props> = ({ onSend, onStop, onRegenerate, loading, options = [] }) => {
+const InputArea: React.FC<Props> = ({
+    onSend,
+    onStop,
+    onRegenerate,
+    onQuickRestart,
+    loading,
+    canReroll = true,
+    canQuickRestart = false,
+    options = []
+}) => {
     const [content, setContent] = useState('');
     const [isStreaming, setIsStreaming] = useState(true);
     const [lastSentContent, setLastSentContent] = useState('');
+    const quickActionsRef = useRef<HTMLDivElement | null>(null);
+    const dragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
+    const suppressClickUntilRef = useRef(0);
 
     const handleSend = () => {
         if (!content.trim()) return;
@@ -28,7 +42,52 @@ const InputArea: React.FC<Props> = ({ onSend, onStop, onRegenerate, loading, opt
     };
 
     const handleOptionClick = (opt: string) => {
+        if (Date.now() < suppressClickUntilRef.current) return;
         setContent(opt);
+    };
+
+    const handleReroll = () => {
+        const restoredInput = onRegenerate();
+        if (!restoredInput) return;
+        setContent(restoredInput);
+        setLastSentContent(restoredInput);
+    };
+
+    const handleQuickActionsPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType !== 'mouse') return;
+        const el = quickActionsRef.current;
+        if (!el) return;
+        if (el.scrollWidth <= el.clientWidth) return;
+        dragRef.current = {
+            active: true,
+            startX: e.clientX,
+            startScrollLeft: el.scrollLeft,
+            moved: false
+        };
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+    };
+
+    const handleQuickActionsPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType !== 'mouse') return;
+        if (!dragRef.current.active) return;
+        const el = quickActionsRef.current;
+        if (!el) return;
+        const delta = e.clientX - dragRef.current.startX;
+        if (Math.abs(delta) > 4) {
+            dragRef.current.moved = true;
+        }
+        el.scrollLeft = dragRef.current.startScrollLeft - delta;
+        if (dragRef.current.moved) {
+            e.preventDefault();
+        }
+    };
+
+    const endQuickActionsDrag = () => {
+        if (!dragRef.current.active) return;
+        if (dragRef.current.moved) {
+            suppressClickUntilRef.current = Date.now() + 120;
+        }
+        dragRef.current.active = false;
     };
 
     const normalizeOptionText = (opt: unknown): string => {
@@ -51,17 +110,28 @@ const InputArea: React.FC<Props> = ({ onSend, onStop, onRegenerate, loading, opt
             
             {/* Quick Actions Chips (Fixed Box Size, Scrolling Text) */}
             {normalizedOptions.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-3 pb-2 w-full px-4">
-                    {normalizedOptions.map((opt, idx) => (
-                        <button 
-                            key={idx}
-                            onClick={() => handleOptionClick(opt)}
-                            disabled={loading}
-                            className="px-6 py-2 bg-white/5 border border-wuxia-gold/30 text-gray-300 rounded hover:bg-wuxia-gold hover:text-ink-black hover:border-wuxia-gold transition-all text-xs tracking-wider shadow-sm min-w-[120px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                             {opt}
-                        </button>
-                    ))}
+                <div
+                    ref={quickActionsRef}
+                    className="w-full px-2 md:px-4 pb-2 overflow-x-auto no-scrollbar select-none cursor-grab active:cursor-grabbing"
+                    style={{ touchAction: 'pan-x' }}
+                    onPointerDown={handleQuickActionsPointerDown}
+                    onPointerMove={handleQuickActionsPointerMove}
+                    onPointerUp={endQuickActionsDrag}
+                    onPointerCancel={endQuickActionsDrag}
+                    onPointerLeave={endQuickActionsDrag}
+                >
+                    <div className="flex flex-nowrap md:flex-wrap md:justify-center gap-3 min-w-max md:min-w-0">
+                        {normalizedOptions.map((opt, idx) => (
+                            <button 
+                                key={idx}
+                                onClick={() => handleOptionClick(opt)}
+                                disabled={loading}
+                                className="shrink-0 whitespace-nowrap px-6 py-2 bg-white/5 border border-wuxia-gold/30 text-gray-300 rounded hover:bg-wuxia-gold hover:text-ink-black hover:border-wuxia-gold transition-all text-xs tracking-wider shadow-sm min-w-[120px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                 {opt}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -86,12 +156,29 @@ const InputArea: React.FC<Props> = ({ onSend, onStop, onRegenerate, loading, opt
 
                     <div className="w-px h-6 bg-gray-800"></div>
 
+                    {/* Quick Restart */}
+                    {canQuickRestart && (
+                        <>
+                            <button 
+                                onClick={onQuickRestart}
+                                disabled={loading}
+                                className="w-10 h-full rounded-lg flex items-center justify-center text-teal-300 hover:text-teal-100 hover:bg-teal-900/20 transition-all disabled:opacity-30"
+                                title="快速重开"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
+                                </svg>
+                            </button>
+                            <div className="w-px h-6 bg-gray-800"></div>
+                        </>
+                    )}
+
                     {/* Re-roll */}
                     <button 
-                        onClick={onRegenerate}
-                        disabled={loading}
+                        onClick={handleReroll}
+                        disabled={loading || !canReroll}
                         className="w-10 h-full rounded-lg flex items-center justify-center text-gray-400 hover:text-wuxia-gold hover:bg-white/5 transition-all disabled:opacity-30"
-                        title="重新生成"
+                        title={canReroll ? "重ROLL：回档到上一轮并回填输入" : "暂无可重ROLL回合"}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />

@@ -35,6 +35,7 @@ export interface 记忆配置结构 {
 }
 
 export interface 记忆系统结构 {
+    即时记忆: string[]; // 近期回合逐条记忆（第0回合开场也写入）
     短期记忆: string[]; // ["1024年3月1日 巳时: 初入稻香村", ...]
     中期记忆: string[];
     长期记忆: string[];

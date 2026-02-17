@@ -25,7 +25,7 @@ import SaveLoadModal from './components/features/SaveLoad/SaveLoadModal'; // New
 import { useGame } from './hooks/useGame';
 
 const App: React.FC = () => {
-    const { state, setters, actions } = useGame();
+    const { state, meta, setters, actions } = useGame();
     const [showCharacter, setShowCharacter] = React.useState(false);
 
     const parseActionOptionText = (option: unknown): string => {
@@ -236,7 +236,10 @@ const App: React.FC = () => {
                                 onSend={actions.handleSend} 
                                 onStop={actions.handleStop}
                                 onRegenerate={actions.handleRegenerate}
+                                onQuickRestart={actions.handleQuickRestart}
                                 loading={state.loading} 
+                                canReroll={meta.canRerollLatest}
+                                canQuickRestart={meta.canQuickRestart}
                                 options={currentOptions}
                             />
                         </div>

@@ -69,7 +69,15 @@ const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少�
                                     <div className={`font-serif font-bold text-sm ${selectedId === npc.id ? 'text-wuxia-gold' : 'text-gray-300'}`}>
                                         {npc.姓名}
                                     </div>
-                                    <div className="text-[10px] text-gray-500">{npc.身份} | {npc.境界}</div>
+                                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                                        <span>{npc.身份} | {npc.境界}</span>
+                                        <span className={npc.是否在场 ? 'text-green-400' : 'text-gray-600'}>
+                                            {npc.是否在场 ? '在场' : '离场'}
+                                        </span>
+                                        <span className={npc.是否队友 ? 'text-wuxia-gold' : 'text-gray-600'}>
+                                            {npc.是否队友 ? '队友' : '非队友'}
+                                        </span>
+                                    </div>
                                 </div>
                                 <div className="ml-auto text-xs font-mono text-wuxia-red">
                                     ♥ {npc.好感度}
@@ -94,6 +102,12 @@ const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少�
                                             <span className="text-xs bg-gray-800 px-2 py-0.5 rounded text-gray-300">{currentNPC.境界}</span>
                                             <span className={`text-xs px-2 py-0.5 rounded border ${currentNPC.性别 === '女' ? 'border-pink-900 text-pink-400' : 'border-blue-900 text-blue-400'}`}>
                                                 {currentNPC.性别} | {currentNPC.年龄}岁
+                                            </span>
+                                            <span className={`text-xs px-2 py-0.5 rounded border ${currentNPC.是否在场 ? 'border-green-700 text-green-400' : 'border-gray-700 text-gray-500'}`}>
+                                                {currentNPC.是否在场 ? '在场中' : '离场'}
+                                            </span>
+                                            <span className={`text-xs px-2 py-0.5 rounded border ${currentNPC.是否队友 ? 'border-wuxia-gold/60 text-wuxia-gold' : 'border-gray-700 text-gray-500'}`}>
+                                                {currentNPC.是否队友 ? '队伍成员' : '非队伍成员'}
                                             </span>
                                         </div>
                                     </div>

@@ -9,8 +9,8 @@ interface Props {
 }
 
 const TeamModal: React.FC<Props> = ({ character, teammates, onClose }) => {
-    // Filter active teammates (for demo, just affinity > 0)
-    const activeTeammates = teammates.filter(n => n.好感度 > 0);
+    // 仅展示“已编队”的 NPC（兼容老存档：若缺失该字段，按好感>0 推定为队友）
+    const activeTeammates = teammates.filter(n => (typeof n.是否队友 === 'boolean' ? n.是否队友 : n.好感度 > 0));
 
     // Helper for Equipment Item
     const EquipItem: React.FC<{ label: string; value?: string; highlight?: boolean }> = ({ label, value, highlight }) => (
@@ -46,6 +46,15 @@ const TeamModal: React.FC<Props> = ({ character, teammates, onClose }) => {
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                                 {activeTeammates.map(npc => (
                                     <div key={npc.id} className="bg-black/30 border border-gray-700 hover:border-wuxia-gold/30 transition-colors p-4 rounded-xl flex flex-col gap-4 relative group">
+                                        {(() => {
+                                            const safeHpMax = Math.max(1, npc.最大血量 || 0);
+                                            const safeHpCur = Math.max(0, npc.当前血量 || 0);
+                                            const safeSpMax = Math.max(1, npc.最大精力 || 0);
+                                            const safeSpCur = Math.max(0, npc.当前精力 || 0);
+                                            const hpPct = Math.max(0, Math.min(100, (safeHpCur / safeHpMax) * 100));
+                                            const spPct = Math.max(0, Math.min(100, (safeSpCur / safeSpMax) * 100));
+                                            return (
+                                                <>
                                         
                                         {/* NPC Top Info */}
                                         <div className="flex items-start gap-4 pb-3 border-b border-gray-800">
@@ -61,11 +70,11 @@ const TeamModal: React.FC<Props> = ({ character, teammates, onClose }) => {
                                                 </div>
                                                 <div className="text-xs text-gray-500 truncate">{npc.身份} · {npc.境界}</div>
                                                 <div className="flex gap-2 mt-2">
-                                                     <div className="flex-1 h-1 bg-gray-800 rounded-full overflow-hidden" title={`血量: ${npc.当前血量}/${npc.最大血量}`}>
-                                                        <div className="h-full bg-red-800" style={{width: `${(npc.当前血量/npc.最大血量)*100}%`}}></div>
+                                                     <div className="flex-1 h-1 bg-gray-800 rounded-full overflow-hidden" title={`血量: ${safeHpCur}/${safeHpMax}`}>
+                                                        <div className="h-full bg-red-800" style={{width: `${hpPct}%`}}></div>
                                                      </div>
-                                                     <div className="flex-1 h-1 bg-gray-800 rounded-full overflow-hidden" title={`精力: ${npc.当前精力}/${npc.最大精力}`}>
-                                                        <div className="h-full bg-blue-800" style={{width: `${(npc.当前精力/npc.最大精力)*100}%`}}></div>
+                                                     <div className="flex-1 h-1 bg-gray-800 rounded-full overflow-hidden" title={`精力: ${safeSpCur}/${safeSpMax}`}>
+                                                        <div className="h-full bg-blue-800" style={{width: `${spPct}%`}}></div>
                                                      </div>
                                                 </div>
                                             </div>
@@ -119,6 +128,9 @@ const TeamModal: React.FC<Props> = ({ character, teammates, onClose }) => {
                                                 ) : <span className="text-[10px] text-gray-600 italic">空空如也</span>}
                                             </div>
                                         </div>
+                                        </>
+                                            );
+                                        })()}
 
                                     </div>
                                 ))}

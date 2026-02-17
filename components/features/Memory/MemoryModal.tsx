@@ -13,9 +13,8 @@ type TabType = 'context' | 'short' | 'medium' | 'long';
 const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose }) => {
     const [activeTab, setActiveTab] = useState<TabType>('context');
 
-    // 1. Context Data (Immediate ~10 turns)
-    // Extract short-term memories from current active history session
-    const contextData = history
+    // Fallback immediate data from history for backward compatibility.
+    const fallbackImmediateData = history
         .filter(msg => msg.role === 'assistant' && msg.structuredResponse?.shortTerm)
         .map((msg, i) => ({
             content: msg.structuredResponse?.shortTerm || "",
@@ -25,7 +24,11 @@ const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose }) => {
         }))
         .reverse();
 
-    // 2. Short Term (From Memory System)
+    // 1. 即时记忆（四段第一层）
+    const immediateData = (memorySystem?.即时记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
+    const contextData = immediateData.length > 0 ? immediateData : fallbackImmediateData;
+
+    // 2. 其余三层
     const shortData = (memorySystem?.短期记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
     const mediumData = (memorySystem?.中期记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
     const longData = (memorySystem?.长期记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
@@ -72,7 +75,7 @@ const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose }) => {
                 {/* Tabs */}
                 <div className="flex border-b border-gray-800/50 bg-black/20 px-6 pt-4 gap-2 relative z-20">
                     {[
-                        { id: 'context', label: '即时 (Context)' },
+                        { id: 'context', label: '即时 (Immediate)' },
                         { id: 'short', label: '短期 (Short)' },
                         { id: 'medium', label: '中期 (Medium)' },
                         { id: 'long', label: '长期 (Long)' }

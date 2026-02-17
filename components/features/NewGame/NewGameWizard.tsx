@@ -32,7 +32,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     });
 
     // --- State: Character Config ---
-    const [charName, setCharName] = useState('萧风');
+    const [charName, setCharName] = useState('');
     const [charGender, setCharGender] = useState<'男' | '女'>('男');
     const [charAge, setCharAge] = useState(18);
     const [charBirth, setCharBirth] = useState('1024:01:01');
@@ -50,6 +50,8 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     // Custom Inputs
     const [customTalent, setCustomTalent] = useState<天赋结构>({ 名称: '', 描述: '', 效果: '' });
     const [showCustomTalent, setShowCustomTalent] = useState(false);
+    const [customBackground, setCustomBackground] = useState<背景结构>({ 名称: '', 描述: '', 效果: '' });
+    const [showCustomBackground, setShowCustomBackground] = useState(false);
     const [openingStreaming, setOpeningStreaming] = useState(true);
 
     // --- Logic ---
@@ -87,11 +89,31 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
         setShowCustomTalent(false);
     };
 
+    const addCustomBackground = () => {
+        const 名称 = customBackground.名称.trim();
+        const 描述 = customBackground.描述.trim();
+        const 效果 = customBackground.效果.trim();
+        if (!名称 || !描述 || !效果) {
+            alert("请完整填写自定义身份（名称/描述/效果）");
+            return;
+        }
+        const nextBg: 背景结构 = { 名称, 描述, 效果 };
+        setSelectedBackground(nextBg);
+        setCustomBackground({ 名称: '', 描述: '', 效果: '' });
+        setShowCustomBackground(false);
+    };
+
     const handleGenerate = (mode: 'all' | 'step') => {
+        if (!charName.trim()) {
+            alert("请先填写角色姓名");
+            setStep(1);
+            return;
+        }
+
         // Construct final character data object
         const charData: 角色数据结构 = {
             ...stats as any, // 力量, 敏捷 etc.
-            姓名: charName,
+            姓名: charName.trim(),
             性别: charGender,
             年龄: charAge,
             出生日期: charBirth,
@@ -131,8 +153,8 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     if (loading) {
         return (
             <div className="h-full w-full flex flex-col items-center justify-center bg-black/90 text-wuxia-gold z-50">
-                <div className="text-4xl font-serif font-bold animate-pulse mb-4">天地开辟中...</div>
-                <div className="text-sm font-mono text-gray-500">AI正在构建世界法则与因果...</div>
+                <div className="text-2xl font-serif font-bold animate-pulse mb-2">正在生成...</div>
+                <div className="text-xs font-mono text-gray-500">请稍候</div>
             </div>
         );
     }
@@ -258,8 +280,13 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                 {/* Left: Info */}
                                 <div className="flex-1 space-y-4">
                                     <div className="space-y-2">
-                                        <label className="text-xs text-gray-400">姓名</label>
-                                        <input value={charName} onChange={e => setCharName(e.target.value)} className="w-full bg-black/40 border border-gray-600 p-2 text-white outline-none focus:border-wuxia-gold" />
+                                        <label className="text-xs text-gray-400">姓名（必填）</label>
+                                        <input
+                                            value={charName}
+                                            onChange={e => setCharName(e.target.value)}
+                                            placeholder="请输入角色姓名"
+                                            className="w-full bg-black/40 border border-gray-600 p-2 text-white outline-none focus:border-wuxia-gold"
+                                        />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
@@ -309,7 +336,33 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                              
                              {/* Backgrounds */}
                              <div>
-                                <h3 className="text-xl font-serif font-bold text-gray-200 border-b border-gray-700 pb-2 mb-4">出身背景 (单选)</h3>
+                                <div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-4">
+                                    <h3 className="text-xl font-serif font-bold text-gray-200">身份背景 (单选)</h3>
+                                    <button onClick={() => setShowCustomBackground(!showCustomBackground)} className="text-xs text-wuxia-cyan hover:underline">+ 自定义身份</button>
+                                </div>
+                                {showCustomBackground && (
+                                    <div className="bg-black/40 border border-wuxia-cyan/30 p-4 mb-4 rounded space-y-3">
+                                        <input
+                                            placeholder="身份名称（例：江南王世子）"
+                                            value={customBackground.名称}
+                                            onChange={e => setCustomBackground({ ...customBackground, 名称: e.target.value })}
+                                            className="w-full bg-black/50 border border-gray-600 p-2 text-xs text-white"
+                                        />
+                                        <input
+                                            placeholder="身份描述"
+                                            value={customBackground.描述}
+                                            onChange={e => setCustomBackground({ ...customBackground, 描述: e.target.value })}
+                                            className="w-full bg-black/50 border border-gray-600 p-2 text-xs text-white"
+                                        />
+                                        <input
+                                            placeholder="身份效果"
+                                            value={customBackground.效果}
+                                            onChange={e => setCustomBackground({ ...customBackground, 效果: e.target.value })}
+                                            className="w-full bg-black/50 border border-gray-600 p-2 text-xs text-white"
+                                        />
+                                        <GameButton onClick={addCustomBackground} variant="secondary" className="w-full py-1 text-xs">保存并使用自定义身份</GameButton>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {预设背景.map((bg, idx) => (
                                         <div 
@@ -326,6 +379,16 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                             <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-700/50">{bg.效果}</div>
                                         </div>
                                     ))}
+                                    {!预设背景.find(bg => bg.名称 === selectedBackground.名称) && (
+                                        <div 
+                                            onClick={() => setSelectedBackground(selectedBackground)}
+                                            className="p-3 border border-wuxia-cyan bg-wuxia-cyan/10 rounded cursor-pointer"
+                                        >
+                                            <div className="font-bold text-sm text-wuxia-cyan">{selectedBackground.名称} (自定义)</div>
+                                            <div className="text-xs text-gray-500 mt-1">{selectedBackground.描述}</div>
+                                            <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-700/50">{selectedBackground.效果}</div>
+                                        </div>
+                                    )}
                                 </div>
                              </div>
 
@@ -394,8 +457,8 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                             <div className="bg-black/40 border border-gray-700 p-6 rounded-lg max-w-lg w-full text-sm space-y-2 font-mono text-gray-300">
                                 <div>世界: <span className="text-white">{worldConfig.worldName}</span> ({worldConfig.powerLevel})</div>
                                 <div>难度: <span className="text-white uppercase">{worldConfig.difficulty}</span></div>
-                                <div>主角: <span className="text-white">{charName}</span> ({charGender}, {charAge}岁)</div>
-                                <div>背景: <span className="text-white">{selectedBackground.名称}</span></div>
+                                <div>主角: <span className="text-white">{charName.trim() || '未填写姓名'}</span> ({charGender}, {charAge}岁)</div>
+                                <div>身份: <span className="text-white">{selectedBackground.名称}</span></div>
                                 <div>天赋: <span className="text-white">{selectedTalents.map(t => t.名称).join(', ') || '无'}</span></div>
                                 <div>开场流式: <span className={`${openingStreaming ? 'text-wuxia-cyan' : 'text-gray-400'}`}>{openingStreaming ? '开启' : '关闭'}</span></div>
                             </div>

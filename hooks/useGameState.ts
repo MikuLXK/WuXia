@@ -41,6 +41,7 @@ export const useGameState = () => {
 
     // New Game State for Memory
     const [记忆系统, 设置记忆系统] = useState<记忆系统结构>({
+        即时记忆: [],
         短期记忆: [],
         中期记忆: [],
         长期记忆: []

@@ -14,6 +14,7 @@ import {
     记忆系统结构,
     WorldGenConfig
 } from '../types';
+import { useRef, useState } from 'react';
 import { 默认任务列表 } from '../models/task';
 import { 默认约定列表 } from '../models/task';
 import { 默认剧情数据 } from '../models/story';
@@ -23,6 +24,29 @@ import * as aiService from '../services/aiService';
 import { applyStateCommand } from '../utils/stateHelpers';
 import { parseJsonWithRepair } from '../utils/jsonRepair';
 import { useGameState } from './useGameState';
+
+type 回合快照结构 = {
+    玩家输入: string;
+    游戏时间: string;
+    回档前状态: {
+        角色: 角色数据结构;
+        环境: typeof 默认环境信息;
+        社交: any[];
+        世界: typeof 默认世界数据;
+        玩家门派: typeof 默认归元宗;
+        任务列表: any[];
+        约定列表: any[];
+        剧情: typeof 默认剧情数据;
+        记忆系统: 记忆系统结构;
+    };
+    回档前历史: 聊天记录结构[];
+};
+
+type 最近开局配置结构 = {
+    worldConfig: WorldGenConfig;
+    charData: 角色数据结构;
+    openingStreaming: boolean;
+};
 
 export const useGame = () => {
     const gameState = useGameState();
@@ -66,8 +90,54 @@ export const useGame = () => {
         contextSize, setContextSize,
         scrollRef, abortControllerRef
     } = gameState;
+    const 回合快照栈Ref = useRef<回合快照结构[]>([]);
+    const [可重Roll计数, set可重Roll计数] = useState(0);
+    const [最近开局配置, 设置最近开局配置] = useState<最近开局配置结构 | null>(null);
 
     // --- Actions ---
+    const 即时记忆上限 = 12;
+    const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
+    const 规范化社交列表 = (list: any[]): any[] => {
+        if (!Array.isArray(list)) return [];
+        return list.map(npc => ({
+            ...npc,
+            是否在场: typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true,
+            是否队友: typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0)
+        }));
+    };
+
+    const 同步重Roll计数 = () => {
+        set可重Roll计数(回合快照栈Ref.current.length);
+    };
+
+    const 清空重Roll快照 = () => {
+        回合快照栈Ref.current = [];
+        同步重Roll计数();
+    };
+
+    const 推入重Roll快照 = (snapshot: 回合快照结构) => {
+        回合快照栈Ref.current.push(snapshot);
+        同步重Roll计数();
+    };
+
+    const 弹出重Roll快照 = (): 回合快照结构 | null => {
+        const snapshot = 回合快照栈Ref.current.pop() || null;
+        同步重Roll计数();
+        return snapshot;
+    };
+
+    const 回档到快照 = (snapshot: 回合快照结构) => {
+        设置角色(深拷贝(snapshot.回档前状态.角色));
+        设置环境(深拷贝(snapshot.回档前状态.环境));
+        设置社交(深拷贝(snapshot.回档前状态.社交));
+        设置世界(深拷贝(snapshot.回档前状态.世界));
+        设置玩家门派(深拷贝(snapshot.回档前状态.玩家门派));
+        设置任务列表(深拷贝(snapshot.回档前状态.任务列表));
+        设置约定列表(深拷贝(snapshot.回档前状态.约定列表));
+        设置剧情(深拷贝(snapshot.回档前状态.剧情));
+        设置记忆系统(深拷贝(snapshot.回档前状态.记忆系统));
+        设置历史记录(深拷贝(snapshot.回档前历史));
+    };
 
     const normalizeCanonicalGameTime = (input?: string): string | null => {
         if (!input || typeof input !== 'string') return null;
@@ -89,7 +159,61 @@ export const useGame = () => {
         return `${year}:${month.toString().padStart(2, '0')}:${day.toString().padStart(2, '0')}:${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
     };
 
+    const 规范化记忆系统 = (raw?: Partial<记忆系统结构> | null): 记忆系统结构 => {
+        return {
+            即时记忆: Array.isArray(raw?.即时记忆) ? [...raw!.即时记忆] : [],
+            短期记忆: Array.isArray(raw?.短期记忆) ? [...raw!.短期记忆] : [],
+            中期记忆: Array.isArray(raw?.中期记忆) ? [...raw!.中期记忆] : [],
+            长期记忆: Array.isArray(raw?.长期记忆) ? [...raw!.长期记忆] : []
+        };
+    };
+
+    const 生成记忆摘要 = (batch: string[], source: '短期' | '中期'): string => {
+        const filtered = batch.map(item => item.trim()).filter(Boolean);
+        if (filtered.length === 0) return source === '短期' ? '短期记忆汇总（空）' : '中期记忆汇总（空）';
+        const first = filtered[0];
+        const last = filtered[filtered.length - 1];
+        const preview = filtered.slice(0, 3).join('；');
+        return `${source}汇总(${filtered.length}): ${first} -> ${last}｜要点: ${preview}`.slice(0, 300);
+    };
+
+    const 构建回合记忆条目 = (gameTime: string, playerInput: string, aiData: GameResponse): string => {
+        const summary = (aiData.shortTerm || '').trim() ||
+            (Array.isArray(aiData.logs)
+                ? aiData.logs.map(log => `${log.sender}:${log.text}`).join(' ').slice(0, 120)
+                : '本回合推进');
+        return `[${gameTime || '未知时间'}] ${playerInput} -> ${summary}`;
+    };
+
+    const 写入四段记忆 = (memoryBase: 记忆系统结构, entry: string): 记忆系统结构 => {
+        const next = 规范化记忆系统(memoryBase);
+        const trimmed = entry.trim();
+        if (!trimmed) return next;
+
+        next.即时记忆.push(trimmed);
+
+        while (next.即时记忆.length > 即时记忆上限) {
+            const moved = next.即时记忆.shift();
+            if (moved) next.短期记忆.push(moved);
+        }
+
+        const shortLimit = Math.max(5, memoryConfig.短期记忆阈值 || 30);
+        while (next.短期记忆.length > shortLimit) {
+            const batch = next.短期记忆.splice(0, shortLimit);
+            next.中期记忆.push(生成记忆摘要(batch, '短期'));
+        }
+
+        const midLimit = Math.max(3, memoryConfig.中期记忆阈值 || 50);
+        while (next.中期记忆.length > midLimit) {
+            const batch = next.中期记忆.splice(0, midLimit);
+            next.长期记忆.push(生成记忆摘要(batch, '中期'));
+        }
+
+        return next;
+    };
+
     const handleStartNewGameWizard = () => {
+        清空重Roll快照();
         setView('new_game');
     };
 
@@ -169,8 +293,8 @@ ${anchor}
             .map(p => p.内容)
             .join('\n\n');
 
-        const contextMemory = `【长期记忆】\n${memoryData.长期记忆.join('\n') || '暂无'}\n【中期记忆】\n${memoryData.中期记忆.join('\n') || '暂无'}\n【短期记忆】\n${memoryData.短期记忆.slice(-30).join('\n') || '暂无'}`;
-        const contextNPC = `【当前场景NPC档案】\n${(socialData || []).map(npc => `姓名：${npc.姓名}\n身份：${npc.身份}\n性格：${npc.简介}\n记忆：${JSON.stringify((npc.记忆 || []).slice(-5))}`).join('\n') || '暂无在场NPC'}`;
+        const contextMemory = `【长期记忆】\n${memoryData.长期记忆.join('\n') || '暂无'}\n【中期记忆】\n${memoryData.中期记忆.join('\n') || '暂无'}\n【短期记忆】\n${memoryData.短期记忆.slice(-30).join('\n') || '暂无'}\n【即时记忆】\n${memoryData.即时记忆.slice(-即时记忆上限).join('\n') || '暂无'}`;
+        const contextNPC = `【当前场景NPC档案】\n${(socialData || []).map(npc => `姓名：${npc.姓名}\n身份：${npc.身份}\n在场：${typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true}\n队友：${typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0)}\n性格：${npc.简介}\n记忆：${JSON.stringify((npc.记忆 || []).slice(-5))}`).join('\n') || '暂无在场NPC'}`;
         const contextSettings = `【游戏设置】\n字数要求: ${gameConfig.字数要求}\n叙事人称: ${gameConfig.叙事人称}`;
         const contextWorldState = `【游戏数值设定 (GameState)】\n${JSON.stringify(statePayload)}`;
 
@@ -189,18 +313,25 @@ ${anchor}
             return;
         }
 
+        设置最近开局配置({
+            worldConfig: 深拷贝(worldConfig),
+            charData: 深拷贝(charData),
+            openingStreaming
+        });
+        清空重Roll快照();
+
         if (openingStreaming) {
             const worldStreamMarker = Date.now();
             setView('game');
             设置历史记录([
                 {
                     role: 'system',
-                    content: '系统: 正在构建世界，请稍候...',
+                    content: '系统: 正在生成数据，请稍候...',
                     timestamp: worldStreamMarker
                 },
                 {
                     role: 'assistant',
-                    content: openingStreaming ? '【创世流式】准备连接模型...' : '【创世】正在等待完整结果返回...',
+                    content: openingStreaming ? '【生成中】准备连接模型...' : '【生成中】等待模型返回...',
                     timestamp: worldStreamMarker + 1
                 }
             ]);
@@ -267,11 +398,11 @@ ${enabledDifficultyPrompts || '未提供'}
                                     item.role === 'assistant' &&
                                     !item.structuredResponse &&
                                     typeof item.content === 'string' &&
-                                    item.content.startsWith('【创世')
+                                    item.content.startsWith('【生成中】')
                                 ) {
                                     return {
                                         ...item,
-                                        content: `【创世流式】世界观生成中... 已接收 ${accumulated.length} 字符`
+                                        content: `【生成中】世界观生成... 已接收 ${accumulated.length} 字符`
                                     };
                                 }
                                 return item;
@@ -300,14 +431,14 @@ ${enabledDifficultyPrompts || '未提供'}
             // Reset other states
             设置任务列表([]);
             设置约定列表([]);
-            设置记忆系统({ 短期记忆: [], 中期记忆: [], 长期记忆: [] });
+            设置记忆系统({ 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
 
             // Mode Handling
             if (mode === 'step') {
                 设置历史记录([]);
                 setView('game');
                 setLoading(false);
-                alert("世界观提示词已生成并写入。请在聊天框输入指令开始第0回合初始化剧情。");
+                alert("世界观提示词已写入。请在聊天框输入指令开始初始化。");
             } else {
                 // We pass genData explicitly because state updates might be async/batched
                 await generateOpeningStory(openingBase, finalPrompts, openingStreaming);
@@ -349,7 +480,7 @@ ${enabledDifficultyPrompts || '未提供'}
         const initialHistory: 聊天记录结构[] = [
             {
                 role: 'system',
-                content: '系统: 世界观已注入，正在生成第0回合开场初始化剧情...',
+                content: '系统: 正在生成开场内容...',
                 timestamp: Date.now()
             }
         ];
@@ -359,7 +490,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const controller = new AbortController();
             abortControllerRef.current = controller;
 
-            const openingMem: 记忆系统结构 = { 短期记忆: [], 中期记忆: [], 长期记忆: [] };
+            const openingMem: 记忆系统结构 = { 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] };
             const openingStatePayload = {
                 角色: contextData.角色 || 角色,
                 环境: contextData.环境 || 环境,
@@ -423,6 +554,10 @@ ${enabledDifficultyPrompts || '未提供'}
                 世界: contextData.世界 || 世界,
                 剧情: contextData.剧情 || 剧情
             });
+
+            const openingTime = contextData.环境?.时间 || "未知时间";
+            const openingEntry = 构建回合记忆条目(openingTime, '开局生成', aiData);
+            设置记忆系统(prev => 写入四段记忆(规范化记忆系统(prev), openingEntry));
 
             const newAiMsg: 聊天记录结构 = { 
                 role: 'assistant', 
@@ -491,14 +626,14 @@ ${enabledDifficultyPrompts || '未提供'}
             const res = applyStateCommand(charBuffer, envBuffer, socialBuffer, worldBuffer, storyBuffer, cmd.key, cmd.value, cmd.action);
             charBuffer = res.char;
             envBuffer = res.env;
-            socialBuffer = res.social;
+            socialBuffer = 规范化社交列表(res.social);
             worldBuffer = res.world;
             storyBuffer = res.story; 
         });
 
         设置角色(charBuffer);
         设置环境(envBuffer);
-        设置社交(socialBuffer);
+        设置社交(规范化社交列表(socialBuffer));
         设置世界(worldBuffer);
         设置剧情(storyBuffer);
     };
@@ -556,24 +691,32 @@ ${enabledDifficultyPrompts || '未提供'}
         // 1. Calculate Game Time String
         const canonicalTime = normalizeCanonicalGameTime(环境.时间);
         const currentGameTime = canonicalTime || `第${环境.日期 || 1}日 ${环境.时间 || '未知时间'}`;
+        const sendInput = content.trim();
+        const historyBeforeSend = [...历史记录];
+        const memBeforeSend = 规范化记忆系统(记忆系统);
+        推入重Roll快照({
+            玩家输入: sendInput,
+            游戏时间: currentGameTime,
+            回档前状态: {
+                角色: 深拷贝(角色),
+                环境: 深拷贝(环境),
+                社交: 深拷贝(社交),
+                世界: 深拷贝(世界),
+                玩家门派: 深拷贝(玩家门派),
+                任务列表: 深拷贝(任务列表),
+                约定列表: 深拷贝(约定列表),
+                剧情: 深拷贝(剧情),
+                记忆系统: 深拷贝(memBeforeSend)
+            },
+            回档前历史: 深拷贝(historyBeforeSend)
+        });
 
-        // 2. Archive Old Memories (Capacity Check)
-        let currentHistory = [...历史记录];
-        const newShortTermMemories: string[] = [];
+        // 2. Trim history window (keep recent context only)
+        let currentHistory = [...historyBeforeSend];
         if (currentHistory.length >= 20) {
-            const overflowCount = currentHistory.length - 18; 
-            const removed = currentHistory.splice(0, overflowCount);
-            removed.forEach(msg => {
-                if (msg.role === 'assistant' && msg.structuredResponse && msg.structuredResponse.shortTerm) {
-                    newShortTermMemories.push(`[${msg.gameTime || '未知时间'}] ${msg.structuredResponse.shortTerm}`);
-                }
-            });
+            currentHistory = currentHistory.slice(-18);
         }
-        let updatedMemSys = { ...记忆系统 };
-        if (newShortTermMemories.length > 0) {
-            updatedMemSys.短期记忆 = [...updatedMemSys.短期记忆, ...newShortTermMemories];
-        }
-        设置记忆系统(updatedMemSys);
+        const updatedMemSys = 规范化记忆系统(memBeforeSend);
 
         // 3. Prepare New Message
         const newUserMsg: 聊天记录结构 = { 
@@ -617,7 +760,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const aiData = await aiService.generateStoryResponse(
                 systemPrompt,
                 contextImmediate,
-                `${content}\n\n${gameConfig.额外提示词}`,
+                `${sendInput}\n\n${gameConfig.额外提示词}`,
                 apiConfig,
                 controller.signal,
                 isStreaming
@@ -641,6 +784,9 @@ ${enabledDifficultyPrompts || '未提供'}
 
             // 6. Process Result
             processResponseCommands(aiData);
+
+            const turnEntry = 构建回合记忆条目(currentGameTime, sendInput, aiData);
+            设置记忆系统(prev => 写入四段记忆(规范化记忆系统(prev), turnEntry));
 
             const newAiMsg: 聊天记录结构 = { 
                 role: 'assistant', 
@@ -670,9 +816,16 @@ ${enabledDifficultyPrompts || '未提供'}
 
         } catch (error: any) {
             if (error.name === 'AbortError') {
-                设置历史记录(currentHistory); // Revert
+                const snapshot = 弹出重Roll快照();
+                if (snapshot) {
+                    回档到快照(snapshot);
+                } else {
+                    设置历史记录(historyBeforeSend);
+                    设置记忆系统(memBeforeSend);
+                }
                 console.log("Request aborted by user");
             } else {
+                弹出重Roll快照();
                 const errorMsg: 聊天记录结构 = { role: 'system', content: `[系统错误]: ${error.message}`, timestamp: Date.now() };
                 设置历史记录([...updatedHistory, errorMsg]);
             }
@@ -682,28 +835,22 @@ ${enabledDifficultyPrompts || '未提供'}
         }
     };
 
-    const handleRegenerate = async () => {
-        if (loading || 历史记录.length === 0) return;
-        let lastUserIndex = -1;
-        for (let i = 历史记录.length - 1; i >= 0; i--) {
-            if (历史记录[i].role === 'user') {
-                lastUserIndex = i;
-                break;
-            }
-        }
-        if (lastUserIndex === -1) return;
-        const newHistory = [...历史记录];
-        const lastMsg = newHistory[newHistory.length - 1];
-        let contentToResend = "";
-        if (lastMsg.role === 'assistant') {
-            newHistory.pop(); 
-            const lastUser = newHistory.pop(); 
-            if (lastUser && lastUser.role === 'user') {
-                contentToResend = lastUser.content;
-                设置历史记录(newHistory);
-                setTimeout(() => handleSend(contentToResend), 0);
-            }
-        }
+    const handleRegenerate = (): string | null => {
+        if (loading) return null;
+        const snapshot = 弹出重Roll快照();
+        if (!snapshot) return null;
+        回档到快照(snapshot);
+        return snapshot.玩家输入;
+    };
+
+    const handleQuickRestart = async () => {
+        if (loading || !最近开局配置) return;
+        await handleGenerateWorld(
+            深拷贝(最近开局配置.worldConfig),
+            深拷贝(最近开局配置.charData),
+            'all',
+            最近开局配置.openingStreaming
+        );
     };
 
     // --- Persistence ---
@@ -768,16 +915,18 @@ ${enabledDifficultyPrompts || '未提供'}
 
     const handleLoadGame = async (save: 存档结构) => {
         if (view === 'home' || confirm(`读取存档: ${save.描述}?`)) {
+            清空重Roll快照();
+            设置最近开局配置(null);
             设置角色(save.角色数据);
             设置环境(save.环境信息);
-            设置社交(save.社交 || []); 
+            设置社交(规范化社交列表(save.社交 || [])); 
             设置世界(save.世界 || 默认世界数据);
             设置玩家门派(save.玩家门派 || 默认归元宗);
             设置任务列表(save.任务列表 || 默认任务列表);
             设置约定列表(save.约定列表 || 默认约定列表);
             设置剧情(save.剧情 || 默认剧情数据);
             设置历史记录(save.历史记录);
-            设置记忆系统(save.记忆系统 || { 短期记忆: [], 中期记忆: [], 长期记忆: [] });
+            设置记忆系统(规范化记忆系统(save.记忆系统));
             
             if (save.游戏设置) setGameConfig(save.游戏设置);
             if (save.记忆配置) setMemoryConfig(save.记忆配置);
@@ -793,6 +942,10 @@ ${enabledDifficultyPrompts || '未提供'}
 
     return {
         state: gameState,
+        meta: {
+            canRerollLatest: 可重Roll计数 > 0,
+            canQuickRestart: Boolean(最近开局配置) && 可重Roll计数 <= 1
+        },
         setters: {
             setShowSettings, setShowInventory, setShowEquipment, setShowSocial, setShowTeam, setShowKungfu, setShowWorld, setShowSect, setShowTask, setShowAgreement, setShowStory, setShowMemory, setShowSaveLoad,
             setActiveTab, setCurrentTheme,
@@ -808,6 +961,7 @@ ${enabledDifficultyPrompts || '未提供'}
             updateHistoryItem,
             handleStartNewGameWizard,
             handleGenerateWorld,
+            handleQuickRestart,
             handleReturnToHome
         }
     };
