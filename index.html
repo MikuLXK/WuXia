@@ -1,0 +1,150 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>墨色江湖</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        /* RGB Values for opacity support */
+        --c-ink-black: 5 5 5;
+        --c-ink-gray: 26 26 26;
+        --c-wuxia-gold: 230 200 110;
+        --c-wuxia-gold-dark: 138 114 54;
+        --c-wuxia-cyan: 68 170 170;
+        --c-wuxia-red: 163 24 24;
+        --c-paper-white: 230 230 230;
+      }
+    </style>
+    <script>
+      function withOpacity(variableName) {
+        return ({ opacityValue }) => {
+          if (opacityValue !== undefined) {
+            return `rgb(var(${variableName}) / ${opacityValue})`
+          }
+          return `rgb(var(${variableName}))`
+        }
+      }
+
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'ink-black': withOpacity('--c-ink-black'),
+              'ink-gray': withOpacity('--c-ink-gray'),
+              'wuxia-gold': withOpacity('--c-wuxia-gold'),
+              'wuxia-gold-dark': withOpacity('--c-wuxia-gold-dark'),
+              'wuxia-cyan': withOpacity('--c-wuxia-cyan'),
+              'wuxia-red': withOpacity('--c-wuxia-red'),
+              'paper-white': withOpacity('--c-paper-white'),
+            },
+            fontFamily: {
+              serif: ['"Noto Serif SC"', 'SimSun', 'Songti SC', 'serif'],
+              sans: ['"Noto Sans SC"', 'Microsoft YaHei', 'sans-serif'],
+              mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", 'monospace'],
+            },
+            backgroundImage: {
+              'noise': "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%220.05%22/%3E%3C/svg%3E')",
+              'ink-wash': "linear-gradient(135deg, rgb(var(--c-ink-black)) 0%, rgb(var(--c-ink-gray)) 100%)",
+            },
+            animation: {
+              'glitch': 'glitch 1s linear infinite',
+              'slide-in': 'slideIn 0.3s ease-out forwards',
+              'fadeIn': 'fadeIn 0.3s ease-out forwards',
+              'marquee': 'marquee 60s linear infinite',
+            },
+            keyframes: {
+              slideIn: {
+                '0%': { transform: 'translateX(-20px)', opacity: '0' },
+                '100%': { transform: 'translateX(0)', opacity: '1' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              marquee: {
+                '0%': { transform: 'translateX(100%)' },
+                '100%': { transform: 'translateX(-100%)' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.3); 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgb(var(--c-wuxia-gold)); 
+        border-radius: 0px;
+        opacity: 0.5;
+      }
+      
+      /* Hide Scrollbar but keep functionality */
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      
+      /* Utilities */
+      .vertical-text {
+        writing-mode: vertical-rl;
+        text-orientation: upright;
+      }
+      
+      /* P5 Style Clip Paths */
+      .clip-trapezoid {
+        clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);
+      }
+      .clip-shard {
+        clip-path: polygon(0 0, 100% 0, 95% 100%, 5% 100%);
+      }
+      .clip-message-left {
+        clip-path: polygon(0 0, 100% 0, 100% 85%, 95% 100%, 0 100%);
+      }
+      .clip-message-right {
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 5% 100%, 0 85%);
+      }
+      .clip-path-polygon {
+         clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+      }
+
+      /* Noise Overlay */
+      .bg-noise {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 50;
+        background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%220.07%22/%3E%3C/svg%3E');
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-ink-black text-paper-white font-sans overflow-hidden h-screen w-screen selection:bg-wuxia-red selection:text-white transition-colors duration-500">
+    <div class="bg-noise"></div>
+    <div id="root" class="relative z-10 h-full"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

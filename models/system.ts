@@ -1,0 +1,96 @@
+
+// 系统配置相关定义 - 解耦自 types.ts
+
+import { 角色数据结构 } from './character';
+import { 环境信息结构 } from './environment';
+import { NPC结构 } from './social';
+import { 世界数据结构 } from './world';
+import { 详细门派结构 } from './sect';
+import { 任务结构, 约定结构 } from './task';
+import { 剧情系统结构 } from './story';
+
+export interface 接口设置结构 {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+}
+
+export interface 视觉设置结构 {
+    时间显示格式: '传统' | '数字'; 
+    背景图片?: string; // URL 或 Base64
+    渲染层数: number; // New: Default 30
+}
+
+export interface 游戏设置结构 {
+    字数要求: string; // e.g. "200字以上"
+    叙事人称: '第二人称' | '第三人称';
+    额外提示词: string; // Custom prompt injected at the end
+}
+
+export interface 记忆配置结构 {
+    短期记忆阈值: number; // 默认 20
+    中期记忆阈值: number; // 默认 50
+    短期转中期提示词: string; 
+    中期转长期提示词: string;
+}
+
+export interface 记忆系统结构 {
+    短期记忆: string[]; // ["1024年3月1日 巳时: 初入稻香村", ...]
+    中期记忆: string[];
+    长期记忆: string[];
+}
+
+export type ThemePreset = 'ink' | 'azure';
+
+export interface 聊天记录结构 {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    timestamp: number;
+    gameTime?: string; // e.g. "1024年3月1日 巳时"
+    [key: string]: any; // Allow extensibility for structuredResponse etc.
+}
+
+export interface 存档结构 {
+    id: number;
+    类型: 'manual' | 'auto'; // Added Save Type
+    时间戳: number;
+    描述: string;
+    角色数据: 角色数据结构;
+    环境信息: 环境信息结构;
+    历史记录: 聊天记录结构[];
+    
+    // Extended fields
+    社交?: NPC结构[];
+    世界?: 世界数据结构;
+    玩家门派?: 详细门派结构;
+    任务列表?: 任务结构[];
+    约定列表?: 约定结构[];
+    剧情?: 剧情系统结构;
+    
+    // New Settings in Save
+    记忆系统?: 记忆系统结构;
+    游戏设置?: 游戏设置结构;
+    记忆配置?: 记忆配置结构;
+    
+    // Saved Prompts State (Important for preserving world gen)
+    提示词快照?: any[]; 
+}
+
+export type PromptCategory = '核心设定' | '数值设定' | '难度设定' | '写作设定' | '自定义';
+
+export interface 提示词结构 {
+    id: string;
+    标题: string;
+    内容: string;
+    类型: PromptCategory;
+    启用: boolean;
+}
+
+export interface 节日结构 {
+    id: string;
+    名称: string;
+    月: number;
+    日: number;
+    描述: string;
+    效果: string; // 如：鬼怪出现率增加
+}
