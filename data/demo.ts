@@ -3,11 +3,11 @@ import { GameResponse, NPC结构, 聊天记录结构 } from '../types';
 
 export const DEMO_SCENARIO: GameResponse = {
     logs: [
-        { sender: "旁白", text: "初入江湖，你站在稻香村的村口，老槐树下几个孩童正在嬉戏。" },
-        { sender: "苏苏", text: "大哥哥，你是刚从外面回来的吗？听说外面有很多好玩的东西！" }
+        { sender: "旁白", text: "这是一条开发期占位剧情，不应在正式开局中出现。" },
+        { sender: "系统", text: "若你看到此行，说明仍在使用 DEMO 数据。请检查初始化流程。" }
     ],
-    shortTerm: "初入稻香村",
-    action_options: ["询问苏苏", "四处逛逛", "查看自身状态"]
+    shortTerm: "开发占位剧情",
+    action_options: ["检查初始化流程"]
 };
 
 export const DEMO_NPC_SUSU: NPC结构 = {

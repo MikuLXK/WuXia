@@ -86,13 +86,23 @@ const ChatList: React.FC<Props> = ({ history, loading, scrollRef, onUpdateHistor
                 // 3. Streaming assistant preview (plain text before final JSON parse)
                 if (msg.role === 'assistant') {
                     return (
-                        <div key={absoluteIdx} className="flex w-full justify-start animate-slide-in mb-6">
-                            <div className="relative max-w-[86%] bg-black/45 border border-wuxia-cyan/30 text-gray-200 p-4 rounded-r-lg rounded-tl-lg shadow-lg">
-                                <p className="whitespace-pre-wrap leading-relaxed font-serif">
-                                    {msg.content || '...'}
-                                </p>
-                                <div className="text-[9px] text-wuxia-cyan/80 mt-2 font-mono tracking-wider">
-                                    STREAMING...
+                        <div key={absoluteIdx} className="flex w-full justify-center animate-slide-in mb-6">
+                            <div className="w-full max-w-3xl px-1 md:px-4">
+                                <div className="relative mx-auto max-w-[94%] md:max-w-[88%] rounded-2xl border border-wuxia-cyan/40 bg-gradient-to-b from-wuxia-cyan/10 via-black/55 to-black/65 px-4 py-3 shadow-[0_8px_28px_rgba(0,0,0,0.45)]">
+                                    <span className="block text-[10px] tracking-[0.2em] text-wuxia-cyan/90 font-mono mb-2">
+                                        流式草稿
+                                    </span>
+                                    <p className="whitespace-pre-wrap leading-relaxed font-serif text-gray-100">
+                                        {msg.content || '...'}
+                                    </p>
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-[9px] text-wuxia-cyan/75 font-mono tracking-[0.12em]">STREAMING</span>
+                                        <span className="inline-flex items-center gap-1 text-wuxia-cyan/70">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-wuxia-cyan/70 animate-pulse"></span>
+                                            <span className="w-1.5 h-1.5 rounded-full bg-wuxia-cyan/55 animate-pulse [animation-delay:120ms]"></span>
+                                            <span className="w-1.5 h-1.5 rounded-full bg-wuxia-cyan/40 animate-pulse [animation-delay:240ms]"></span>
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

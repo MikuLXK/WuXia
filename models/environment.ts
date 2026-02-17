@@ -1,7 +1,7 @@
 // 环境相关定义 - 解耦自 types.ts
 
 export interface 环境信息结构 {
-    时间: string; // 子丑寅卯...
+    时间: string; // YYYY:MM:DD:HH:MM
     时刻: string; // 初刻, 正刻, 三刻 等
     洲: string;
     国: string;
@@ -16,7 +16,7 @@ export interface 环境信息结构 {
 }
 
 export const 默认环境信息: 环境信息结构 = {
-    时间: "巳时",
+    时间: "1024:03:01:09:00",
     时刻: "初刻",
     洲: "中土神洲",
     国: "大乾王朝",

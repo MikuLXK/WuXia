@@ -23,7 +23,6 @@ import { 默认提示词 } from '../prompts';
 import { 默认节日, 默认世界数据, 默认归元宗 } from '../data/world'; 
 import * as dbService from '../services/dbService';
 import { THEMES } from '../styles/themes';
-import { DEMO_NPC_SUSU, DEMO_NPC_LIN, DEMO_HISTORY_ITEM, DEFAULT_WORLD_EVENTS } from '../data/demo';
 
 export const useGameState = () => {
     // View State
@@ -33,7 +32,7 @@ export const useGameState = () => {
     // Game State
     const [角色, 设置角色] = useState<角色数据结构>(默认角色数据);
     const [环境, 设置环境] = useState<环境信息结构>(默认环境信息);
-    const [社交, 设置社交] = useState<NPC结构[]>([DEMO_NPC_SUSU, DEMO_NPC_LIN]);
+    const [社交, 设置社交] = useState<NPC结构[]>([]);
     const [世界, 设置世界] = useState<世界数据结构>(默认世界数据); 
     const [玩家门派, 设置玩家门派] = useState<详细门派结构>(默认归元宗);
     const [任务列表, 设置任务列表] = useState<任务结构[]>(默认任务列表);
@@ -47,10 +46,10 @@ export const useGameState = () => {
         长期记忆: []
     });
 
-    const [历史记录, 设置历史记录] = useState<聊天记录结构[]>([DEMO_HISTORY_ITEM]);
+    const [历史记录, 设置历史记录] = useState<聊天记录结构[]>([]);
     const [loading, setLoading] = useState(false);
     
-    const [worldEvents, setWorldEvents] = useState<string[]>(DEFAULT_WORLD_EVENTS);
+    const [worldEvents, setWorldEvents] = useState<string[]>([]);
     
     // UI/System State
     const [showSettings, setShowSettings] = useState(false);

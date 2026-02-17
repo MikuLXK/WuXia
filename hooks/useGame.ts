@@ -21,6 +21,7 @@ import { 默认世界数据, 默认归元宗 } from '../data/world';
 import * as dbService from '../services/dbService';
 import * as aiService from '../services/aiService';
 import { applyStateCommand } from '../utils/stateHelpers';
+import { parseJsonWithRepair } from '../utils/jsonRepair';
 import { useGameState } from './useGameState';
 
 export const useGame = () => {
@@ -67,6 +68,26 @@ export const useGame = () => {
     } = gameState;
 
     // --- Actions ---
+
+    const normalizeCanonicalGameTime = (input?: string): string | null => {
+        if (!input || typeof input !== 'string') return null;
+        const match = input.trim().match(/^(\d{1,6}):(\d{1,2}):(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+        if (!match) return null;
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        const hour = Number(match[4]);
+        const minute = Number(match[5]);
+        if (
+            month < 1 || month > 12 ||
+            day < 1 || day > 31 ||
+            hour < 0 || hour > 23 ||
+            minute < 0 || minute > 59
+        ) {
+            return null;
+        }
+        return `${year}:${month.toString().padStart(2, '0')}:${day.toString().padStart(2, '0')}:${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    };
 
     const handleStartNewGameWizard = () => {
         setView('new_game');
@@ -312,14 +333,20 @@ ${enabledDifficultyPrompts || '未提供'}
 【第0回合开场初始化任务】
 请基于当前 GameState（空白开局基础状态 + world_prompt 世界观母本）生成第一幕，要求：
 1. 输出严格符合 GameResponse JSON（含 thinking_pre/logs/thinking_post/tavern_commands/shortTerm）。
-2. 本回合必须完成开局变量初始化：至少初始化 \`gameState.环境\`、\`gameState.世界\`（势力列表/活跃NPC/事件流）、\`gameState.社交\`（初始NPC）、\`gameState.剧情\`（章节与变量），并补齐角色初始物资/功法/BUFF（如有）。
-3. 初始化必须通过 tavern_commands 落地，禁止只写叙事不改变量。
-4. 开场必须落在玩家当前环境与时间，不得跳场景；并引出第一个可交互选择，不替玩家决定。
-5. shortTerm 仅写 100 字内剧情概况。
+2. **字数硬约束**：\`logs\` 中叙事正文总长度必须 **>= 450 个中文字符**（不含 thinking 与 tavern_commands）。
+3. **全量初始化硬约束**：本回合必须完成“当前引擎可写域”的完整初始化，且通过 \`tavern_commands\` 落地，禁止只叙事不改变量。
+4. 可写域与最小覆盖（全部必须命中）：
+   - \`gameState.角色\`：至少初始化/确认 生存值（精力/饱腹/口渴）、七部位血量与状态、装备、物品列表、功法列表、经验与BUFF。
+   - \`gameState.环境\`：必须完整初始化 时间(YYYY:MM:DD:HH:MM)、时刻、天气、节日、洲/国/郡/县/村、具体地点、日期(第几日)。
+   - \`gameState.社交\`：至少创建 2 个初始 NPC（完整结构，含记忆数组）。
+   - \`gameState.世界\`：至少初始化 势力列表、活跃NPC列表、进行中事件（>=1 条）、已结算事件、江湖史册、当前时代、混乱度。
+   - \`gameState.剧情\`：必须初始化 当前章节、下一章预告、历史卷宗、剧情变量。
+5. 命令覆盖硬约束：\`tavern_commands\` 必须同时包含对 \`角色/环境/社交/世界/剧情\` 五个根域的有效命令。
+6. 开场必须落在玩家当前环境与时间，不得跳场景；并引出第一个可交互选择，不替玩家决定。
+7. \`shortTerm\` 仅写 100 字内剧情概况。
         `;
 
         const initialHistory: 聊天记录结构[] = [
-            ...历史记录,
             {
                 role: 'system',
                 content: '系统: 世界观已注入，正在生成第0回合开场初始化剧情...',
@@ -477,19 +504,21 @@ ${enabledDifficultyPrompts || '未提供'}
     };
 
     const updateHistoryItem = (index: number, newRawJson: string) => {
-        try {
-            const parsed = JSON.parse(newRawJson);
-            const newHistory = [...历史记录];
-            newHistory[index] = {
-                ...newHistory[index],
-                structuredResponse: parsed,
-                rawJson: newRawJson,
-                content: "Parsed Content Updated" 
-            };
-            设置历史记录(newHistory);
-        } catch (e) {
-            console.error("Failed to update history", e);
+        const parsed = parseJsonWithRepair<GameResponse>(newRawJson);
+        if (!parsed.value) {
+            console.error("Failed to update history: JSON repair failed", parsed.error);
+            return;
         }
+
+        const normalizedRaw = JSON.stringify(parsed.value, null, 2);
+        const newHistory = [...历史记录];
+        newHistory[index] = {
+            ...newHistory[index],
+            structuredResponse: parsed.value,
+            rawJson: normalizedRaw,
+            content: "Parsed Content Updated" 
+        };
+        设置历史记录(newHistory);
     };
 
     const handleStop = () => {
@@ -525,11 +554,8 @@ ${enabledDifficultyPrompts || '未提供'}
         }
 
         // 1. Calculate Game Time String
-        const year = 1024 + Math.floor((环境.日期 || 0) / 365);
-        const dayOfYear = (环境.日期 || 0) % 365;
-        const month = Math.floor(dayOfYear / 30) + 1;
-        const day = (dayOfYear % 30) + 1;
-        const currentGameTime = `${year}年${month}月${day}日 ${环境.时间}`;
+        const canonicalTime = normalizeCanonicalGameTime(环境.时间);
+        const currentGameTime = canonicalTime || `第${环境.日期 || 1}日 ${环境.时间 || '未知时间'}`;
 
         // 2. Archive Old Memories (Capacity Check)
         let currentHistory = [...历史记录];

@@ -3,6 +3,8 @@ import React from 'react';
 import TopBar from './components/layout/TopBar';
 import LeftPanel from './components/layout/LeftPanel';
 import RightPanel from './components/layout/RightPanel';
+import MobileQuickMenu from './components/layout/MobileQuickMenu';
+import CharacterModal from './components/features/Character/CharacterModal';
 import ChatList from './components/features/Chat/ChatList';
 import InputArea from './components/features/Chat/InputArea';
 import LandingPage from './components/layout/LandingPage';
@@ -24,12 +26,149 @@ import { useGame } from './hooks/useGame';
 
 const App: React.FC = () => {
     const { state, setters, actions } = useGame();
+    const [showCharacter, setShowCharacter] = React.useState(false);
+
+    const parseActionOptionText = (option: unknown): string => {
+        if (typeof option === 'string') return option.trim();
+        if (typeof option === 'number' || typeof option === 'boolean') return String(option);
+        if (option && typeof option === 'object') {
+            const obj = option as Record<string, unknown>;
+            const candidates = [obj.text, obj.label, obj.action, obj.name, obj.id];
+            for (const candidate of candidates) {
+                if (typeof candidate === 'string' && candidate.trim().length > 0) {
+                    return candidate.trim();
+                }
+            }
+        }
+        return '';
+    };
+
+    const parseGameTimestampToNumber = (timeStr?: string): number => {
+        if (!timeStr || typeof timeStr !== 'string') return 0;
+        const m = timeStr.trim().match(/^(\d{1,6}):(\d{1,2}):(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+        if (!m) return 0;
+        const year = Number(m[1]);
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        const hour = Number(m[4]);
+        const minute = Number(m[5]);
+        return (((year * 12 + month) * 31 + day) * 24 + hour) * 60 + minute;
+    };
+
+    const tickerEvents = React.useMemo(() => {
+        const ongoingEvents = Array.isArray(state.世界?.进行中事件) ? state.世界.进行中事件 : [];
+        const formatted = ongoingEvents
+            .filter(evt => evt && (evt.当前状态 === '进行中' || !evt.当前状态))
+            .sort((a, b) => parseGameTimestampToNumber(b.开始时间) - parseGameTimestampToNumber(a.开始时间))
+            .map(evt => {
+                const type = evt.类型 || '事件';
+                const start = evt.开始时间 || '未知时间';
+                const title = evt.标题 || '无标题';
+                const location = evt.发生地点 || '未知地点';
+                return `【${type}】${start} ${title}（${location}）`;
+            })
+            .filter(Boolean);
+
+        return formatted.length > 0 ? formatted : state.worldEvents;
+    }, [state.世界, state.worldEvents]);
 
     // Extract options from the latest assistant message
     const lastMessage = state.历史记录[state.历史记录.length - 1];
-    const currentOptions = (lastMessage?.role === 'assistant' && lastMessage.structuredResponse?.action_options) 
-        ? lastMessage.structuredResponse.action_options 
+    const currentOptions = (lastMessage?.role === 'assistant' && Array.isArray(lastMessage.structuredResponse?.action_options))
+        ? lastMessage.structuredResponse.action_options
+            .map(parseActionOptionText)
+            .filter(item => item.length > 0)
         : [];
+
+    const activeMobileWindow =
+        showCharacter ? '角色' :
+        state.showEquipment ? '装备' :
+        state.showInventory ? '背包' :
+        state.showSocial ? '社交' :
+        state.showKungfu ? '功法' :
+        state.showWorld ? '世界' :
+        state.showTeam ? '队伍' :
+        state.showSect ? '门派' :
+        state.showTask ? '任务' :
+        state.showAgreement ? '约定' :
+        state.showStory ? '剧情' :
+        state.showMemory ? '记忆' :
+        state.showSaveLoad.show ? (state.showSaveLoad.mode === 'save' ? '保存' : '读取') :
+        state.showSettings ? '设置' :
+        null;
+
+    const closeAllPanels = () => {
+        setShowCharacter(false);
+        setters.setShowInventory(false);
+        setters.setShowEquipment(false);
+        setters.setShowTeam(false);
+        setters.setShowSocial(false);
+        setters.setShowKungfu(false);
+        setters.setShowWorld(false);
+        setters.setShowSect(false);
+        setters.setShowTask(false);
+        setters.setShowAgreement(false);
+        setters.setShowStory(false);
+        setters.setShowMemory(false);
+        setters.setShowSaveLoad({ show: false, mode: 'save' });
+        setters.setShowSettings(false);
+    };
+
+    const handleMobileMenuClick = (menu: string) => {
+        const isActive = activeMobileWindow === menu;
+        closeAllPanels();
+        if (isActive) return;
+
+        switch (menu) {
+            case '角色':
+                setShowCharacter(true);
+                break;
+            case '装备':
+                setters.setShowEquipment(true);
+                break;
+            case '背包':
+                setters.setShowInventory(true);
+                break;
+            case '社交':
+                setters.setShowSocial(true);
+                break;
+            case '功法':
+                setters.setShowKungfu(true);
+                break;
+            case '世界':
+                setters.setShowWorld(true);
+                break;
+            case '队伍':
+                setters.setShowTeam(true);
+                break;
+            case '门派':
+                setters.setShowSect(true);
+                break;
+            case '任务':
+                setters.setShowTask(true);
+                break;
+            case '约定':
+                setters.setShowAgreement(true);
+                break;
+            case '剧情':
+                setters.setShowStory(true);
+                break;
+            case '记忆':
+                setters.setShowMemory(true);
+                break;
+            case '保存':
+                setters.setShowSaveLoad({ show: true, mode: 'save' });
+                break;
+            case '读取':
+                setters.setShowSaveLoad({ show: true, mode: 'load' });
+                break;
+            case '设置':
+                setters.setShowSettings(true);
+                break;
+            default:
+                break;
+        }
+    };
 
     return (
         <div className="h-screen w-screen overflow-hidden bg-black relative flex flex-col p-3 transition-colors duration-500">
@@ -123,8 +262,36 @@ const App: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* 移动端快捷菜单 */}
+                    <MobileQuickMenu
+                        activeWindow={activeMobileWindow}
+                        onMenuClick={handleMobileMenuClick}
+                    />
+
+                    {/* 移动端底部世界大事栏 */}
+                    <div className="md:hidden shrink-0 h-7 bg-ink-black/90 border-t border-wuxia-gold/20 flex items-center text-[10px] font-mono text-wuxia-gold-dark relative mx-1 mb-1 overflow-hidden pb-[env(safe-area-inset-bottom)]">
+                        <div className="shrink-0 h-full px-2 flex items-center border-r border-gray-800 text-wuxia-gold/90 tracking-wider">
+                            世界大事
+                        </div>
+                        <div className="flex-1 overflow-hidden relative h-full flex items-center">
+                            <div className="absolute left-0 top-0 bottom-0 w-5 bg-gradient-to-r from-ink-black to-transparent z-10 pointer-events-none"></div>
+                            <div className="absolute right-0 top-0 bottom-0 w-5 bg-gradient-to-l from-ink-black to-transparent z-10 pointer-events-none"></div>
+                            {tickerEvents && tickerEvents.length > 0 ? (
+                                <div className="whitespace-nowrap animate-marquee text-[10px] text-wuxia-gold/70 tracking-wide">
+                                    {tickerEvents.map((e, i) => (
+                                        <span key={i} className="mx-5 inline-block">{e}</span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="w-full text-center text-[10px] text-gray-700 tracking-wider">
+                                    江湖平静，暂无大事发生...
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {/* 底部状态栏 */}
-                    <div className="shrink-0 h-8 bg-ink-black/90 border-t border-wuxia-gold/20 flex justify-between px-4 items-center text-xs font-mono text-wuxia-gold-dark z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.8)] relative rounded-b-xl mx-1 mb-1 overflow-hidden">
+                    <div className="hidden md:flex shrink-0 h-8 bg-ink-black/90 border-t border-wuxia-gold/20 justify-between px-4 items-center text-xs font-mono text-wuxia-gold-dark z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.8)] relative rounded-b-xl mx-1 mb-1 overflow-hidden">
                         
                         {/* Left Label: World Events */}
                          <div className="shrink-0 text-wuxia-gold font-bold mr-2 z-20 bg-ink-black/90 px-2 flex items-center h-full border-r border-gray-800">
@@ -136,9 +303,9 @@ const App: React.FC = () => {
                             <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-ink-black to-transparent z-10 pointer-events-none"></div>
                             <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-ink-black to-transparent z-10 pointer-events-none"></div>
                             
-                            {state.worldEvents && state.worldEvents.length > 0 ? (
+                            {tickerEvents && tickerEvents.length > 0 ? (
                                 <div className="whitespace-nowrap animate-marquee text-[10px] text-wuxia-gold/70 font-mono tracking-wider">
-                                    {state.worldEvents.map((e, i) => (
+                                    {tickerEvents.map((e, i) => (
                                         <span key={i} className="mx-8 inline-block">{e}</span>
                                     ))}
                                 </div>
@@ -222,6 +389,13 @@ const App: React.FC = () => {
                         />
                     )}
 
+                    {showCharacter && (
+                        <CharacterModal
+                            character={state.角色}
+                            onClose={() => setShowCharacter(false)}
+                        />
+                    )}
+
                     {state.showEquipment && (
                         <EquipmentModal 
                             character={state.角色} 
@@ -262,7 +436,7 @@ const App: React.FC = () => {
                     {state.showSect && (
                         <SectModal
                             sectData={state.玩家门派}
-                            currentTime={`${state.环境.日期}日 ${state.环境.时间}`} 
+                            currentTime={state.环境.时间} 
                             onClose={() => setters.setShowSect(false)}
                         />
                     )}

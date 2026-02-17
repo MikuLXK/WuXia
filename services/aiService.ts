@@ -1,5 +1,6 @@
 
 import { 接口设置结构, GameResponse } from '../types';
+import { parseJsonWithRepair } from '../utils/jsonRepair';
 
 interface StoryStreamOptions {
     stream?: boolean;
@@ -49,22 +50,17 @@ ${JSON.stringify(charData)}
     `.trim();
 
     const parseWorldPrompt = (content: string): string => {
-        try {
-            const json = JSON.parse(content);
-            const prompt = typeof json?.world_prompt === 'string' ? json.world_prompt.trim() : '';
-            if (!prompt) throw new Error('world_prompt 为空');
-            return prompt;
-        } catch {
-            const start = content.indexOf('{');
-            const end = content.lastIndexOf('}');
-            if (start >= 0 && end > start) {
-                const json = JSON.parse(content.slice(start, end + 1));
-                const prompt = typeof json?.world_prompt === 'string' ? json.world_prompt.trim() : '';
-                if (!prompt) throw new Error('world_prompt 为空');
-                return prompt;
-            }
-            throw new Error('世界观生成解析失败: 未获得有效 world_prompt');
+        const parsed = parseJsonWithRepair<Record<string, unknown>>(content);
+        if (!parsed.value || typeof parsed.value !== 'object') {
+            throw new Error(`世界观生成解析失败: ${parsed.error || '未获得有效 JSON'}`);
         }
+        const prompt = typeof parsed.value.world_prompt === 'string'
+            ? parsed.value.world_prompt.trim()
+            : typeof parsed.value.worldPrompt === 'string'
+                ? parsed.value.worldPrompt.trim()
+                : '';
+        if (!prompt) throw new Error('世界观生成解析失败: world_prompt 为空');
+        return prompt;
     };
 
     const enableStream = !!streamOptions?.stream;
@@ -175,24 +171,58 @@ export const generateStoryResponse = async (
         { role: 'user', content: `${userContext}\n\n<玩家输入>${playerInput}</玩家输入>` }
     ];
 
+    const normalizeGameResponse = (raw: any): GameResponse => {
+        const logs = Array.isArray(raw?.logs)
+            ? raw.logs
+                .map((item: any) => {
+                    if (typeof item === 'string') {
+                        return { sender: '旁白', text: item };
+                    }
+                    if (item && typeof item === 'object') {
+                        return {
+                            sender: typeof item.sender === 'string' ? item.sender : '旁白',
+                            text: typeof item.text === 'string' ? item.text : String(item.text ?? '')
+                        };
+                    }
+                    return null;
+                })
+                .filter((item: any) => item && item.text.trim().length > 0)
+            : [];
+
+        return {
+            thinking_pre: typeof raw?.thinking_pre === 'string' ? raw.thinking_pre : undefined,
+            logs,
+            thinking_post: typeof raw?.thinking_post === 'string' ? raw.thinking_post : undefined,
+            tavern_commands: Array.isArray(raw?.tavern_commands) ? raw.tavern_commands : undefined,
+            shortTerm: typeof raw?.shortTerm === 'string' ? raw.shortTerm : undefined,
+            action_options: Array.isArray(raw?.action_options)
+                ? raw.action_options
+                    .map((item: any) => {
+                        if (typeof item === 'string') return item.trim();
+                        if (typeof item === 'number' || typeof item === 'boolean') return String(item);
+                        if (item && typeof item === 'object') {
+                            const candidate = item.text ?? item.label ?? item.action ?? item.name ?? item.id;
+                            if (typeof candidate === 'string') return candidate.trim();
+                        }
+                        return '';
+                    })
+                    .filter((item: string) => item.trim().length > 0)
+                : undefined
+        };
+    };
+
     const parseJsonToGameResponse = (content: string): GameResponse => {
-        try {
-            return JSON.parse(content);
-        } catch {
-            const start = content.indexOf('{');
-            const end = content.lastIndexOf('}');
-            if (start >= 0 && end > start) {
-                try {
-                    return JSON.parse(content.slice(start, end + 1));
-                } catch {
-                    // continue to fallback
-                }
+        const parsed = parseJsonWithRepair<any>(content);
+        if (parsed.value && typeof parsed.value === 'object') {
+            const normalized = normalizeGameResponse(parsed.value);
+            if (normalized.logs.length > 0 || normalized.thinking_pre || normalized.thinking_post) {
+                return normalized;
             }
-            return {
-                logs: [{ sender: "系统", text: content }],
-                thinking_pre: "解析错误: 返回内容非标准JSON"
-            };
         }
+        return {
+            logs: [{ sender: "系统", text: content }],
+            thinking_pre: `解析错误: 返回内容非标准JSON（${parsed.error || 'unknown'}）`
+        };
     };
 
     const enableStream = !!streamOptions?.stream;

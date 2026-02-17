@@ -7,7 +7,7 @@ interface Props {
     onStop: () => void;
     onRegenerate: () => void;
     loading: boolean;
-    options?: string[]; // Quick actions from the last turn
+    options?: unknown[]; // Quick actions from the last turn
 }
 
 const InputArea: React.FC<Props> = ({ onSend, onStop, onRegenerate, loading, options = [] }) => {
@@ -31,13 +31,28 @@ const InputArea: React.FC<Props> = ({ onSend, onStop, onRegenerate, loading, opt
         setContent(opt);
     };
 
+    const normalizeOptionText = (opt: unknown): string => {
+        if (typeof opt === 'string') return opt.trim();
+        if (typeof opt === 'number' || typeof opt === 'boolean') return String(opt);
+        if (opt && typeof opt === 'object') {
+            const obj = opt as Record<string, unknown>;
+            const candidate = obj.text ?? obj.label ?? obj.action ?? obj.name ?? obj.id;
+            if (typeof candidate === 'string') return candidate.trim();
+        }
+        return '';
+    };
+
+    const normalizedOptions = options
+        .map(normalizeOptionText)
+        .filter(item => item.length > 0);
+
     return (
         <div className="shrink-0 relative z-20 bg-gradient-to-t from-ink-black via-ink-black/95 to-transparent pb-4 px-4 flex flex-col gap-2">
             
             {/* Quick Actions Chips (Fixed Box Size, Scrolling Text) */}
-            {options && options.length > 0 && (
+            {normalizedOptions.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-3 pb-2 w-full px-4">
-                    {options.map((opt, idx) => (
+                    {normalizedOptions.map((opt, idx) => (
                         <button 
                             key={idx}
                             onClick={() => handleOptionClick(opt)}

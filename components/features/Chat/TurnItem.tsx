@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { GameResponse, GameLog } from '../../../types';
 import { NarratorRenderer, CharacterRenderer, JudgmentRenderer } from './MessageRenderers';
 import GameButton from '../../ui/GameButton';
+import { formatJsonWithRepair, parseJsonWithRepair } from '../../../utils/jsonRepair';
 
 interface Props {
     response: GameResponse;
@@ -14,11 +15,7 @@ interface Props {
 const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }) => {
     const formatRawJson = (raw?: string) => {
         if (!raw) return JSON.stringify(response, null, 2);
-        try {
-            return JSON.stringify(JSON.parse(raw), null, 2);
-        } catch {
-            return raw;
-        }
+        return formatJsonWithRepair(raw, raw);
     };
 
     const [showThinking, setShowThinking] = useState(false);
@@ -27,14 +24,17 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
     const [parseError, setParseError] = useState<string | null>(null);
 
     const handleSave = () => {
-        try {
-            JSON.parse(editValue); // Validate JSON
-            onSaveEdit(editValue);
-            setIsEditing(false);
-            setParseError(null);
-        } catch (e: any) {
-            setParseError(e.message);
+        const parsed = parseJsonWithRepair<GameResponse>(editValue);
+        if (!parsed.value) {
+            setParseError(parsed.error || 'JSON 修复失败，请继续检查。');
+            return;
         }
+
+        const formatted = JSON.stringify(parsed.value, null, 2);
+        onSaveEdit(formatted);
+        setEditValue(formatted);
+        setIsEditing(false);
+        setParseError(null);
     };
 
     if (isEditing) {

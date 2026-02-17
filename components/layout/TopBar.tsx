@@ -24,6 +24,45 @@ const Divider = () => (
     <div className="h-6 w-px bg-gradient-to-b from-transparent via-wuxia-gold/30 to-transparent mx-1"></div>
 );
 
+const parseCanonicalGameTime = (input?: string): { year: number; month: number; day: number; hour: number; minute: number } | null => {
+    if (!input || typeof input !== 'string') return null;
+    const match = input.trim().match(/^(\d{1,6}):(\d{1,2}):(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+    if (!match) return null;
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+
+    if (
+        !Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) ||
+        !Number.isFinite(hour) || !Number.isFinite(minute)
+    ) {
+        return null;
+    }
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+        return null;
+    }
+
+    return { year, month, day, hour, minute };
+};
+
+const mapHourToWuxia = (hour: number): string => {
+    if (hour >= 23 || hour < 1) return '子时';
+    if (hour < 3) return '丑时';
+    if (hour < 5) return '寅时';
+    if (hour < 7) return '卯时';
+    if (hour < 9) return '辰时';
+    if (hour < 11) return '巳时';
+    if (hour < 13) return '午时';
+    if (hour < 15) return '未时';
+    if (hour < 17) return '申时';
+    if (hour < 19) return '酉时';
+    if (hour < 21) return '戌时';
+    return '亥时';
+};
+
 // Helper to map Wuxia time to approximate clock time for display
 // Now includes "Ke" (Quarter) logic roughly
 const mapWuxiaTime = (hourStr?: string, quarterStr?: string): string => {
@@ -68,17 +107,26 @@ const mapWuxiaTime = (hourStr?: string, quarterStr?: string): string => {
 };
 
 const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
-    // Calculate Date Display
-    const year = 1024 + Math.floor((环境.日期 || 0) / 365);
-    const dayOfYear = (环境.日期 || 0) % 365;
-    const month = Math.floor(dayOfYear / 30) + 1;
-    const day = (dayOfYear % 30) + 1;
+    // Date is read from canonical game timestamp first (YYYY:MM:DD:HH:MM).
+    // 环境.日期 only represents "第几日" (journey day index).
+    const parsedTime = parseCanonicalGameTime(环境?.时间);
+    const fallbackYear = 1024 + Math.floor((环境.日期 || 0) / 365);
+    const fallbackDayOfYear = (环境.日期 || 0) % 365;
+    const fallbackMonth = Math.floor(fallbackDayOfYear / 30) + 1;
+    const fallbackDay = (fallbackDayOfYear % 30) + 1;
+    const year = parsedTime?.year ?? fallbackYear;
+    const month = parsedTime?.month ?? fallbackMonth;
+    const day = parsedTime?.day ?? fallbackDay;
     
-    const rawTime = 环境?.时间 || '午时';
+    const rawTime = 环境?.时间 || '1024:01:01:12:00';
     const rawKe = 环境.时刻 || '初刻';
     
-    const numericTime = mapWuxiaTime(rawTime, rawKe);
-    const traditionalTime = `${rawTime} · ${rawKe}`;
+    const numericTime = parsedTime
+        ? `${parsedTime.hour.toString().padStart(2, '0')}:${parsedTime.minute.toString().padStart(2, '0')}`
+        : mapWuxiaTime(rawTime, rawKe);
+    const traditionalTime = parsedTime
+        ? `${mapHourToWuxia(parsedTime.hour)} · ${rawKe}`
+        : `${rawTime} · ${rawKe}`;
     
     const displayTime = timeFormat === '数字' ? numericTime : traditionalTime;
     const fullDateStr = `${year}年${month.toString().padStart(2, '0')}月${day.toString().padStart(2, '0')}日 ${displayTime}`;
