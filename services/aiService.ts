@@ -1,28 +1,73 @@
 
 import { 接口设置结构, GameResponse } from '../types';
 
-export const generateWorldData = async (prompt: string, charData: any, apiConfig: 接口设置结构) => {
+interface StoryStreamOptions {
+    stream?: boolean;
+    onDelta?: (delta: string, accumulated: string) => void;
+}
+
+interface WorldStreamOptions {
+    stream?: boolean;
+    onDelta?: (delta: string, accumulated: string) => void;
+}
+
+export const generateWorldData = async (
+    worldContext: string,
+    charData: any,
+    apiConfig: 接口设置结构,
+    streamOptions?: WorldStreamOptions
+): Promise<string> => {
     if (!apiConfig.apiKey) throw new Error("Missing API Key");
 
-    const genPrompt = `
-你是一个硬核武侠游戏的世界构建者。请根据以下配置生成初始游戏数据（JSON格式）。
+    const genSystemPrompt = `
+你是 WuXia 项目的世界观生成器。任务是只生成“世界观提示词文本”，用于覆盖 prompts/core/world.ts 的内容。
 
-${prompt}
+【输出要求（必须）】
+1. 仅输出一个 JSON 对象，禁止 Markdown、解释、注释。
+2. JSON 必须只有一个核心字段：\`world_prompt\`（字符串）。
+3. \`world_prompt\` 必须是可直接注入系统提示词的完整世界观文本。
+4. 内容只允许“世界观信息”，不要包含 tavern_commands、JSON 输出格式规则、UI 说明。
 
-【玩家基础】
+【world_prompt 必含信息】
+- 世界总览：世界名称、时代基调、地理尺度、社会秩序
+- 势力版图：主要势力（立场、目标、关系）
+- 社会环境：治安、经济、江湖风气、朝廷与宗门关系
+- 风险生态：主要冲突、危险区域、典型生存压力
+- 开场基调：适配玩家建档身份/背景的第0回合落点建议（只给世界观方向，不做变量初始化）
+    `;
+
+    const genUserPrompt = `
+【世界生成上下文】
+${worldContext}
+
+【玩家建档输入（必须严格参考）】
 ${JSON.stringify(charData)}
 
-【要求】
-1. 生成完整的 'gameState.世界' (含势力列表、活跃NPC列表)。
-2. 生成完整的 'gameState.角色' (基于玩家基础完善数值，添加初始物品/功法)。
-3. 生成初始 'gameState.社交' (2-3个初始NPC，如师傅、发小)。
-4. 生成 'gameState.环境' (初始地点)。
-5. 生成 'gameState.玩家门派' (若玩家选了门派，或生成默认门派)。
-6. 生成 'gameState.剧情' (仅第一章的基础设定，不含历史)。
+【生成目标】
+- 只生成世界观提示词文本（world_prompt）。
+- 变量初始化（角色/环境/世界/社交/剧情具体数值）将在“开场剧情生成”阶段完成，此处不要做状态初始化输出。
+    `.trim();
 
-请返回一个 JSON 对象，包含: { 世界, 角色, 社交, 环境, 玩家门派, 剧情 }。
-不要返回任何 Markdown，只返回纯 JSON。
-    `;
+    const parseWorldPrompt = (content: string): string => {
+        try {
+            const json = JSON.parse(content);
+            const prompt = typeof json?.world_prompt === 'string' ? json.world_prompt.trim() : '';
+            if (!prompt) throw new Error('world_prompt 为空');
+            return prompt;
+        } catch {
+            const start = content.indexOf('{');
+            const end = content.lastIndexOf('}');
+            if (start >= 0 && end > start) {
+                const json = JSON.parse(content.slice(start, end + 1));
+                const prompt = typeof json?.world_prompt === 'string' ? json.world_prompt.trim() : '';
+                if (!prompt) throw new Error('world_prompt 为空');
+                return prompt;
+            }
+            throw new Error('世界观生成解析失败: 未获得有效 world_prompt');
+        }
+    };
+
+    const enableStream = !!streamOptions?.stream;
 
     const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST',
@@ -32,15 +77,87 @@ ${JSON.stringify(charData)}
         },
         body: JSON.stringify({
             model: apiConfig.model,
-            messages: [{ role: 'system', content: genPrompt }],
+            messages: [
+                { role: 'system', content: genSystemPrompt },
+                { role: 'user', content: genUserPrompt }
+            ],
             temperature: 0.8,
-            response_format: { type: "json_object" }
+            response_format: { type: "json_object" },
+            stream: enableStream
         })
     });
 
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+    if (!enableStream) {
+        const data = await response.json();
+        return parseWorldPrompt(data.choices[0].message.content);
+    }
+
+    if (!response.body) throw new Error("World stream body is empty");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let accumulated = '';
+    let doneSignal = false;
+
+    while (!doneSignal) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload) continue;
+            if (payload === '[DONE]') {
+                doneSignal = true;
+                break;
+            }
+
+            try {
+                const json = JSON.parse(payload);
+                const deltaContent =
+                    json?.choices?.[0]?.delta?.content ??
+                    json?.choices?.[0]?.message?.content ??
+                    '';
+                if (deltaContent) {
+                    accumulated += deltaContent;
+                    streamOptions?.onDelta?.(deltaContent, accumulated);
+                }
+            } catch {
+                // ignore malformed chunk
+            }
+        }
+    }
+
+    if (buffer.trim()) {
+        const lines = buffer.split('\n').map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+            try {
+                const json = JSON.parse(payload);
+                const deltaContent =
+                    json?.choices?.[0]?.delta?.content ??
+                    json?.choices?.[0]?.message?.content ??
+                    '';
+                if (deltaContent) {
+                    accumulated += deltaContent;
+                    streamOptions?.onDelta?.(deltaContent, accumulated);
+                }
+            } catch {
+                // ignore malformed tail chunk
+            }
+        }
+    }
+
+    return parseWorldPrompt(accumulated);
 };
 
 export const generateStoryResponse = async (
@@ -48,7 +165,8 @@ export const generateStoryResponse = async (
     userContext: string, 
     playerInput: string,
     apiConfig: 接口设置结构,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    streamOptions?: StoryStreamOptions
 ): Promise<GameResponse> => {
     if (!apiConfig.apiKey) throw new Error("Missing API Key");
 
@@ -56,6 +174,28 @@ export const generateStoryResponse = async (
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `${userContext}\n\n<玩家输入>${playerInput}</玩家输入>` }
     ];
+
+    const parseJsonToGameResponse = (content: string): GameResponse => {
+        try {
+            return JSON.parse(content);
+        } catch {
+            const start = content.indexOf('{');
+            const end = content.lastIndexOf('}');
+            if (start >= 0 && end > start) {
+                try {
+                    return JSON.parse(content.slice(start, end + 1));
+                } catch {
+                    // continue to fallback
+                }
+            }
+            return {
+                logs: [{ sender: "系统", text: content }],
+                thinking_pre: "解析错误: 返回内容非标准JSON"
+            };
+        }
+    };
+
+    const enableStream = !!streamOptions?.stream;
 
     const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST',
@@ -68,22 +208,86 @@ export const generateStoryResponse = async (
             messages: apiMessages,
             temperature: 0.7,
             response_format: { type: "json_object" },
-            stream: false 
+            stream: enableStream
         }),
         signal
     });
 
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    
-    try {
-        return JSON.parse(content);
-    } catch (e) {
-        // Fallback if not JSON
-        return {
-            logs: [{ sender: "系统", text: content }],
-            thinking_pre: "解析错误: 返回内容非标准JSON"
-        };
+
+    if (!enableStream) {
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+        return parseJsonToGameResponse(content);
     }
+
+    if (!response.body) {
+        throw new Error("Stream body is empty");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let accumulated = '';
+    let doneSignal = false;
+
+    while (!doneSignal) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) continue;
+
+            const payload = line.slice(5).trim();
+            if (!payload) continue;
+            if (payload === '[DONE]') {
+                doneSignal = true;
+                break;
+            }
+
+            try {
+                const json = JSON.parse(payload);
+                const deltaContent =
+                    json?.choices?.[0]?.delta?.content ??
+                    json?.choices?.[0]?.message?.content ??
+                    '';
+
+                if (deltaContent) {
+                    accumulated += deltaContent;
+                    streamOptions?.onDelta?.(deltaContent, accumulated);
+                }
+            } catch {
+                // Ignore non-JSON line fragments.
+            }
+        }
+    }
+
+    if (buffer.trim()) {
+        const trailingLines = buffer.split('\n').map(l => l.trim()).filter(Boolean);
+        for (const line of trailingLines) {
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+            try {
+                const json = JSON.parse(payload);
+                const deltaContent =
+                    json?.choices?.[0]?.delta?.content ??
+                    json?.choices?.[0]?.message?.content ??
+                    '';
+                if (deltaContent) {
+                    accumulated += deltaContent;
+                    streamOptions?.onDelta?.(deltaContent, accumulated);
+                }
+            } catch {
+                // Ignore trailing parse errors.
+            }
+        }
+    }
+
+    return parseJsonToGameResponse(accumulated);
 };

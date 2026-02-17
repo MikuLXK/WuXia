@@ -12,9 +12,18 @@ interface Props {
 }
 
 const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }) => {
+    const formatRawJson = (raw?: string) => {
+        if (!raw) return JSON.stringify(response, null, 2);
+        try {
+            return JSON.stringify(JSON.parse(raw), null, 2);
+        } catch {
+            return raw;
+        }
+    };
+
     const [showThinking, setShowThinking] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [editValue, setEditValue] = useState(rawJson || JSON.stringify(response, null, 2));
+    const [editValue, setEditValue] = useState(formatRawJson(rawJson));
     const [parseError, setParseError] = useState<string | null>(null);
 
     const handleSave = () => {
@@ -79,7 +88,10 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
 
                  {/* Right: Edit/Source Icon */}
                  <button 
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                        setEditValue(formatRawJson(rawJson));
+                        setIsEditing(true);
+                    }}
                     className="p-1.5 rounded-full border border-gray-700 text-gray-500 hover:text-wuxia-gold hover:border-wuxia-gold transition-all"
                     title="查看/编辑原文"
                  >

@@ -8,7 +8,8 @@ interface Props {
     onComplete: (
         worldConfig: WorldGenConfig, 
         charData: 角色数据结构, 
-        mode: 'all' | 'step'
+        mode: 'all' | 'step',
+        openingStreaming: boolean
     ) => void;
     onCancel: () => void;
     loading: boolean;
@@ -49,6 +50,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     // Custom Inputs
     const [customTalent, setCustomTalent] = useState<天赋结构>({ 名称: '', 描述: '', 效果: '' });
     const [showCustomTalent, setShowCustomTalent] = useState(false);
+    const [openingStreaming, setOpeningStreaming] = useState(true);
 
     // --- Logic ---
     
@@ -117,7 +119,13 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
             当前经验: 0, 升级经验: 100, 玩家BUFF: []
         };
         
-        onComplete(worldConfig, charData, mode);
+        if (mode === 'all') {
+            const streamStatus = openingStreaming ? '开启' : '关闭';
+            const confirmText = `开场剧情流式传输当前为【${streamStatus}】。\n开启后会边生成边展示，关闭则等待整段返回。\n是否继续创建？`;
+            if (!confirm(confirmText)) return;
+        }
+
+        onComplete(worldConfig, charData, mode, openingStreaming);
     };
 
     if (loading) {
@@ -389,6 +397,25 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                 <div>主角: <span className="text-white">{charName}</span> ({charGender}, {charAge}岁)</div>
                                 <div>背景: <span className="text-white">{selectedBackground.名称}</span></div>
                                 <div>天赋: <span className="text-white">{selectedTalents.map(t => t.名称).join(', ') || '无'}</span></div>
+                                <div>开场流式: <span className={`${openingStreaming ? 'text-wuxia-cyan' : 'text-gray-400'}`}>{openingStreaming ? '开启' : '关闭'}</span></div>
+                            </div>
+
+                            <div className="w-full max-w-md bg-black/40 border border-gray-700 rounded-lg p-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-xs text-gray-300 font-bold tracking-widest">开场剧情流式传输</div>
+                                        <div className="text-[11px] text-gray-500 mt-1">开启后会实时显示开场生成内容；关闭则一次性返回完整 JSON。</div>
+                                    </div>
+                                    <button
+                                        onClick={() => setOpeningStreaming(!openingStreaming)}
+                                        className={`w-12 h-7 rounded-full border transition-all relative ${openingStreaming ? 'border-wuxia-cyan bg-wuxia-cyan/20' : 'border-gray-600 bg-black/40'}`}
+                                        title={openingStreaming ? '开场流式开启' : '开场流式关闭'}
+                                    >
+                                        <span
+                                            className={`absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full transition-all ${openingStreaming ? 'left-6 bg-wuxia-cyan' : 'left-1 bg-gray-500'}`}
+                                        />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex flex-col gap-4 w-full max-w-md">

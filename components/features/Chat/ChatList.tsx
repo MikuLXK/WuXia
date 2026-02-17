@@ -83,7 +83,34 @@ const ChatList: React.FC<Props> = ({ history, loading, scrollRef, onUpdateHistor
                     );
                 }
 
-                // 3. Fallback for old System/Assistant messages or Errors
+                // 3. Streaming assistant preview (plain text before final JSON parse)
+                if (msg.role === 'assistant') {
+                    return (
+                        <div key={absoluteIdx} className="flex w-full justify-start animate-slide-in mb-6">
+                            <div className="relative max-w-[86%] bg-black/45 border border-wuxia-cyan/30 text-gray-200 p-4 rounded-r-lg rounded-tl-lg shadow-lg">
+                                <p className="whitespace-pre-wrap leading-relaxed font-serif">
+                                    {msg.content || '...'}
+                                </p>
+                                <div className="text-[9px] text-wuxia-cyan/80 mt-2 font-mono tracking-wider">
+                                    STREAMING...
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // 4. System info messages
+                if (msg.role === 'system') {
+                    return (
+                        <div key={absoluteIdx} className="flex w-full justify-center mb-4 opacity-90">
+                            <div className="bg-black/40 text-wuxia-gold/90 text-xs px-4 py-2 border border-wuxia-gold/30 font-mono rounded">
+                                {msg.content}
+                            </div>
+                        </div>
+                    );
+                }
+
+                // 5. Fallback for unknown role
                 return (
                     <div key={absoluteIdx} className="flex w-full justify-center mb-4 opacity-70">
                         <div className="bg-red-900/20 text-red-400 text-xs px-4 py-1 border border-red-900/50 font-mono">

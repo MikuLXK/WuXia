@@ -26,7 +26,18 @@ const Divider = () => (
 
 // Helper to map Wuxia time to approximate clock time for display
 // Now includes "Ke" (Quarter) logic roughly
-const mapWuxiaTime = (hourStr: string, quarterStr: string): string => {
+const mapWuxiaTime = (hourStr?: string, quarterStr?: string): string => {
+    const safeHour = typeof hourStr === 'string' ? hourStr : '';
+    const safeQuarter = typeof quarterStr === 'string' ? quarterStr : '';
+
+    // If model already returns canonical timestamp like YYYY:MM:DD:HH:MM, extract HH:MM directly.
+    const tsParts = safeHour.split(':');
+    if (tsParts.length >= 5 && /^\d{1,2}$/.test(tsParts[3]) && /^\d{1,2}$/.test(tsParts[4])) {
+        const h2 = tsParts[3].padStart(2, '0');
+        const m2 = tsParts[4].padStart(2, '0');
+        return `${h2}:${m2}`;
+    }
+
     const hourMap: Record<string, number> = {
         '子时': 23, '丑时': 1, '寅时': 3, '卯时': 5,
         '辰时': 7, '巳时': 9, '午时': 11, '未时': 13,
@@ -37,18 +48,18 @@ const mapWuxiaTime = (hourStr: string, quarterStr: string): string => {
     // Ke varies historically, but often 1 Shi = 8 Ke (15 mins each)
     let baseHour = 12;
     for (const key in hourMap) {
-        if (hourStr.includes(key) || hourStr.includes(key[0])) {
+        if (safeHour.includes(key) || safeHour.includes(key[0])) {
             baseHour = hourMap[key];
             break;
         }
     }
 
     let additionalMinutes = 0;
-    if (quarterStr.includes('初')) additionalMinutes = 0;
-    else if (quarterStr.includes('一')) additionalMinutes = 15;
-    else if (quarterStr.includes('二')) additionalMinutes = 30; // Often called "Zheng" (正)
-    else if (quarterStr.includes('三')) additionalMinutes = 45;
-    else if (quarterStr.includes('正')) additionalMinutes = 60; // Next hour start usually
+    if (safeQuarter.includes('初')) additionalMinutes = 0;
+    else if (safeQuarter.includes('一')) additionalMinutes = 15;
+    else if (safeQuarter.includes('二')) additionalMinutes = 30; // Often called "Zheng" (正)
+    else if (safeQuarter.includes('三')) additionalMinutes = 45;
+    else if (safeQuarter.includes('正')) additionalMinutes = 60; // Next hour start usually
     
     // Format
     const h = (baseHour + Math.floor(additionalMinutes / 60)) % 24;
@@ -63,7 +74,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
     const month = Math.floor(dayOfYear / 30) + 1;
     const day = (dayOfYear % 30) + 1;
     
-    const rawTime = 环境.时间;
+    const rawTime = 环境?.时间 || '午时';
     const rawKe = 环境.时刻 || '初刻';
     
     const numericTime = mapWuxiaTime(rawTime, rawKe);
