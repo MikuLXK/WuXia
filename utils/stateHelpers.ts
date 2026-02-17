@@ -21,23 +21,50 @@ export const applyStateCommand = (
     let targetObj: any = null;
     let path = "";
 
-    if (key.startsWith("gameState.角色")) {
+    if (key === "gameState.当前地点") {
+        targetObj = newEnv;
+        path = "具体地点";
+    } else if (key.startsWith("gameState.角色")) {
         targetObj = newChar;
-        path = key.replace("gameState.角色.", "");
+        path = key.replace(/^gameState\.角色\.?/, "");
+        if (!path && action === 'set') {
+            newChar = JSON.parse(JSON.stringify(value));
+            return { char: newChar, env: newEnv, social: newSocial, world: newWorld, story: newStory };
+        }
     } else if (key.startsWith("gameState.环境")) {
         targetObj = newEnv;
-        path = key.replace("gameState.环境.", "");
+        path = key.replace(/^gameState\.环境\.?/, "");
+        if (!path && action === 'set') {
+            newEnv = JSON.parse(JSON.stringify(value));
+            return { char: newChar, env: newEnv, social: newSocial, world: newWorld, story: newStory };
+        }
     } else if (key.startsWith("gameState.社交")) {
-        targetObj = { 社交: newSocial }; 
-        path = key.replace("gameState.", "");
+        if (key === "gameState.社交") {
+            if (action === 'set') {
+                newSocial = Array.isArray(value) ? JSON.parse(JSON.stringify(value)) : [];
+                return { char: newChar, env: newEnv, social: newSocial, world: newWorld, story: newStory };
+            }
+            if (action === 'push') {
+                newSocial.push(value);
+                return { char: newChar, env: newEnv, social: newSocial, world: newWorld, story: newStory };
+            }
+        }
+        targetObj = { 社交: newSocial };
+        path = key.replace(/^gameState\./, "");
     } else if (key.startsWith("gameState.世界")) {
-        targetObj = { 世界: newWorld }; 
-        path = key.replace("gameState.世界.", "世界.");
+        targetObj = newWorld;
+        path = key.replace(/^gameState\.世界\.?/, "");
+        if (!path && action === 'set') {
+            newWorld = JSON.parse(JSON.stringify(value));
+            return { char: newChar, env: newEnv, social: newSocial, world: newWorld, story: newStory };
+        }
     } else if (key.startsWith("gameState.剧情")) { 
-        targetObj = { 剧情: newStory };
-        path = key.replace("gameState.剧情.", "剧情.");
-    } else {
-        if (key === "gameState.当前地点") { targetObj = newEnv; path = "具体地点"; }
+        targetObj = newStory;
+        path = key.replace(/^gameState\.剧情\.?/, "");
+        if (!path && action === 'set') {
+            newStory = JSON.parse(JSON.stringify(value));
+            return { char: newChar, env: newEnv, social: newSocial, world: newWorld, story: newStory };
+        }
     }
 
     if (!targetObj || !path) return { char: newChar, env: newEnv, social: newSocial, world: newWorld, story: newStory };
@@ -112,5 +139,11 @@ export const applyStateCommand = (
         }
     }
 
-    return { char: newChar, env: newEnv, social: targetObj.社交 || newSocial, world: targetObj.世界 || newWorld, story: targetObj.剧情 || newStory };
+    return {
+        char: newChar,
+        env: newEnv,
+        social: Array.isArray((targetObj as any).社交) ? (targetObj as any).社交 : newSocial,
+        world: targetObj === newWorld ? newWorld : newWorld,
+        story: targetObj === newStory ? newStory : newStory
+    };
 };

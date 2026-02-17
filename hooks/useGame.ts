@@ -1,7 +1,7 @@
 
 import { 
     角色数据结构, 默认角色数据, 
-    默认环境信息, 
+    环境信息结构,
     聊天记录结构, 
     接口设置结构,
     提示词结构,
@@ -12,13 +12,12 @@ import {
     游戏设置结构,
     记忆配置结构,
     记忆系统结构,
-    WorldGenConfig
+    WorldGenConfig,
+    世界数据结构,
+    详细门派结构,
+    剧情系统结构
 } from '../types';
 import { useRef, useState } from 'react';
-import { 默认任务列表 } from '../models/task';
-import { 默认约定列表 } from '../models/task';
-import { 默认剧情数据 } from '../models/story';
-import { 默认世界数据, 默认归元宗 } from '../data/world'; 
 import * as dbService from '../services/dbService';
 import * as aiService from '../services/aiService';
 import { applyStateCommand } from '../utils/stateHelpers';
@@ -30,13 +29,13 @@ type 回合快照结构 = {
     游戏时间: string;
     回档前状态: {
         角色: 角色数据结构;
-        环境: typeof 默认环境信息;
+        环境: 环境信息结构;
         社交: any[];
-        世界: typeof 默认世界数据;
-        玩家门派: typeof 默认归元宗;
+        世界: 世界数据结构;
+        玩家门派: 详细门派结构;
         任务列表: any[];
         约定列表: any[];
-        剧情: typeof 默认剧情数据;
+        剧情: 剧情系统结构;
         记忆系统: 记忆系统结构;
     };
     回档前历史: 聊天记录结构[];
@@ -177,24 +176,58 @@ export const useGame = () => {
         return `${source}汇总(${filtered.length}): ${first} -> ${last}｜要点: ${preview}`.slice(0, 300);
     };
 
-    const 构建回合记忆条目 = (gameTime: string, playerInput: string, aiData: GameResponse): string => {
-        const summary = (aiData.shortTerm || '').trim() ||
-            (Array.isArray(aiData.logs)
-                ? aiData.logs.map(log => `${log.sender}:${log.text}`).join(' ').slice(0, 120)
-                : '本回合推进');
-        return `[${gameTime || '未知时间'}] ${playerInput} -> ${summary}`;
+    const 格式化记忆时间 = (raw: string): string => {
+        if (typeof raw !== 'string') return '【未知时间】';
+        const m = raw.trim().match(/^(\d{1,6}):(\d{1,2}):(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+        if (!m) return `【${raw || '未知时间'}】`;
+        const year = Number(m[1]);
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        const hour = Number(m[4]).toString().padStart(2, '0');
+        const minute = Number(m[5]).toString().padStart(2, '0');
+        return `【${year}年${month}月${day}日-${hour}:${minute}】`;
     };
 
-    const 写入四段记忆 = (memoryBase: 记忆系统结构, entry: string): 记忆系统结构 => {
-        const next = 规范化记忆系统(memoryBase);
-        const trimmed = entry.trim();
-        if (!trimmed) return next;
+    const 构建即时记忆条目 = (gameTime: string, playerInput: string, aiData: GameResponse): string => {
+        const timeLabel = 格式化记忆时间(gameTime || '未知时间');
+        const logsText = Array.isArray(aiData.logs) && aiData.logs.length > 0
+            ? aiData.logs
+                .map((log) => `${log.sender}：${(log.text || '').trim()}`)
+                .join('\n')
+            : '（本轮无有效剧情日志）';
+        return [
+            timeLabel,
+            `玩家输入：${playerInput || '（空输入）'}`,
+            'AI输出：',
+            logsText
+        ].join('\n').trim();
+    };
 
-        next.即时记忆.push(trimmed);
+    const 构建短期记忆条目 = (gameTime: string, playerInput: string, aiData: GameResponse): string => {
+        const timeLabel = 格式化记忆时间(gameTime || '未知时间');
+        const summary = (aiData.shortTerm || '').trim() ||
+            (Array.isArray(aiData.logs)
+                ? aiData.logs.map(log => `${log.sender}:${log.text}`).join(' ').slice(0, 180)
+                : '本回合推进');
+        return `${timeLabel} ${playerInput} -> ${summary}`;
+    };
+
+    const 写入四段记忆 = (memoryBase: 记忆系统结构, immediateEntry: string, shortEntry: string): 记忆系统结构 => {
+        const next = 规范化记忆系统(memoryBase);
+        const full = immediateEntry.trim();
+        const summary = shortEntry.trim();
+        if (!full && !summary) return next;
+
+        if (full) {
+            next.即时记忆.push(full);
+        }
 
         while (next.即时记忆.length > 即时记忆上限) {
-            const moved = next.即时记忆.shift();
-            if (moved) next.短期记忆.push(moved);
+            next.即时记忆.shift();
+        }
+
+        if (summary) {
+            next.短期记忆.push(summary);
         }
 
         const shortLimit = Math.max(5, memoryConfig.短期记忆阈值 || 30);
@@ -210,6 +243,130 @@ export const useGame = () => {
         }
 
         return next;
+    };
+
+    const 构建NPC上下文 = (socialData: any[]): {
+        在场数据块: string;
+        离场数据块: string;
+        记忆历史块: string;
+    } => {
+        const npcList = Array.isArray(socialData) ? socialData : [];
+        const 普通关键记忆条数N = 5;
+        const 在场重要角色关键记忆条数N = 20;
+
+        const 标准化记忆 = (npc: any, limit: number) => {
+            if (!Array.isArray(npc?.记忆)) return [];
+            return npc.记忆
+                .map((m: any) => ({
+                    时间: typeof m?.时间 === 'string' ? m.时间 : '未知时间',
+                    内容: typeof m?.内容 === 'string' ? m.内容 : String(m?.内容 ?? '')
+                }))
+                .filter((m: any) => m.内容.trim().length > 0)
+                .slice(-Math.max(1, limit));
+        };
+
+        const toLite = (npc: any, index: number) => {
+            const 是否在场 = typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true;
+            const 是否队友 = typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0);
+            const 是否主要角色 = typeof npc?.是否主要角色 === 'boolean' ? npc.是否主要角色 : false;
+            const 记忆上限 = 是否在场 && 是否主要角色 ? 在场重要角色关键记忆条数N : 普通关键记忆条数N;
+            return {
+                索引: index,
+                id: typeof npc?.id === 'string' ? npc.id : `npc_${index}`,
+                姓名: typeof npc?.姓名 === 'string' ? npc.姓名 : `角色${index}`,
+                性别: typeof npc?.性别 === 'string' ? npc.性别 : '未知',
+                身份: typeof npc?.身份 === 'string' ? npc.身份 : '未知身份',
+                境界: typeof npc?.境界 === 'string' ? npc.境界 : '未知境界',
+                是否在场,
+                是否队友,
+                是否主要角色,
+                关系状态: typeof npc?.关系状态 === 'string' ? npc.关系状态 : '未知',
+                好感度: typeof npc?.好感度 === 'number' ? npc.好感度 : 0,
+                关键记忆: 标准化记忆(npc, 记忆上限)
+            };
+        };
+
+        const entries = npcList.map((npc, index) => toLite(npc, index));
+
+        const 在场队伍成员 = entries.filter(n => n.是否在场 && n.是否队友);
+        const 在场非队伍重点 = entries.filter(n => n.是否在场 && !n.是否队友 && n.是否主要角色);
+        const 在场非队伍普通 = entries.filter(n => n.是否在场 && !n.是否队友 && !n.是否主要角色);
+        const 离场队伍成员 = entries.filter(n => !n.是否在场 && n.是否队友);
+        const 离场非队伍重点 = entries.filter(n => !n.是否在场 && !n.是否队友 && n.是否主要角色);
+        const 离场非队伍普通简报 = entries
+            .filter(n => !n.是否在场 && !n.是否队友 && !n.是否主要角色)
+            .map((n, idx) => `[${idx + 1}]#${n.索引}/${n.姓名}/${n.身份}/${n.关系状态}/好感${n.好感度}`);
+
+        const 去记忆 = (n: any) => ({
+            索引: n.索引,
+            id: n.id,
+            姓名: n.姓名,
+            性别: n.性别,
+            身份: n.身份,
+            境界: n.境界,
+            是否在场: n.是否在场,
+            是否队友: n.是否队友,
+            是否主要角色: n.是否主要角色,
+            关系状态: n.关系状态,
+            好感度: n.好感度
+        });
+
+        const 在场数据 = {
+            社交索引映射: entries.map(n => ({
+                索引: n.索引,
+                id: n.id,
+                姓名: n.姓名,
+                是否在场: n.是否在场,
+                是否队友: n.是否队友,
+                是否主要角色: n.是否主要角色
+            })),
+            在场NPC: {
+                队伍成员: 在场队伍成员.map(去记忆),
+                非队伍_重点角色: 在场非队伍重点.map(去记忆),
+                非队伍_普通角色: 在场非队伍普通.map(去记忆)
+            }
+        };
+
+        const 离场数据 = {
+            离场NPC: {
+                队伍成员: 离场队伍成员.map(去记忆),
+                非队伍_重点角色: 离场非队伍重点.map(去记忆),
+                非队伍_普通角色简报: 离场非队伍普通简报
+            }
+        };
+
+        const 在场记忆历史 = entries
+            .filter(n => n.是否在场 && Array.isArray(n.关键记忆) && n.关键记忆.length > 0)
+            .map(n => ({
+                索引: n.索引,
+                id: n.id,
+                姓名: n.姓名,
+                记忆历史: n.关键记忆
+            }));
+
+        const 离场记忆历史 = entries
+            .filter(n => !n.是否在场 && Array.isArray(n.关键记忆) && n.关键记忆.length > 0)
+            .map(n => ({
+                索引: n.索引,
+                id: n.id,
+                姓名: n.姓名,
+                记忆历史: n.关键记忆
+            }));
+
+        const 记忆历史 = {
+            关键记忆条数策略: {
+                普通角色: 普通关键记忆条数N,
+                在场重要角色: 在场重要角色关键记忆条数N
+            },
+            在场NPC记忆历史: 在场记忆历史,
+            离场NPC记忆历史: 离场记忆历史
+        };
+
+        return {
+            在场数据块: `【当前场景NPC档案】\n${JSON.stringify(在场数据)}`,
+            离场数据块: `【离场NPC档案】\n${JSON.stringify(离场数据)}`,
+            记忆历史块: `【NPC记忆历史】\n${JSON.stringify(记忆历史)}`
+        };
     };
 
     const handleStartNewGameWizard = () => {
@@ -264,21 +421,100 @@ ${anchor}
         `.trim();
     };
 
-    const 创建开场基础状态 = (charData: 角色数据结构) => {
+    const 创建空门派状态 = (): 详细门派结构 => ({
+        ID: 'none',
+        名称: '无门无派',
+        简介: '尚未加入任何门派。',
+        门规: [],
+        门派资金: 0,
+        门派物资: 0,
+        建设度: 0,
+        玩家职位: '无',
+        玩家贡献: 0,
+        任务列表: [],
+        兑换列表: [],
+        重要成员: []
+    });
+
+    const 创建占位门派状态 = (charData: 角色数据结构): 详细门派结构 => {
+        const hasJoinedSect = typeof charData?.所属门派ID === 'string' && charData.所属门派ID !== 'none';
+        if (!hasJoinedSect) return 创建空门派状态();
+        return {
+            ID: charData.所属门派ID || 'unknown',
+            名称: '',
+            简介: '',
+            门规: [],
+            门派资金: 0,
+            门派物资: 0,
+            建设度: 0,
+            玩家职位: charData.门派职位 || '成员',
+            玩家贡献: typeof charData.门派贡献 === 'number' ? charData.门派贡献 : 0,
+            任务列表: [],
+            兑换列表: [],
+            重要成员: []
+        };
+    };
+
+    const 创建开场空白环境 = () => ({
+        时间: '',
+        时刻: '',
+        洲: '',
+        国: '',
+        郡: '',
+        县: '',
+        村: '',
+        具体地点: '',
+        节日: '',
+        天气: '',
+        环境描述: '',
+        日期: 1
+    });
+
+    const 创建开场空白世界 = () => ({
+        当前时代: '',
+        混乱度: 0,
+        全局修正: [],
+        势力列表: [],
+        活跃NPC列表: [],
+        进行中事件: [],
+        已结算事件: [],
+        江湖史册: []
+    });
+
+    const 创建开场空白剧情 = () => ({
+        当前章节: {
+            ID: '',
+            序号: 1,
+            标题: '',
+            背景故事: '',
+            主要矛盾: '',
+            结束条件: [],
+            伏笔列表: []
+        },
+        下一章预告: {
+            标题: '',
+            大纲: ''
+        },
+        历史卷宗: [],
+        剧情变量: {}
+    });
+
+    const 创建开场基础状态 = (charData: 角色数据结构, _worldConfig: WorldGenConfig) => {
+        const hasJoinedSect = typeof charData?.所属门派ID === 'string' && charData.所属门派ID !== 'none';
+        const sectState: 详细门派结构 = 创建占位门派状态(charData);
+        const initialTasks: any[] = hasJoinedSect ? [] : [];
+        const initialAgreements: any[] = hasJoinedSect ? [] : [];
+
         return {
             角色: JSON.parse(JSON.stringify(charData)),
-            环境: JSON.parse(JSON.stringify(默认环境信息)),
+            环境: 创建开场空白环境(),
             社交: [],
-            世界: {
-                ...JSON.parse(JSON.stringify(默认世界数据)),
-                势力列表: [],
-                活跃NPC列表: [],
-                进行中事件: [],
-                已结算事件: [],
-                江湖史册: []
-            },
-            玩家门派: JSON.parse(JSON.stringify(默认归元宗)),
-            剧情: JSON.parse(JSON.stringify(默认剧情数据))
+            世界: 创建开场空白世界(),
+            玩家门派: sectState,
+            任务列表: initialTasks,
+            约定列表: initialAgreements,
+            当前地点: '',
+            剧情: 创建开场空白剧情()
         };
     };
 
@@ -287,18 +523,67 @@ ${anchor}
         memoryData: 记忆系统结构,
         socialData: any[],
         statePayload: any
-    ) => {
-        const systemPrompt = promptPool
-            .filter(p => p.启用)
+    ): {
+        systemPrompt: string;
+        shortMemoryContext: string;
+        npcMemoryContext: string;
+    } => {
+        const 构建去重GameState快照 = (payload: any) => {
+            const source = payload || {};
+            const role = source.角色 || {};
+            return {
+                角色基础信息: {
+                    姓名: role.姓名,
+                    性别: role.性别,
+                    年龄: role.年龄,
+                    出生日期: role.出生日期,
+                    称号: role.称号,
+                    境界: role.境界,
+                    天赋列表: role.天赋列表,
+                    出身背景: role.出身背景
+                },
+                角色装备: role.装备 || {},
+                角色背包: Array.isArray(role.物品列表) ? role.物品列表 : [],
+                角色功法: Array.isArray(role.功法列表) ? role.功法列表 : [],
+                当前地点: source.当前地点 || source?.环境?.具体地点 || '',
+                角色: source.角色,
+                环境: source.环境,
+                世界: source.世界,
+                玩家门派: source.玩家门派,
+                任务列表: Array.isArray(source.任务列表) ? source.任务列表 : [],
+                约定列表: Array.isArray(source.约定列表) ? source.约定列表 : [],
+                剧情: source.剧情
+            };
+        };
+
+        const enabledPrompts = promptPool.filter(p => p.启用);
+        const worldPrompt = enabledPrompts.find(p => p.id === 'core_world')?.内容 || '';
+        const otherPrompts = enabledPrompts
+            .filter(p => p.id !== 'core_world')
             .map(p => p.内容)
             .join('\n\n');
 
-        const contextMemory = `【长期记忆】\n${memoryData.长期记忆.join('\n') || '暂无'}\n【中期记忆】\n${memoryData.中期记忆.join('\n') || '暂无'}\n【短期记忆】\n${memoryData.短期记忆.slice(-30).join('\n') || '暂无'}\n【即时记忆】\n${memoryData.即时记忆.slice(-即时记忆上限).join('\n') || '暂无'}`;
-        const contextNPC = `【当前场景NPC档案】\n${(socialData || []).map(npc => `姓名：${npc.姓名}\n身份：${npc.身份}\n在场：${typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true}\n队友：${typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0)}\n性格：${npc.简介}\n记忆：${JSON.stringify((npc.记忆 || []).slice(-5))}`).join('\n') || '暂无在场NPC'}`;
-        const contextSettings = `【游戏设置】\n字数要求: ${gameConfig.字数要求}\n叙事人称: ${gameConfig.叙事人称}`;
-        const contextWorldState = `【游戏数值设定 (GameState)】\n${JSON.stringify(statePayload)}`;
+        const npcContext = 构建NPC上下文(socialData || []);
+        const promptHeader = [
+            worldPrompt.trim(),
+            npcContext.离场数据块,
+            otherPrompts.trim()
+        ].filter(Boolean).join('\n\n');
 
-        return `${systemPrompt}\n${contextMemory}\n${contextNPC}\n${contextSettings}\n${contextWorldState}`;
+        const contextMemory = `【长期记忆】\n${memoryData.长期记忆.join('\n') || '暂无'}\n【中期记忆】\n${memoryData.中期记忆.join('\n') || '暂无'}`;
+        const contextNPCData = npcContext.在场数据块;
+        const contextSettings = `【游戏设置】\n字数要求: ${gameConfig.字数要求}\n叙事人称: ${gameConfig.叙事人称}`;
+        const contextWorldState = `【游戏数值设定 (GameState)】\n${JSON.stringify(构建去重GameState快照(statePayload))}`;
+        const shortMemoryContext = `【短期记忆】\n${memoryData.短期记忆.slice(-30).join('\n') || '暂无'}`;
+        const npcMemoryContext = npcContext.记忆历史块;
+
+        return {
+            systemPrompt: [promptHeader, contextMemory, contextNPCData, contextSettings, contextWorldState]
+                .filter(Boolean)
+                .join('\n\n'),
+            shortMemoryContext,
+            npcMemoryContext
+        };
     };
 
     const handleGenerateWorld = async (
@@ -420,17 +705,17 @@ ${enabledDifficultyPrompts || '未提供'}
             await dbService.保存设置('prompts', finalPrompts);
 
             // Initialize opening base state (full runtime initialization happens in opening story)
-            const openingBase = 创建开场基础状态(charData);
+            const openingBase = 创建开场基础状态(charData, worldConfig);
             设置角色(openingBase.角色);
             设置环境(openingBase.环境);
             设置社交(openingBase.社交);
             设置世界(openingBase.世界);
             设置玩家门派(openingBase.玩家门派);
+            设置任务列表(openingBase.任务列表 || []);
+            设置约定列表(openingBase.约定列表 || []);
             设置剧情(openingBase.剧情);
 
             // Reset other states
-            设置任务列表([]);
-            设置约定列表([]);
             设置记忆系统({ 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
 
             // Mode Handling
@@ -462,19 +747,40 @@ ${enabledDifficultyPrompts || '未提供'}
     ) => {
         const openingPrompt = `
 【第0回合开场初始化任务】
-请基于当前 GameState（空白开局基础状态 + world_prompt 世界观母本）生成第一幕，要求：
+请基于当前 GameState（已清空变量模板 + world_prompt 世界观母本 + 角色建档信息）生成第一幕，要求：
 1. 输出严格符合 GameResponse JSON（含 thinking_pre/logs/thinking_post/tavern_commands/shortTerm）。
-2. **字数硬约束**：\`logs\` 中叙事正文总长度必须 **>= 450 个中文字符**（不含 thinking 与 tavern_commands）。
+2. **字数硬约束**：\`logs\` 中叙事正文总长度必须 **>= 650 个中文字符**（不含 thinking 与 tavern_commands）。
 3. **全量初始化硬约束**：本回合必须完成“当前引擎可写域”的完整初始化，且通过 \`tavern_commands\` 落地，禁止只叙事不改变量。
-4. 可写域与最小覆盖（全部必须命中）：
-   - \`gameState.角色\`：至少初始化/确认 生存值（精力/饱腹/口渴）、七部位血量与状态、装备、物品列表、功法列表、经验与BUFF。
-   - \`gameState.环境\`：必须完整初始化 时间(YYYY:MM:DD:HH:MM)、时刻、天气、节日、洲/国/郡/县/村、具体地点、日期(第几日)。
-   - \`gameState.社交\`：至少创建 2 个初始 NPC（完整结构，含记忆数组）。
-   - \`gameState.世界\`：至少初始化 势力列表、活跃NPC列表、进行中事件（>=1 条）、已结算事件、江湖史册、当前时代、混乱度。
-   - \`gameState.剧情\`：必须初始化 当前章节、下一章预告、历史卷宗、剧情变量。
-5. 命令覆盖硬约束：\`tavern_commands\` 必须同时包含对 \`角色/环境/社交/世界/剧情\` 五个根域的有效命令。
-6. 开场必须落在玩家当前环境与时间，不得跳场景；并引出第一个可交互选择，不替玩家决定。
-7. \`shortTerm\` 仅写 100 字内剧情概况。
+   - 特别说明：系统在开场前已清空大部分变量内容；除角色建档信息与 world_prompt 外，禁止依赖“现成默认值”。
+4. 可写域初始化标准（全部必须命中）：
+   - \`gameState.角色\`：按当前角色建档数据完整初始化（基础身份、六维、生存值、部位血量与状态、装备、物品列表、功法列表、经验与BUFF）。
+   - \`gameState.环境\`：完整初始化 时间(YYYY:MM:DD:HH:MM)、时刻、天气、节日、洲/国/郡/县/村、具体地点、日期(第几日)。
+   - \`gameState.当前地点\`：必须显式初始化，并与 \`gameState.环境.具体地点\` 保持一致。
+   - \`gameState.社交\`：按开场剧情实际出场角色初始化；不强制固定人数。未出场角色可不建档。
+   - \`gameState.世界\`：完整初始化（当前时代/混乱度/势力列表/活跃NPC列表/进行中事件/已结算事件/江湖史册）。
+     其中“天下大势正在发生的事件”（\`gameState.世界.进行中事件\`）开场必须生成 **>=3 条**（推荐 5 条），且每条都需具备真实关联势力或人物，禁止空事件凑数。
+   - \`gameState.剧情\`：完整初始化（当前章节/下一章预告/历史卷宗/剧情变量）。
+5. 非可写域初始化原则（随建档决定）：
+   - \`玩家门派/任务列表/约定列表\` 在本地状态中也需完成初始化。
+   - 若角色未加入门派（如 \`所属门派ID=none\`），相关门派数据与任务/约定可留空，但字段必须存在且语义正确。
+6. 命令覆盖硬约束：\`tavern_commands\` 必须覆盖本回合实际发生且可写的变更；禁止为了凑数量生成无意义命令。
+7. 开场必须落在玩家当前环境与时间，不得跳场景；并引出第一个可交互选择，不替玩家决定。
+8. \`shortTerm\` 仅写 100 字内剧情概况。
+9. **剧情重置硬约束（必须执行）**：
+   - world_prompt 已更新后，本回合必须先重建并覆盖 \`gameState.剧情.剧情变量\`（\`set\` 整对象），禁止沿用旧存档固定键与旧值。
+   - \`gameState.剧情.当前章节.标题/背景故事/主要矛盾\` 必须基于新世界观重写，禁止复用“固定默认章节模板”。
+   - \`gameState.剧情.当前章节.结束条件\` 必须与本回合实际事件绑定并动态生成，至少 3 条，且至少覆盖两种类型（时间/变量/事件）。
+   - 所有“变量型结束条件”必须引用真实存在的 \`剧情变量\` 键名，禁止悬空键名。
+10. **卷间衔接硬约束（必须执行）**：
+   - 第一卷阶段就必须写好 \`gameState.剧情.下一章预告.标题\` 与 \`大纲\`，不得使用“暂定/未定”。
+   - 第二卷大纲必须包含：核心冲突、关键势力、触发条件、失败风险，确保后续可直接承接。
+11. **分线变量硬约束（必须执行）**：
+   - \`剧情变量\` 必须用于剧情线路门控，不得写成纯描述文本。
+   - 至少包含：章节阶段变量、关键抉择变量、线索进度变量、阵营倾向变量、风险压力变量。
+   - 开场必须生成可改变剧情路线的变量组合（例如站队、线索完成度、追杀热度），并与本回合叙事一致。
+12. **开场质量约束（必须执行）**：
+   - 需要出现“可执行的下一步选择点”，并体现风险与收益差异。
+   - 出场角色、冲突与伏笔数量不设固定下限，但必须与开场剧情规模和世界观一致。
         `;
 
         const initialHistory: 聊天记录结构[] = [
@@ -491,22 +797,30 @@ ${enabledDifficultyPrompts || '未提供'}
             abortControllerRef.current = controller;
 
             const openingMem: 记忆系统结构 = { 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] };
+            const openingCurrentLocation = Object.prototype.hasOwnProperty.call(contextData || {}, '当前地点')
+                ? contextData.当前地点
+                : (contextData?.环境?.具体地点 ?? '');
             const openingStatePayload = {
                 角色: contextData.角色 || 角色,
                 环境: contextData.环境 || 环境,
                 世界: contextData.世界 || 世界,
                 玩家门派: contextData.玩家门派 || 玩家门派,
-                任务列表: [],
-                约定列表: [],
+                任务列表: contextData.任务列表 || 任务列表,
+                约定列表: contextData.约定列表 || 约定列表,
+                当前地点: openingCurrentLocation,
                 剧情: contextData.剧情 || 剧情
             };
-            const openingSystemPrompt = 构建系统提示词(
+            const openingContext = 构建系统提示词(
                 promptSnapshot,
                 openingMem,
                 contextData.社交 || [],
                 openingStatePayload
             );
-            const openingScriptContext = `【即时剧情回顾 (Script)】\n世界初始化完成，第一幕即将展开。`;
+            const openingScriptContext = [
+                openingContext.npcMemoryContext,
+                openingContext.shortMemoryContext,
+                `【即时剧情回顾 (Script)】\n世界初始化完成，第一幕即将展开。`
+            ].filter(Boolean).join('\n\n');
 
             const streamMarker = Date.now();
             if (useStreaming) {
@@ -522,7 +836,7 @@ ${enabledDifficultyPrompts || '未提供'}
             }
 
             const aiData = await aiService.generateStoryResponse(
-                openingSystemPrompt,
+                openingContext.systemPrompt,
                 openingScriptContext,
                 `${openingPrompt}\n\n${gameConfig.额外提示词}`,
                 apiConfig,
@@ -556,8 +870,9 @@ ${enabledDifficultyPrompts || '未提供'}
             });
 
             const openingTime = contextData.环境?.时间 || "未知时间";
-            const openingEntry = 构建回合记忆条目(openingTime, '开局生成', aiData);
-            设置记忆系统(prev => 写入四段记忆(规范化记忆系统(prev), openingEntry));
+            const openingImmediateEntry = 构建即时记忆条目(openingTime, '开局生成', aiData);
+            const openingShortEntry = 构建短期记忆条目(openingTime, '开局生成', aiData);
+            设置记忆系统(prev => 写入四段记忆(规范化记忆系统(prev), openingImmediateEntry, openingShortEntry));
 
             const newAiMsg: 聊天记录结构 = { 
                 role: 'assistant', 
@@ -734,13 +1049,17 @@ ${enabledDifficultyPrompts || '未提供'}
 
         try {
             // 4. Construct System Prompt
-            const systemPrompt = 构建系统提示词(
+            const builtContext = 构建系统提示词(
                 prompts,
                 updatedMemSys,
                 社交,
-                { 角色, 环境, 世界, 玩家门派, 任务列表, 约定列表, 剧情 }
+                { 角色, 环境, 世界, 玩家门派, 任务列表, 约定列表, 当前地点: 环境?.具体地点 || '', 剧情 }
             );
-            const contextImmediate = `【即时剧情回顾 (Script)】\n${formatHistoryToScript(updatedHistory)}`;
+            const contextImmediate = [
+                builtContext.npcMemoryContext,
+                builtContext.shortMemoryContext,
+                `【即时剧情回顾 (Script)】\n${formatHistoryToScript(updatedHistory) || '暂无'}`
+            ].filter(Boolean).join('\n\n');
 
             let streamMarker = 0;
             if (isStreaming) {
@@ -758,7 +1077,7 @@ ${enabledDifficultyPrompts || '未提供'}
 
             // 5. Call AI Service
             const aiData = await aiService.generateStoryResponse(
-                systemPrompt,
+                builtContext.systemPrompt,
                 contextImmediate,
                 `${sendInput}\n\n${gameConfig.额外提示词}`,
                 apiConfig,
@@ -785,8 +1104,9 @@ ${enabledDifficultyPrompts || '未提供'}
             // 6. Process Result
             processResponseCommands(aiData);
 
-            const turnEntry = 构建回合记忆条目(currentGameTime, sendInput, aiData);
-            设置记忆系统(prev => 写入四段记忆(规范化记忆系统(prev), turnEntry));
+            const immediateEntry = 构建即时记忆条目(currentGameTime, sendInput, aiData);
+            const shortEntry = 构建短期记忆条目(currentGameTime, sendInput, aiData);
+            设置记忆系统(prev => 写入四段记忆(规范化记忆系统(prev), immediateEntry, shortEntry));
 
             const newAiMsg: 聊天记录结构 = { 
                 role: 'assistant', 
@@ -845,6 +1165,7 @@ ${enabledDifficultyPrompts || '未提供'}
 
     const handleQuickRestart = async () => {
         if (loading || !最近开局配置) return;
+        清空重Roll快照();
         await handleGenerateWorld(
             深拷贝(最近开局配置.worldConfig),
             深拷贝(最近开局配置.charData),
@@ -918,13 +1239,13 @@ ${enabledDifficultyPrompts || '未提供'}
             清空重Roll快照();
             设置最近开局配置(null);
             设置角色(save.角色数据);
-            设置环境(save.环境信息);
+            设置环境(save.环境信息 || 创建开场空白环境());
             设置社交(规范化社交列表(save.社交 || [])); 
-            设置世界(save.世界 || 默认世界数据);
-            设置玩家门派(save.玩家门派 || 默认归元宗);
-            设置任务列表(save.任务列表 || 默认任务列表);
-            设置约定列表(save.约定列表 || 默认约定列表);
-            设置剧情(save.剧情 || 默认剧情数据);
+            设置世界(save.世界 || 创建开场空白世界());
+            设置玩家门派(save.玩家门派 || 创建空门派状态());
+            设置任务列表(save.任务列表 || []);
+            设置约定列表(save.约定列表 || []);
+            设置剧情(save.剧情 || 创建开场空白剧情());
             设置历史记录(save.历史记录);
             设置记忆系统(规范化记忆系统(save.记忆系统));
             
@@ -944,7 +1265,7 @@ ${enabledDifficultyPrompts || '未提供'}
         state: gameState,
         meta: {
             canRerollLatest: 可重Roll计数 > 0,
-            canQuickRestart: Boolean(最近开局配置) && 可重Roll计数 <= 1
+            canQuickRestart: Boolean(最近开局配置)
         },
         setters: {
             setShowSettings, setShowInventory, setShowEquipment, setShowSocial, setShowTeam, setShowKungfu, setShowWorld, setShowSect, setShowTask, setShowAgreement, setShowStory, setShowMemory, setShowSaveLoad,

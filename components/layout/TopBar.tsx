@@ -107,36 +107,34 @@ const mapWuxiaTime = (hourStr?: string, quarterStr?: string): string => {
 };
 
 const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
-    // Date is read from canonical game timestamp first (YYYY:MM:DD:HH:MM).
-    // 环境.日期 only represents "第几日" (journey day index).
     const parsedTime = parseCanonicalGameTime(环境?.时间);
-    const fallbackYear = 1024 + Math.floor((环境.日期 || 0) / 365);
-    const fallbackDayOfYear = (环境.日期 || 0) % 365;
-    const fallbackMonth = Math.floor(fallbackDayOfYear / 30) + 1;
-    const fallbackDay = (fallbackDayOfYear % 30) + 1;
-    const year = parsedTime?.year ?? fallbackYear;
-    const month = parsedTime?.month ?? fallbackMonth;
-    const day = parsedTime?.day ?? fallbackDay;
-    
-    const rawTime = 环境?.时间 || '1024:01:01:12:00';
-    const rawKe = 环境.时刻 || '初刻';
+    const month = parsedTime?.month ?? null;
+    const day = parsedTime?.day ?? null;
+
+    const rawTime = 环境?.时间 || '';
+    const rawKe = 环境?.时刻 || '';
     
     const numericTime = parsedTime
         ? `${parsedTime.hour.toString().padStart(2, '0')}:${parsedTime.minute.toString().padStart(2, '0')}`
         : mapWuxiaTime(rawTime, rawKe);
     const traditionalTime = parsedTime
-        ? `${mapHourToWuxia(parsedTime.hour)} · ${rawKe}`
-        : `${rawTime} · ${rawKe}`;
+        ? `${mapHourToWuxia(parsedTime.hour)}${rawKe ? ` · ${rawKe}` : ''}`
+        : `${rawTime || '未知时刻'}${rawKe ? ` · ${rawKe}` : ''}`;
     
     const displayTime = timeFormat === '数字' ? numericTime : traditionalTime;
-    const fullDateStr = `${year}年${month.toString().padStart(2, '0')}月${day.toString().padStart(2, '0')}日 ${displayTime}`;
+    const fullDateStr = parsedTime
+        ? `${parsedTime.year}年${parsedTime.month.toString().padStart(2, '0')}月${parsedTime.day.toString().padStart(2, '0')}日 ${displayTime}`
+        : displayTime;
 
     // Determine Festival automatically
     const currentFestival = useMemo(() => {
+        if (month == null || day == null) return undefined;
         return festivals.find(f => f.月 === month && f.日 === day);
     }, [festivals, month, day]);
 
-    const festivalDisplay = currentFestival ? currentFestival.名称 : '平常日';
+    const festivalDisplay = 环境?.节日 && 环境.节日 !== '无'
+        ? 环境.节日
+        : (currentFestival ? currentFestival.名称 : '平常日');
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {

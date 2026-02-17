@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
     角色数据结构, 默认角色数据, 
-    环境信息结构, 默认环境信息, 
+    环境信息结构, 
     聊天记录结构, 
     接口设置结构,
     提示词结构,
@@ -12,32 +12,91 @@ import {
     NPC结构,
     世界数据结构,
     详细门派结构,
-    任务结构, 默认任务列表,
-    约定结构, 默认约定列表,
-    剧情系统结构, 默认剧情数据,
+    任务结构,
+    约定结构,
+    剧情系统结构,
     游戏设置结构,
     记忆配置结构,
     记忆系统结构
 } from '../types';
 import { 默认提示词 } from '../prompts';
-import { 默认节日, 默认世界数据, 默认归元宗 } from '../data/world'; 
+import { 默认节日 } from '../data/world'; 
 import * as dbService from '../services/dbService';
 import { THEMES } from '../styles/themes';
 
 export const useGameState = () => {
+    const 创建空环境 = (): 环境信息结构 => ({
+        时间: '',
+        时刻: '',
+        洲: '',
+        国: '',
+        郡: '',
+        县: '',
+        村: '',
+        具体地点: '',
+        节日: '',
+        天气: '',
+        环境描述: '',
+        日期: 1
+    });
+
+    const 创建空世界 = (): 世界数据结构 => ({
+        当前时代: '',
+        混乱度: 0,
+        全局修正: [],
+        势力列表: [],
+        活跃NPC列表: [],
+        进行中事件: [],
+        已结算事件: [],
+        江湖史册: []
+    });
+
+    const 创建空门派 = (): 详细门派结构 => ({
+        ID: 'none',
+        名称: '无门无派',
+        简介: '尚未加入任何门派。',
+        门规: [],
+        门派资金: 0,
+        门派物资: 0,
+        建设度: 0,
+        玩家职位: '无',
+        玩家贡献: 0,
+        任务列表: [],
+        兑换列表: [],
+        重要成员: []
+    });
+
+    const 创建空剧情 = (): 剧情系统结构 => ({
+        当前章节: {
+            ID: '',
+            序号: 1,
+            标题: '',
+            背景故事: '',
+            主要矛盾: '',
+            结束条件: [],
+            伏笔列表: []
+        },
+        下一章预告: {
+            标题: '',
+            大纲: ''
+        },
+        历史卷宗: [],
+        剧情变量: {}
+    });
+
     // View State
     const [view, setView] = useState<'home' | 'game' | 'new_game'>('home');
     const [hasSave, setHasSave] = useState(false);
 
     // Game State
     const [角色, 设置角色] = useState<角色数据结构>(默认角色数据);
-    const [环境, 设置环境] = useState<环境信息结构>(默认环境信息);
+    const [环境, 设置环境] = useState<环境信息结构>(() => 创建空环境());
     const [社交, 设置社交] = useState<NPC结构[]>([]);
-    const [世界, 设置世界] = useState<世界数据结构>(默认世界数据); 
-    const [玩家门派, 设置玩家门派] = useState<详细门派结构>(默认归元宗);
-    const [任务列表, 设置任务列表] = useState<任务结构[]>(默认任务列表);
-    const [约定列表, 设置约定列表] = useState<约定结构[]>(默认约定列表);
-    const [剧情, 设置剧情] = useState<剧情系统结构>(默认剧情数据); 
+    const [世界, 设置世界] = useState<世界数据结构>(() => 创建空世界()); 
+    const [玩家门派, 设置玩家门派] = useState<详细门派结构>(() => 创建空门派());
+    const [任务列表, 设置任务列表] = useState<任务结构[]>([]);
+    const [约定列表, 设置约定列表] = useState<约定结构[]>([]);
+    const [剧情, 设置剧情] = useState<剧情系统结构>(() => 创建空剧情()); 
 
     // New Game State for Memory
     const [记忆系统, 设置记忆系统] = useState<记忆系统结构>({
