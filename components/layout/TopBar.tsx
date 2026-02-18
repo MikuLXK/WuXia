@@ -9,19 +9,19 @@ interface Props {
 }
 
 const TopItem: React.FC<{ label: string; value: string | number; highlight?: boolean }> = ({ label, value, highlight }) => (
-    <div className="flex flex-col items-center justify-center mx-2 md:mx-6 relative group cursor-default">
+    <div className="flex flex-col items-center justify-center mx-1 md:mx-4 relative group cursor-default">
         {/* Subtle hover bracket */}
-        <div className="absolute -inset-2 border-x border-wuxia-gold/0 group-hover:border-wuxia-gold/20 transition-all duration-500 scale-y-50 group-hover:scale-y-100"></div>
+        <div className="absolute -inset-1.5 border-x border-wuxia-gold/0 group-hover:border-wuxia-gold/20 transition-all duration-500 scale-y-50 group-hover:scale-y-100"></div>
         
-        <div className="text-[9px] md:text-[10px] text-wuxia-gold/60 font-serif tracking-widest mb-1">{label}</div>
-        <div className={`font-serif whitespace-nowrap text-base md:text-lg drop-shadow-md transition-colors ${highlight ? 'text-wuxia-red font-bold animate-pulse' : 'text-paper-white group-hover:text-wuxia-gold'}`}>
+        <div className="text-[8px] md:text-[9px] text-wuxia-gold/60 font-serif tracking-[0.18em] mb-0.5">{label}</div>
+        <div className={`font-serif whitespace-nowrap text-xs md:text-sm drop-shadow-md transition-colors ${highlight ? 'text-wuxia-red font-bold animate-pulse' : 'text-paper-white group-hover:text-wuxia-gold'}`}>
             {value}
         </div>
     </div>
 );
 
 const Divider = () => (
-    <div className="h-6 w-px bg-gradient-to-b from-transparent via-wuxia-gold/30 to-transparent mx-1"></div>
+    <div className="h-4 md:h-5 w-px bg-gradient-to-b from-transparent via-wuxia-gold/30 to-transparent mx-0.5 md:mx-1"></div>
 );
 
 const parseCanonicalGameTime = (input?: string): { year: number; month: number; day: number; hour: number; minute: number } | null => {
@@ -63,47 +63,12 @@ const mapHourToWuxia = (hour: number): string => {
     return '亥时';
 };
 
-// Helper to map Wuxia time to approximate clock time for display
-// Now includes "Ke" (Quarter) logic roughly
-const mapWuxiaTime = (hourStr?: string, quarterStr?: string): string => {
-    const safeHour = typeof hourStr === 'string' ? hourStr : '';
-    const safeQuarter = typeof quarterStr === 'string' ? quarterStr : '';
-
-    // If model already returns canonical timestamp like YYYY:MM:DD:HH:MM, extract HH:MM directly.
-    const tsParts = safeHour.split(':');
-    if (tsParts.length >= 5 && /^\d{1,2}$/.test(tsParts[3]) && /^\d{1,2}$/.test(tsParts[4])) {
-        const h2 = tsParts[3].padStart(2, '0');
-        const m2 = tsParts[4].padStart(2, '0');
-        return `${h2}:${m2}`;
-    }
-
-    const hourMap: Record<string, number> = {
-        '子时': 23, '丑时': 1, '寅时': 3, '卯时': 5,
-        '辰时': 7, '巳时': 9, '午时': 11, '未时': 13,
-        '申时': 15, '酉时': 17, '戌时': 19, '亥时': 21
-    };
-
-    // Very rough estimation: 1 Shi = 2 Hours.
-    // Ke varies historically, but often 1 Shi = 8 Ke (15 mins each)
-    let baseHour = 12;
-    for (const key in hourMap) {
-        if (safeHour.includes(key) || safeHour.includes(key[0])) {
-            baseHour = hourMap[key];
-            break;
-        }
-    }
-
-    let additionalMinutes = 0;
-    if (safeQuarter.includes('初')) additionalMinutes = 0;
-    else if (safeQuarter.includes('一')) additionalMinutes = 15;
-    else if (safeQuarter.includes('二')) additionalMinutes = 30; // Often called "Zheng" (正)
-    else if (safeQuarter.includes('三')) additionalMinutes = 45;
-    else if (safeQuarter.includes('正')) additionalMinutes = 60; // Next hour start usually
-    
-    // Format
-    const h = (baseHour + Math.floor(additionalMinutes / 60)) % 24;
-    const m = additionalMinutes % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+const mapMinuteToKe = (minute: number): string => {
+    if (minute === 30) return '正刻';
+    if (minute < 15) return '初刻';
+    if (minute < 30) return '一刻';
+    if (minute < 45) return '二刻';
+    return '三刻';
 };
 
 const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
@@ -112,19 +77,22 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
     const day = parsedTime?.day ?? null;
 
     const rawTime = 环境?.时间 || '';
-    const rawKe = 环境?.时刻 || '';
     
     const numericTime = parsedTime
         ? `${parsedTime.hour.toString().padStart(2, '0')}:${parsedTime.minute.toString().padStart(2, '0')}`
-        : mapWuxiaTime(rawTime, rawKe);
+        : (rawTime || '未知时间');
     const traditionalTime = parsedTime
-        ? `${mapHourToWuxia(parsedTime.hour)}${rawKe ? ` · ${rawKe}` : ''}`
-        : `${rawTime || '未知时刻'}${rawKe ? ` · ${rawKe}` : ''}`;
+        ? `${mapHourToWuxia(parsedTime.hour)} · ${mapMinuteToKe(parsedTime.minute)}`
+        : (rawTime || '未知时刻');
     
     const displayTime = timeFormat === '数字' ? numericTime : traditionalTime;
     const fullDateStr = parsedTime
         ? `${parsedTime.year}年${parsedTime.month.toString().padStart(2, '0')}月${parsedTime.day.toString().padStart(2, '0')}日 ${displayTime}`
         : displayTime;
+    const mobileDateStr = parsedTime
+        ? `${parsedTime.year}年${parsedTime.month.toString().padStart(2, '0')}月${parsedTime.day.toString().padStart(2, '0')}日`
+        : '未知日期';
+    const mobileClockStr = displayTime;
 
     // Determine Festival automatically
     const currentFestival = useMemo(() => {
@@ -169,15 +137,15 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                 {/* Center Plaque - The "Hanging" UI Element */}
                 <div className="absolute left-1/2 top-0 transform -translate-x-1/2 h-full flex flex-col items-center justify-start pt-0 z-20">
                      {/* The Ropes */}
-                    <div className="flex gap-10 md:gap-16 w-full justify-center absolute top-0">
-                         <div className="w-[2px] h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
-                         <div className="w-[2px] h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
+                    <div className="flex gap-8 md:gap-16 w-full justify-center absolute top-0">
+                         <div className="w-[2px] h-7 md:h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
+                         <div className="w-[2px] h-7 md:h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
                      </div>
 
                      {/* The Plaque Body */}
                      <div 
                         onClick={toggleFullScreen}
-                        className="mt-3 md:mt-4 bg-[#111] border-2 border-double border-wuxia-gold/50 px-6 md:px-10 py-2 md:py-3 rounded-lg shadow-[0_10px_20px_rgba(0,0,0,0.8)] relative flex flex-col items-center min-w-[200px] md:min-w-[240px] transform hover:scale-105 transition-transform duration-500 cursor-pointer"
+                        className="mt-2.5 md:mt-4 bg-[#111] border-2 border-double border-wuxia-gold/50 px-4 md:px-10 py-1.5 md:py-3 rounded-lg shadow-[0_10px_20px_rgba(0,0,0,0.8)] relative flex flex-col items-center min-w-[164px] md:min-w-[240px] transform hover:scale-105 transition-transform duration-500 cursor-pointer"
                      >
                          
                          {/* Inner Corner Decos */}
@@ -187,12 +155,16 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                          <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-wuxia-gold/50"></div>
 
                          {/* Time Display */}
-                         <div className="text-base md:text-xl font-bold font-serif text-wuxia-gold tracking-[0.08em] md:tracking-[0.1em] text-shadow">
+                         <div className="hidden md:block text-base md:text-xl font-bold font-serif text-wuxia-gold tracking-[0.08em] md:tracking-[0.1em] text-shadow">
                              {fullDateStr}
+                         </div>
+                         <div className="md:hidden text-wuxia-gold text-shadow text-center leading-tight">
+                             <div className="text-[10px] font-serif tracking-[0.08em]">{mobileDateStr}</div>
+                             <div className="text-base font-bold font-mono tracking-[0.12em]">{mobileClockStr}</div>
                          </div>
                          
                          {/* Location Badge (Hanging from Plaque) */}
-                         <div className="absolute -bottom-3 bg-wuxia-red text-white text-[9px] md:text-[10px] px-3 py-[2px] rounded border border-wuxia-gold/30 shadow-md flex items-center gap-1 z-30 font-bold tracking-widest">
+                         <div className="absolute -bottom-2.5 md:-bottom-3 bg-wuxia-red text-white text-[8px] md:text-[10px] px-2 md:px-3 py-[1px] md:py-[2px] rounded border border-wuxia-gold/30 shadow-md flex items-center gap-1 z-30 font-bold tracking-widest">
                             <span className="opacity-90">{环境.国}</span>
                             <span className="text-wuxia-gold opacity-80 font-bold">-</span>
                             <span>{环境.具体地点}</span>

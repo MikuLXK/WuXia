@@ -10,6 +10,17 @@ interface Props {
 }
 
 type TabType = 'context' | 'short' | 'medium' | 'long';
+const 即时短期分隔标记 = '\n<<SHORT_TERM_SYNC>>\n';
+
+const 解析即时记忆 = (raw: string) => {
+    const text = (raw || '').trim();
+    const splitAt = text.lastIndexOf(即时短期分隔标记);
+    if (splitAt < 0) return { main: text, syncedShort: '' };
+    return {
+        main: text.slice(0, splitAt).trim(),
+        syncedShort: text.slice(splitAt + 即时短期分隔标记.length).trim()
+    };
+};
 
 const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose, currentTime }) => {
     const [activeTab, setActiveTab] = useState<TabType>('context');
@@ -26,7 +37,10 @@ const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose, currentT
         .reverse();
 
     // 1. 即时记忆（四段第一层）
-    const immediateData = (memorySystem?.即时记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
+    const immediateData = (memorySystem?.即时记忆 || []).map((m, i) => {
+        const parsed = 解析即时记忆(m);
+        return { content: parsed.main, syncedShort: parsed.syncedShort, id: i };
+    }).reverse();
     const contextData = immediateData.length > 0 ? immediateData : fallbackImmediateData;
 
     // 2. 其余三层
@@ -103,7 +117,7 @@ const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose, currentT
                         <div className="absolute left-[19px] top-4 bottom-4 w-px bg-gradient-to-b from-gray-800 via-gray-700 to-transparent"></div>
 
                         {currentData.length > 0 ? currentData.map((mem, idx) => (
-                            <div key={idx} className="relative pl-12 group animate-slide-in" style={{ animationDelay: `${idx * 30}ms` }}>
+                            <div key={`${activeTab}-${(mem as any).id ?? idx}`} className="relative pl-12 group animate-slide-in" style={{ animationDelay: `${idx * 30}ms` }}>
                                 {/* Timeline Dot */}
                                 <div className={`absolute left-[13px] top-1.5 w-3 h-3 rounded-full border-2 transition-colors shadow-[0_0_10px_rgba(0,0,0,0.5)] ${
                                     activeTab === 'context' ? 'bg-wuxia-cyan border-wuxia-cyan text-black' :
@@ -120,6 +134,14 @@ const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose, currentT
                                     <p className="text-gray-300 font-serif leading-loose text-sm italic whitespace-pre-wrap">
                                         {mem.content}
                                     </p>
+                                    {activeTab === 'context' && (mem as any).syncedShort && (
+                                        <div className="mt-3 border-t border-gray-800/70 pt-2">
+                                            <div className="text-[10px] text-wuxia-cyan/80 mb-1 tracking-wide">短期摘要（待转入）</div>
+                                            <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
+                                                {(mem as any).syncedShort}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )) : (

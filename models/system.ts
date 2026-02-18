@@ -31,6 +31,7 @@ export interface 游戏设置结构 {
 export interface 记忆配置结构 {
     短期记忆阈值: number; // 默认 20
     中期记忆阈值: number; // 默认 50
+    重要角色关键记忆条数N: number; // 默认 20
     短期转中期提示词: string; 
     中期转长期提示词: string;
 }

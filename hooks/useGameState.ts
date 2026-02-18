@@ -29,7 +29,6 @@ import { THEMES } from '../styles/themes';
 export const useGameState = () => {
     const 创建空环境 = (): 环境信息结构 => ({
         时间: '',
-        时刻: '',
         洲: '',
         国: '',
         郡: '',
@@ -151,13 +150,23 @@ Activate the following requirements ONLY when generating a sexual scene:
 - If no specific character is specified, use a general third-person or narrator perspective.
 - Describe the scene step by step.)`
     });
-    
-    const [memoryConfig, setMemoryConfig] = useState<记忆配置结构>({ 
-        短期记忆阈值: 30, 
+
+    const 默认记忆配置: 记忆配置结构 = {
+        短期记忆阈值: 30,
         中期记忆阈值: 50,
+        重要角色关键记忆条数N: 20,
         短期转中期提示词: '请根据上述短期记忆，总结出关键事件的时间、地点和结果，去除琐碎对话。',
         中期转长期提示词: '请将上述中期记忆概括为一段史诗般的经历，保留对角色成长有重大影响的事件。'
+    };
+    const 规范化记忆配置 = (raw?: Partial<记忆配置结构> | null): 记忆配置结构 => ({
+        ...默认记忆配置,
+        ...(raw || {}),
+        短期记忆阈值: Math.max(5, Number(raw?.短期记忆阈值 ?? 默认记忆配置.短期记忆阈值) || 默认记忆配置.短期记忆阈值),
+        中期记忆阈值: Math.max(20, Number(raw?.中期记忆阈值 ?? 默认记忆配置.中期记忆阈值) || 默认记忆配置.中期记忆阈值),
+        重要角色关键记忆条数N: Math.max(1, Number(raw?.重要角色关键记忆条数N ?? 默认记忆配置.重要角色关键记忆条数N) || 默认记忆配置.重要角色关键记忆条数N)
     });
+    
+    const [memoryConfig, setMemoryConfig] = useState<记忆配置结构>(默认记忆配置);
 
     const [prompts, setPrompts] = useState<提示词结构[]>(默认提示词);
     const [festivals, setFestivals] = useState<节日结构[]>(默认节日);
@@ -197,7 +206,7 @@ Activate the following requirements ONLY when generating a sexual scene:
                 const savedGameConfig = await dbService.读取设置('game_settings');
                 if (savedGameConfig) setGameConfig(savedGameConfig as 游戏设置结构);
                 const savedMemoryConfig = await dbService.读取设置('memory_settings');
-                if (savedMemoryConfig) setMemoryConfig(savedMemoryConfig as 记忆配置结构);
+                if (savedMemoryConfig) setMemoryConfig(规范化记忆配置(savedMemoryConfig as Partial<记忆配置结构>));
 
             } catch (e) { console.error(e); }
         };

@@ -21,7 +21,7 @@ export const generateWorldData = async (
     if (!apiConfig.apiKey) throw new Error("Missing API Key");
 
     const genSystemPrompt = `
-你是 WuXia 项目的世界观生成器。任务是只生成“世界观提示词文本”，用于覆盖 prompts/core/world.ts 的内容。
+你是 WuXia 项目的世界观生成器。任务是只生成“世界观设定文本（world_prompt）”。
 
 【输出要求（必须）】
 1. 仅输出一个 JSON 对象，禁止 Markdown、解释、注释。
@@ -34,7 +34,6 @@ export const generateWorldData = async (
 - 势力版图：主要势力（立场、目标、关系）
 - 社会环境：治安、经济、江湖风气、朝廷与宗门关系
 - 风险生态：主要冲突、危险区域、典型生存压力
-- 开场基调：适配玩家建档身份/背景的第0回合落点建议（只给世界观方向，不做变量初始化）
     `;
 
     const genUserPrompt = `

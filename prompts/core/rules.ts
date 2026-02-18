@@ -97,7 +97,7 @@ export const 核心_核心规则: 提示词结构 = {
        - 新增剧情事件（如写入 \`gameState.剧情.事件池\`）必须带 \`来源标签\`，并通过时间门控 + 条件门控双检查。
 
     9. **时间字段规则**
-       - 涉及时间/日期（如 \`gameState.环境.日期\`、\`gameState.环境.时间\`、\`gameState.环境.时刻\`、\`gameState.当前地点\`）时，必须用 \`set\`，禁止 \`add\`。
+       - 涉及时间/日期（如 \`gameState.环境.日期\`、\`gameState.环境.时间\`、\`gameState.当前地点\`）时，必须用 \`set\`，禁止 \`add\`。
 
     10. **输出结构（JSON Only）**
        - 只允许输出单一 JSON 对象，禁止 JSON 之外任何文本。

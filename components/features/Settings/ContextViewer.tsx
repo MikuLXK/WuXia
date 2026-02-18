@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { 记忆配置结构 } from '../../../types';
 
 type ContextSection = {
     id: string;
@@ -15,17 +16,25 @@ type ContextSnapshot = {
 
 interface Props {
     snapshot: ContextSnapshot;
+    memoryConfig?: 记忆配置结构;
+    onSaveMemory?: (config: 记忆配置结构) => void;
 }
 
-const ContextViewer: React.FC<Props> = ({ snapshot }) => {
+const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }) => {
     const [mode, setMode] = useState<'all' | 'single'>('all');
     const [selectedId, setSelectedId] = useState(snapshot.sections[0]?.id || '');
+    const [重要角色记忆N, set重要角色记忆N] = useState(memoryConfig?.重要角色关键记忆条数N || 20);
+    const [保存中, set保存中] = useState(false);
+    const [已保存, set已保存] = useState(false);
 
     useEffect(() => {
         if (!snapshot.sections.find(s => s.id === selectedId)) {
             setSelectedId(snapshot.sections[0]?.id || '');
         }
     }, [snapshot.sections, selectedId]);
+    useEffect(() => {
+        set重要角色记忆N(memoryConfig?.重要角色关键记忆条数N || 20);
+    }, [memoryConfig?.重要角色关键记忆条数N]);
 
     const selectedSection = useMemo(
         () => snapshot.sections.find(s => s.id === selectedId) || snapshot.sections[0],
@@ -35,6 +44,22 @@ const ContextViewer: React.FC<Props> = ({ snapshot }) => {
     const displayContent = mode === 'all'
         ? snapshot.fullText
         : (selectedSection?.content || '');
+    const 可保存上下文配置 = Boolean(memoryConfig && onSaveMemory);
+
+    const handleSaveMemoryInContext = async () => {
+        if (!memoryConfig || !onSaveMemory) return;
+        set保存中(true);
+        try {
+            await Promise.resolve(onSaveMemory({
+                ...memoryConfig,
+                重要角色关键记忆条数N: Math.max(1, Number(重要角色记忆N) || 20)
+            }));
+            set已保存(true);
+            setTimeout(() => set已保存(false), 1800);
+        } finally {
+            set保存中(false);
+        }
+    };
 
     return (
         <div className="h-full flex flex-col space-y-4 animate-fadeIn">
@@ -61,6 +86,28 @@ const ContextViewer: React.FC<Props> = ({ snapshot }) => {
                         单项查看
                     </button>
                 </div>
+            </div>
+
+            <div className="bg-black/20 border border-gray-800 rounded-lg px-4 py-3 flex flex-wrap items-center gap-3">
+                <span className="text-[11px] text-gray-400">上下文策略 · 重要角色关键记忆条数 N</span>
+                <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={重要角色记忆N}
+                    disabled={!可保存上下文配置 || 保存中}
+                    onChange={(e) => set重要角色记忆N(parseInt(e.target.value) || 20)}
+                    className="bg-black/50 border border-gray-600 p-1 text-white font-mono w-20 text-center focus:border-wuxia-gold outline-none text-xs"
+                />
+                <button
+                    onClick={handleSaveMemoryInContext}
+                    disabled={!可保存上下文配置 || 保存中}
+                    className="px-3 py-1 text-xs rounded border border-wuxia-gold/60 text-wuxia-gold hover:bg-wuxia-gold/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {保存中 ? '保存中...' : '保存'}
+                </button>
+                {已保存 && <span className="text-[11px] text-green-400">已保存</span>}
+                {!可保存上下文配置 && <span className="text-[11px] text-gray-600">当前会话不可修改</span>}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0">

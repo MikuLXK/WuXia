@@ -134,7 +134,11 @@ const SettingsModal: React.FC<Props> = ({
                         {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} />} 
                         {activeTab === 'history' && <HistoryViewer history={history} />} 
                         {activeTab === 'context' && contextSnapshot && (
-                            <ContextViewer snapshot={contextSnapshot} />
+                            <ContextViewer
+                                snapshot={contextSnapshot}
+                                memoryConfig={memoryConfig}
+                                onSaveMemory={onSaveMemory}
+                            />
                         )}
                         
                         {activeTab === 'game' && gameConfig && onSaveGame && (

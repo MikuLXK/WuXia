@@ -9,6 +9,17 @@ interface Props {
 }
 
 type TabType = 'context' | 'short' | 'medium' | 'long';
+const 即时短期分隔标记 = '\n<<SHORT_TERM_SYNC>>\n';
+
+const 解析即时记忆 = (raw: string) => {
+    const text = (raw || '').trim();
+    const splitAt = text.lastIndexOf(即时短期分隔标记);
+    if (splitAt < 0) return { main: text, syncedShort: '' };
+    return {
+        main: text.slice(0, splitAt).trim(),
+        syncedShort: text.slice(splitAt + 即时短期分隔标记.length).trim()
+    };
+};
 
 const MobileMemory: React.FC<Props> = ({ history, memorySystem, onClose, currentTime }) => {
     const [activeTab, setActiveTab] = useState<TabType>('context');
@@ -23,7 +34,10 @@ const MobileMemory: React.FC<Props> = ({ history, memorySystem, onClose, current
         }))
         .reverse();
 
-    const immediateData = (memorySystem?.即时记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
+    const immediateData = (memorySystem?.即时记忆 || []).map((m, i) => {
+        const parsed = 解析即时记忆(m);
+        return { content: parsed.main, syncedShort: parsed.syncedShort, id: i };
+    }).reverse();
     const contextData = immediateData.length > 0 ? immediateData : fallbackImmediateData;
     const shortData = (memorySystem?.短期记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
     const mediumData = (memorySystem?.中期记忆 || []).map((m, i) => ({ content: m, id: i })).reverse();
@@ -86,7 +100,7 @@ const MobileMemory: React.FC<Props> = ({ history, memorySystem, onClose, current
 
                 <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-ink-wash/5">
                     {currentData.length > 0 ? currentData.map((mem, idx) => (
-                        <div key={idx} className="bg-black/40 border border-gray-800 rounded-xl p-4">
+                        <div key={`${activeTab}-${(mem as any).id ?? idx}`} className="bg-black/40 border border-gray-800 rounded-xl p-4">
                             {activeTab === 'context' && (mem as any).rawDate && (
                                 <div className="text-[9px] text-gray-500 font-mono mb-2 border-b border-gray-800/50 pb-1">
                                     {(mem as any).rawDate}
@@ -95,6 +109,14 @@ const MobileMemory: React.FC<Props> = ({ history, memorySystem, onClose, current
                             <p className="text-gray-300 font-serif leading-relaxed text-sm whitespace-pre-wrap">
                                 {mem.content}
                             </p>
+                            {activeTab === 'context' && (mem as any).syncedShort && (
+                                <div className="mt-2 border-t border-gray-800/70 pt-2">
+                                    <div className="text-[10px] text-wuxia-cyan/80 mb-1">短期摘要（待转入）</div>
+                                    <p className="text-[11px] text-gray-400 leading-relaxed whitespace-pre-wrap">
+                                        {(mem as any).syncedShort}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )) : (
                         <div className="text-center py-16 text-gray-600 italic font-serif">

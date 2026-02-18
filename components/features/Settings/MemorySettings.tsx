@@ -26,7 +26,7 @@ const MemorySettings: React.FC<Props> = ({ settings, onSave }) => {
             </div>
             
             {/* Thresholds */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="space-y-2 bg-black/20 p-4 rounded border border-gray-800">
                     <label className="text-xs text-wuxia-cyan font-bold uppercase tracking-widest">短期记忆阈值 (条)</label>
                     <div className="flex items-center gap-3">
@@ -52,6 +52,20 @@ const MemorySettings: React.FC<Props> = ({ settings, onSave }) => {
                             className="bg-black/50 border border-gray-600 p-2 text-white font-mono w-24 text-center focus:border-wuxia-gold outline-none"
                         />
                         <span className="text-gray-500 text-xs">达到此数量时归档为长期记忆</span>
+                    </div>
+                </div>
+
+                <div className="space-y-2 bg-black/20 p-4 rounded border border-gray-800">
+                    <label className="text-xs text-wuxia-cyan font-bold uppercase tracking-widest">重要角色记忆条数 N</label>
+                    <div className="flex items-center gap-3">
+                        <input
+                            type="number"
+                            min="1" max="50"
+                            value={form.重要角色关键记忆条数N || 20}
+                            onChange={(e) => setForm({ ...form, 重要角色关键记忆条数N: parseInt(e.target.value) || 20 })}
+                            className="bg-black/50 border border-gray-600 p-2 text-white font-mono w-24 text-center focus:border-wuxia-gold outline-none"
+                        />
+                        <span className="text-gray-500 text-xs">用于重要角色上下文记忆条数</span>
                     </div>
                 </div>
             </div>
