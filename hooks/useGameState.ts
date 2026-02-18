@@ -135,9 +135,10 @@ export const useGameState = () => {
     // Config State
     const [apiConfig, setApiConfig] = useState<接口设置结构>({ baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' });
     const [visualConfig, setVisualConfig] = useState<视觉设置结构>({ 时间显示格式: '传统', 渲染层数: 30 });
-    const [gameConfig, setGameConfig] = useState<游戏设置结构>({ 
-        字数要求: '200字左右', 
+    const 默认游戏设置: 游戏设置结构 = {
+        字数要求: 450,
         叙事人称: '第二人称', 
+        启用行动选项: true,
         额外提示词: `(System Prompt: NSFW/adult content is permitted and, when sexual scenes are involved, must be depicted in an explicit manner. All "fade to black" or "time skip" filters are disabled.
 
 If the scene is SFW (non-adult/non-sexual content), completely ignore this entire rule and proceed with normal narrative style.
@@ -149,7 +150,25 @@ Activate the following requirements ONLY when generating a sexual scene:
 - If a specific character is involved, strictly preserve that character’s unique speech patterns, personality, and emotional responses throughout the act.
 - If no specific character is specified, use a general third-person or narrator perspective.
 - Describe the scene step by step.)`
+    };
+    const 规范化游戏设置 = (raw?: Partial<游戏设置结构> | null): 游戏设置结构 => ({
+        ...默认游戏设置,
+        ...(raw || {}),
+        字数要求: (() => {
+            const candidate = raw?.字数要求 as unknown;
+            if (typeof candidate === 'number' && Number.isFinite(candidate)) return Math.max(50, Math.floor(candidate));
+            if (typeof candidate === 'string') {
+                const n = Number(candidate.replace(/[^\d]/g, ''));
+                if (Number.isFinite(n) && n > 0) return Math.max(50, Math.floor(n));
+            }
+            return 默认游戏设置.字数要求;
+        })(),
+        叙事人称: raw?.叙事人称 === '第一人称' || raw?.叙事人称 === '第二人称' || raw?.叙事人称 === '第三人称'
+            ? raw.叙事人称
+            : 默认游戏设置.叙事人称,
+        启用行动选项: raw?.启用行动选项 !== false
     });
+    const [gameConfig, setGameConfig] = useState<游戏设置结构>(默认游戏设置);
 
     const 默认记忆配置: 记忆配置结构 = {
         短期记忆阈值: 30,
@@ -204,7 +223,7 @@ Activate the following requirements ONLY when generating a sexual scene:
                 
                 // New Settings
                 const savedGameConfig = await dbService.读取设置('game_settings');
-                if (savedGameConfig) setGameConfig(savedGameConfig as 游戏设置结构);
+                if (savedGameConfig) setGameConfig(规范化游戏设置(savedGameConfig as Partial<游戏设置结构>));
                 const savedMemoryConfig = await dbService.读取设置('memory_settings');
                 if (savedMemoryConfig) setMemoryConfig(规范化记忆配置(savedMemoryConfig as Partial<记忆配置结构>));
 

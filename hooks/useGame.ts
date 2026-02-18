@@ -194,6 +194,25 @@ export const useGame = () => {
             ? raw.中期转长期提示词
             : '请将上述中期记忆概括为一段史诗般的经历，保留对角色成长有重大影响的事件。'
     });
+    const 规范化游戏设置 = (raw?: Partial<游戏设置结构> | null): 游戏设置结构 => ({
+        字数要求: (() => {
+            const candidate = raw?.字数要求 as unknown;
+            if (typeof candidate === 'number' && Number.isFinite(candidate)) return Math.max(50, Math.floor(candidate));
+            if (typeof candidate === 'string') {
+                const n = Number(candidate.replace(/[^\d]/g, ''));
+                if (Number.isFinite(n) && n > 0) return Math.max(50, Math.floor(n));
+            }
+            if (typeof gameConfig?.字数要求 === 'number' && Number.isFinite(gameConfig.字数要求)) {
+                return Math.max(50, Math.floor(gameConfig.字数要求));
+            }
+            return 450;
+        })(),
+        叙事人称: raw?.叙事人称 === '第一人称' || raw?.叙事人称 === '第二人称' || raw?.叙事人称 === '第三人称'
+            ? raw.叙事人称
+            : (gameConfig?.叙事人称 || '第二人称'),
+        启用行动选项: raw?.启用行动选项 !== false,
+        额外提示词: typeof raw?.额外提示词 === 'string' ? raw.额外提示词 : (gameConfig?.额外提示词 || '')
+    });
 
     const 生成记忆摘要 = (batch: string[], source: '短期' | '中期'): string => {
         const filtered = batch.map(item => item.trim()).filter(Boolean);
@@ -775,12 +794,13 @@ ${anchor}
             'write_perspective_second',
             'write_perspective_third'
         ];
+        const normalizedGameConfig = 规范化游戏设置(gameConfig);
         const selectedPerspectiveIdMap: Record<string, string> = {
             第一人称: 'write_perspective_first',
             第二人称: 'write_perspective_second',
             第三人称: 'write_perspective_third'
         };
-        const selectedPerspectiveId = selectedPerspectiveIdMap[gameConfig.叙事人称] || 'write_perspective_second';
+        const selectedPerspectiveId = selectedPerspectiveIdMap[normalizedGameConfig.叙事人称] || 'write_perspective_second';
         const selectedPerspectivePrompt = promptPool.find(p => p.id === selectedPerspectiveId);
         const fallbackPerspectivePrompt = promptPool.find(p => perspectivePromptIds.includes(p.id) && p.启用);
 
@@ -788,27 +808,34 @@ ${anchor}
         const 渲染提示词文本 = (content: string) => content.replace(/\$\{playerName\}/g, playerName);
         const 应用写作设置 = (promptId: string, content: string) => {
             if (promptId !== 'write_req') return content;
-            const lengthRule = `- 单条旁白字数要求：${gameConfig.字数要求 || '200字左右'}；长段需拆分多条 logs。`;
-            if (content.includes('单条旁白建议')) {
+            const lengthRule = `<字数>本次"logs"内的正文**必须${normalizedGameConfig.字数要求}字**以上</字数>`;
+            if (/<字数>[\s\S]*?<\/字数>/m.test(content)) {
+                return content.replace(/<字数>[\s\S]*?<\/字数>/m, lengthRule);
+            }
+            if (/- 单条旁白建议.*$/m.test(content)) {
                 return content.replace(/- 单条旁白建议.*$/m, lengthRule);
             }
             return `${content.trim()}\n${lengthRule}`;
         };
 
         const enabledPrompts = promptPool.filter(p => p.启用);
+        const actionOptionsPrompt = promptPool.find(p => p.id === 'core_action_options');
         const worldPrompt = 渲染提示词文本(enabledPrompts.find(p => p.id === 'core_world')?.内容 || '');
         const writeReqPrompt = enabledPrompts.find(p => p.id === 'write_req');
         const writeReqContent = writeReqPrompt
             ? 应用写作设置(writeReqPrompt.id, 渲染提示词文本(writeReqPrompt.内容))
             : '';
         const otherPromptContents = enabledPrompts
-            .filter(p => p.id !== 'core_world' && !perspectivePromptIds.includes(p.id) && p.id !== 'write_req')
+            .filter(p => p.id !== 'core_world' && p.id !== 'core_action_options' && !perspectivePromptIds.includes(p.id) && p.id !== 'write_req')
             .map(p => 应用写作设置(p.id, 渲染提示词文本(p.内容)));
+        const actionOptionsPromptContent = normalizedGameConfig.启用行动选项
+            ? 渲染提示词文本(actionOptionsPrompt?.内容 || '')
+            : '';
         const activePerspectiveContent = 应用写作设置(
             selectedPerspectivePrompt?.id || '',
             渲染提示词文本(selectedPerspectivePrompt?.内容 || fallbackPerspectivePrompt?.内容 || '')
         );
-        const otherPrompts = [...otherPromptContents]
+        const otherPrompts = [...otherPromptContents, actionOptionsPromptContent]
             .filter(Boolean)
             .join('\n\n');
 
@@ -825,8 +852,9 @@ ${anchor}
         const contextNPCData = npcContext.在场数据块;
         const contextSettings = [
             '【游戏设置】',
-            `字数要求: ${gameConfig.字数要求}`,
-            `叙事人称: ${gameConfig.叙事人称}`,
+            `字数要求: ${normalizedGameConfig.字数要求}字`,
+            `叙事人称: ${normalizedGameConfig.叙事人称}`,
+            `行动选项功能: ${normalizedGameConfig.启用行动选项 ? '开启' : '关闭'}`,
             '',
             '【对应叙事人称提示词】',
             activePerspectiveContent || '未配置',
@@ -1127,7 +1155,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const aiData = await aiService.generateStoryResponse(
                 openingContext.systemPrompt,
                 openingScriptContext,
-                `${openingPrompt}\n\n${gameConfig.额外提示词}`,
+                openingPrompt,
                 apiConfig,
                 controller.signal,
                 useStreaming
@@ -1146,7 +1174,8 @@ ${enabledDifficultyPrompts || '未提供'}
                             }));
                         }
                     }
-                    : undefined
+                    : undefined,
+                gameConfig.额外提示词
             );
 
             // Apply commands (use generated opening state as base to avoid stale state race)
@@ -1313,6 +1342,14 @@ ${enabledDifficultyPrompts || '未提供'}
             { 角色, 环境, 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 环境?.具体地点 || '', 剧情 }
         );
         const historyScript = formatHistoryToScript(历史记录) || '暂无';
+        const latestUserInput = [...历史记录]
+            .reverse()
+            .find(item => item.role === 'user' && typeof item.content === 'string' && item.content.trim().length > 0)
+            ?.content
+            ?.trim() || '暂无';
+        const extraPrompt = typeof gameConfig?.额外提示词 === 'string' && gameConfig.额外提示词.trim().length > 0
+            ? gameConfig.额外提示词.trim()
+            : '未配置';
 
         const sections: 上下文段[] = [];
         let order = 1;
@@ -1339,6 +1376,8 @@ ${enabledDifficultyPrompts || '未提供'}
         pushSection('game_state', '游戏数值设定 (GameState)', '系统', builtContext.contextPieces.游戏数值设定);
         pushSection('memory_short', '短期记忆', '记忆', builtContext.shortMemoryContext);
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
+        pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);
+        pushSection('extra_prompt', '额外要求提示词', '用户', `【额外要求提示词】\n${extraPrompt}`);
 
         return {
             sections,
@@ -1431,7 +1470,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const aiData = await aiService.generateStoryResponse(
                 builtContext.systemPrompt,
                 contextImmediate,
-                `${sendInput}\n\n${gameConfig.额外提示词}`,
+                sendInput,
                 apiConfig,
                 controller.signal,
                 isStreaming
@@ -1450,7 +1489,8 @@ ${enabledDifficultyPrompts || '未提供'}
                             }));
                         }
                     }
-                    : undefined
+                    : undefined,
+                gameConfig.额外提示词
             );
 
             // 6. Process Result
@@ -1537,8 +1577,9 @@ ${enabledDifficultyPrompts || '未提供'}
         await dbService.保存设置('visual_settings', newConfig);
     }
     const saveGameSettings = async (newConfig: 游戏设置结构) => {
-        setGameConfig(newConfig);
-        await dbService.保存设置('game_settings', newConfig);
+        const normalized = 规范化游戏设置(newConfig);
+        setGameConfig(normalized);
+        await dbService.保存设置('game_settings', normalized);
     }
     const saveMemorySettings = async (newConfig: 记忆配置结构) => {
         const normalized = 规范化记忆配置(newConfig);
@@ -1604,7 +1645,7 @@ ${enabledDifficultyPrompts || '未提供'}
             设置历史记录(save.历史记录);
             设置记忆系统(规范化记忆系统(save.记忆系统));
             
-            if (save.游戏设置) setGameConfig(save.游戏设置);
+            if (save.游戏设置) setGameConfig(规范化游戏设置(save.游戏设置));
             if (save.记忆配置) setMemoryConfig(规范化记忆配置(save.记忆配置));
             if (save.提示词快照) {
                 setPrompts(save.提示词快照); // Restore world settings etc.

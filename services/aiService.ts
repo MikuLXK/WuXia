@@ -161,13 +161,18 @@ export const generateStoryResponse = async (
     playerInput: string,
     apiConfig: 接口设置结构,
     signal?: AbortSignal,
-    streamOptions?: StoryStreamOptions
+    streamOptions?: StoryStreamOptions,
+    extraPrompt?: string
 ): Promise<GameResponse> => {
     if (!apiConfig.apiKey) throw new Error("Missing API Key");
 
+    const extraPromptBlock = typeof extraPrompt === 'string' && extraPrompt.trim().length > 0
+        ? `\n\n【额外要求提示词】\n${extraPrompt.trim()}`
+        : '';
+
     const apiMessages = [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `${userContext}\n\n<玩家输入>${playerInput}</玩家输入>` }
+        { role: 'user', content: `${userContext}\n\n<玩家输入>${playerInput}</玩家输入>${extraPromptBlock}` }
     ];
 
     const normalizeGameResponse = (raw: any): GameResponse => {

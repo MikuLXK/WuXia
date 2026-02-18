@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 游戏设置结构 } from '../../../types';
 import GameButton from '../../ui/GameButton';
 
@@ -10,6 +10,10 @@ interface Props {
 const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [form, setForm] = useState<游戏设置结构>(settings);
     const [showSuccess, setShowSuccess] = useState(false);
+
+    useEffect(() => {
+        setForm(settings);
+    }, [settings]);
 
     const handleSave = () => {
         onSave(form);
@@ -28,11 +32,16 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                 <div className="space-y-2">
                     <label className="text-sm text-wuxia-cyan font-bold">字数要求</label>
                     <input 
-                        type="text"
+                        type="number"
+                        min={50}
+                        step={10}
                         value={form.字数要求}
-                        onChange={(e) => setForm({...form, 字数要求: e.target.value})}
+                        onChange={(e) => {
+                            const n = Number(e.target.value);
+                            setForm({ ...form, 字数要求: Number.isFinite(n) && n > 0 ? Math.max(50, Math.floor(n)) : 450 });
+                        }}
                         className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all font-serif tracking-wider"
-                        placeholder="e.g. 200字左右"
+                        placeholder="例如 450"
                     />
                 </div>
 
@@ -47,6 +56,25 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         <option value="第二人称">第二人称 (你)</option>
                         <option value="第三人称">第三人称 (他/姓名)</option>
                     </select>
+                </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <div className="text-sm text-wuxia-cyan font-bold">行动选项功能</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后，将在上下文注入“行动选项规范”，并要求输出 \`action_options\`。</div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setForm({ ...form, 启用行动选项: !(form.启用行动选项 !== false) })}
+                        className={`relative w-14 h-8 rounded-full transition-colors ${form.启用行动选项 !== false ? 'bg-wuxia-gold/80' : 'bg-gray-700'}`}
+                        aria-label="切换行动选项功能"
+                    >
+                        <span
+                            className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-transform ${form.启用行动选项 !== false ? 'translate-x-7' : 'translate-x-1'}`}
+                        />
+                    </button>
                 </div>
             </div>
 

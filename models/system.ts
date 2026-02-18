@@ -23,8 +23,9 @@ export interface 视觉设置结构 {
 }
 
 export interface 游戏设置结构 {
-    字数要求: string; // e.g. "200字以上"
+    字数要求: number; // Minimum logs body length
     叙事人称: '第一人称' | '第二人称' | '第三人称';
+    启用行动选项: boolean; // Whether to require action_options output
     额外提示词: string; // Custom prompt injected at the end
 }
 
