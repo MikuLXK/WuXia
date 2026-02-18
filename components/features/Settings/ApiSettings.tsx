@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 接口设置结构 } from '../../../types';
 import GameButton from '../../ui/GameButton';
@@ -33,7 +32,6 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
         setLoadingModels(true);
         setMessage('');
         try {
-            // Standard OpenAI models endpoint
             const url = form.baseUrl.replace(/\/+$/, '') + '/models';
             const res = await fetch(url, {
                 headers: {
@@ -56,58 +54,59 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     };
 
     return (
-        <div className="space-y-5 text-sm animate-fadeIn">
-             <div className="flex justify-between items-center border-b border-wuxia-gold/30 pb-2 mb-4">
-                <h3 className="text-wuxia-gold font-serif font-bold text-lg">接口连接</h3>
+        <div className="space-y-6 text-sm animate-fadeIn">
+             <div className="flex justify-between items-center border-b border-wuxia-gold/30 pb-3 mb-6">
+                <h3 className="text-wuxia-gold font-serif font-bold text-xl">接口连接</h3>
                 {showSuccess && <span className="text-green-400 text-xs font-bold animate-pulse">✔ 连接配置已保存</span>}
-            </div>
+             </div>
 
-             <div className="flex flex-col space-y-2">
-                <label className="text-gray-400 font-serif font-bold tracking-wider">接口地址 (Base URL)</label>
-                <input 
-                    type="text" 
-                    value={form.baseUrl}
-                    onChange={(e) => setForm({...form, baseUrl: e.target.value})}
-                    placeholder="https://api.openai.com/v1"
-                    className="bg-black/30 border border-gray-700/50 p-3 text-gray-200 focus:border-wuxia-gold outline-none focus:bg-black/50 transition-colors placeholder-gray-700"
-                />
-            </div>
-            <div className="flex flex-col space-y-2">
-                <label className="text-gray-400 font-serif font-bold tracking-wider">密钥 (API Key)</label>
-                <input 
-                    type="password" 
-                    value={form.apiKey}
-                    onChange={(e) => setForm({...form, apiKey: e.target.value})}
-                    placeholder="sk-..."
-                    className="bg-black/30 border border-gray-700/50 p-3 text-gray-200 focus:border-wuxia-gold outline-none focus:bg-black/50 transition-colors placeholder-gray-700"
-                />
-            </div>
-            
-            <div className="flex gap-2 items-end">
-                 <div className="flex-1 flex flex-col space-y-2">
-                    <label className="text-gray-400 font-serif font-bold tracking-wider">模型名称 (Model)</label>
-                    <input 
-                        type="text" 
-                        value={form.model}
-                        onChange={(e) => setForm({...form, model: e.target.value})}
-                        className="bg-black/30 border border-gray-700/50 p-3 text-gray-200 focus:border-wuxia-gold outline-none focus:bg-black/50 transition-colors"
-                    />
-                </div>
-                <button 
-                    onClick={handleFetchModels}
-                    className="bg-gray-800/50 border border-gray-600/50 px-4 py-3 text-xs hover:bg-wuxia-gold/10 hover:text-wuxia-gold hover:border-wuxia-gold transition-colors h-[46px]"
-                    disabled={loadingModels}
-                >
-                    {loadingModels ? '...' : '获取列表'}
-                </button>
-            </div>
+             <div className="space-y-2">
+                <label className="text-sm text-wuxia-cyan font-bold">接口地址 (Base URL)</label>
+                 <input 
+                     type="text" 
+                     value={form.baseUrl}
+                     onChange={(e) => setForm({...form, baseUrl: e.target.value})}
+                     placeholder="https://api.openai.com/v1"
+                     className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all font-serif tracking-wider"
+                 />
+             </div>
+             <div className="space-y-2">
+                <label className="text-sm text-wuxia-cyan font-bold">密钥 (API Key)</label>
+                 <input 
+                     type="password" 
+                     value={form.apiKey}
+                     onChange={(e) => setForm({...form, apiKey: e.target.value})}
+                     placeholder="sk-..."
+                     className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all font-serif tracking-wider"
+                 />
+             </div>
+             
+             <div className="flex gap-4 items-end">
+                  <div className="flex-1 space-y-2">
+                    <label className="text-sm text-wuxia-cyan font-bold">模型名称 (Model)</label>
+                     <input 
+                         type="text" 
+                         value={form.model}
+                         onChange={(e) => setForm({...form, model: e.target.value})}
+                         className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all font-serif tracking-wider"
+                     />
+                 </div>
+                 <GameButton 
+                     onClick={handleFetchModels}
+                     variant="secondary"
+                     className="h-[52px] px-6"
+                     disabled={loadingModels}
+                 >
+                     {loadingModels ? '...' : '获取列表'}
+                 </GameButton>
+             </div>
 
             {models.length > 0 && (
-                <div className="bg-black/40 p-2 border border-gray-700/50 max-h-32 overflow-y-auto custom-scrollbar">
+                <div className="bg-black/40 p-2 border border-gray-700/50 rounded-md max-h-32 overflow-y-auto custom-scrollbar">
                     {models.map(m => (
                         <div key={m} 
                             onClick={() => setForm({...form, model: m})}
-                            className="cursor-pointer hover:text-wuxia-gold text-xs py-1.5 px-2 hover:bg-white/5"
+                            className="cursor-pointer rounded-md hover:text-wuxia-gold text-xs py-1.5 px-2 hover:bg-white/5"
                         >
                             {m}
                         </div>
@@ -117,7 +116,7 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
 
             {message && <p className="text-xs text-wuxia-cyan animate-pulse">{message}</p>}
 
-            <div className="pt-6 border-t border-gray-800">
+            <div className="pt-6 border-t border-wuxia-gold/20 mt-8">
                 <GameButton onClick={handleSave} variant="primary" className="w-full">保存配置</GameButton>
             </div>
         </div>

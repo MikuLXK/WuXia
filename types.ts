@@ -55,6 +55,9 @@ export interface 背景结构 {
     效果: string;
 }
 
+// Game difficulty settings
+export type 游戏难度 = 'relaxed' | 'easy' | 'normal' | 'hard' | 'extreme';
+
 // Configuration for World Generation
 export interface WorldGenConfig {
     worldName: string;
@@ -63,7 +66,7 @@ export interface WorldGenConfig {
     dynastySetting: string; // e.g. "大一统王朝" or "诸侯割据"
     sectDensity: '稀少' | '适中' | '林立';
     tianjiaoSetting: string; // Setting regarding prodigies
-    difficulty: 'relaxed' | 'easy' | 'normal' | 'hard' | 'extreme'; // Added difficulty
+    difficulty: 游戏难度; // Added difficulty
 }
 
 export type SaveType = 'manual' | 'auto';
