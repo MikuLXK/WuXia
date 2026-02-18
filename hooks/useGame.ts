@@ -112,13 +112,45 @@ export const useGame = () => {
 
     // --- Actions ---
     const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
+    const 取首个非空文本 = (...values: unknown[]): string | undefined => {
+        for (const value of values) {
+            if (typeof value === 'string' && value.trim().length > 0) {
+                return value.trim();
+            }
+        }
+        return undefined;
+    };
+
     const 规范化社交列表 = (list: any[]): any[] => {
         if (!Array.isArray(list)) return [];
-        return list.map(npc => ({
-            ...npc,
-            是否在场: typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true,
-            是否队友: typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0)
-        }));
+        return list.map(npc => {
+            const 外貌描写 = 取首个非空文本(
+                npc?.外貌描写,
+                npc?.外貌,
+                npc?.档案?.外貌要点,
+                npc?.档案?.外貌描写
+            );
+            const 身材描写 = 取首个非空文本(
+                npc?.身材描写,
+                npc?.身材,
+                npc?.档案?.身材要点,
+                npc?.档案?.身材描写
+            );
+            const 衣着风格 = 取首个非空文本(
+                npc?.衣着风格,
+                npc?.衣着,
+                npc?.档案?.衣着风格,
+                npc?.档案?.衣着要点
+            );
+            return {
+                ...npc,
+                是否在场: typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true,
+                是否队友: typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0),
+                ...(外貌描写 ? { 外貌描写 } : {}),
+                ...(身材描写 ? { 身材描写 } : {}),
+                ...(衣着风格 ? { 衣着风格 } : {})
+            };
+        });
     };
 
     const 同步重Roll计数 = () => {
