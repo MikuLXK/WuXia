@@ -16,6 +16,13 @@ import { 数值_物品属性 } from './stats/items';
 import { 数值_功法体系 } from './stats/kungfu';
 import { 数值_世界演化 } from './stats/world'; 
 import { 数值_其他设定 } from './stats/others';
+import { 数值_战斗口径 } from './stats/combat';
+import { 数值_部位生命 } from './stats/body';
+import { 数值_经验成长 } from './stats/experience';
+import { 数值_修炼体系 } from './stats/cultivation';
+import { 数值_NPC参考 } from './stats/npc';
+import { 数值_掉落资源 } from './stats/drop';
+import { 数值_恢复休整 } from './stats/recovery';
 
 // Difficulty
 import { 难度_游戏 } from './difficulty/game';
@@ -23,7 +30,7 @@ import { 难度_判定 } from './difficulty/check';
 import { 难度_生理 } from './difficulty/physiology';
 
 // Writing
-import { 写作_人称 } from './writing/perspective';
+import { 写作_人称_第一, 写作_人称_第二, 写作_人称_第三 } from './writing/perspective';
 import { 写作_要求 } from './writing/requirements';
 import { 写作_风格 } from './writing/style';
 
@@ -43,6 +50,13 @@ export const 默认提示词: 提示词结构[] = [
     数值_功法体系,
     数值_世界演化,
     数值_其他设定,
+    数值_战斗口径,
+    数值_部位生命,
+    数值_经验成长,
+    数值_修炼体系,
+    数值_NPC参考,
+    数值_掉落资源,
+    数值_恢复休整,
 
     // Difficulty (Arrays)
     ...难度_游戏,
@@ -50,7 +64,9 @@ export const 默认提示词: 提示词结构[] = [
     ...难度_生理,
 
     // Writing
-    写作_人称,
+    写作_人称_第一,
+    写作_人称_第二,
+    写作_人称_第三,
     写作_要求,
     写作_风格
 ];

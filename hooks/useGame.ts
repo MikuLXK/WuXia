@@ -14,6 +14,8 @@ import {
     记忆系统结构,
     WorldGenConfig,
     世界数据结构,
+    战斗状态结构,
+    默认战斗状态,
     详细门派结构,
     剧情系统结构
 } from '../types';
@@ -32,6 +34,7 @@ type 回合快照结构 = {
         环境: 环境信息结构;
         社交: any[];
         世界: 世界数据结构;
+        战斗: 战斗状态结构;
         玩家门派: 详细门派结构;
         任务列表: any[];
         约定列表: any[];
@@ -56,6 +59,7 @@ export const useGame = () => {
         环境, 设置环境,
         社交, 设置社交,
         世界, 设置世界,
+        战斗, 设置战斗,
         玩家门派, 设置玩家门派,
         任务列表, 设置任务列表,
         约定列表, 设置约定列表,
@@ -130,6 +134,7 @@ export const useGame = () => {
         设置环境(深拷贝(snapshot.回档前状态.环境));
         设置社交(深拷贝(snapshot.回档前状态.社交));
         设置世界(深拷贝(snapshot.回档前状态.世界));
+        设置战斗(深拷贝(snapshot.回档前状态.战斗));
         设置玩家门派(深拷贝(snapshot.回档前状态.玩家门派));
         设置任务列表(深拷贝(snapshot.回档前状态.任务列表));
         设置约定列表(深拷贝(snapshot.回档前状态.约定列表));
@@ -481,6 +486,43 @@ ${anchor}
         江湖史册: []
     });
 
+    const 创建开场空白战斗 = (): 战斗状态结构 => ({
+        是否战斗中: 默认战斗状态.是否战斗中,
+        敌方: 默认战斗状态.敌方
+    });
+
+    const 规范化战斗状态 = (raw?: any): 战斗状态结构 => {
+        const base = raw ? JSON.parse(JSON.stringify(raw)) : 创建开场空白战斗();
+        if (typeof base?.是否战斗中 !== 'boolean') base.是否战斗中 = false;
+        if (!('敌方' in base)) base.敌方 = null;
+        return base as 战斗状态结构;
+    };
+
+    const 战斗结束自动清空 = (battleLike: any, storyLike?: any): 战斗状态结构 => {
+        const battle = 规范化战斗状态(battleLike);
+        const 敌方 = battle.敌方;
+        const 变量标记结束 =
+            storyLike?.剧情变量?.是否战斗中 === false ||
+            storyLike?.剧情变量?.战斗结束 === true ||
+            storyLike?.剧情变量?.离开战斗 === true;
+
+        const shouldClear =
+            battle.是否战斗中 !== true ||
+            !敌方 ||
+            (typeof 敌方?.当前血量 === 'number' && 敌方.当前血量 <= 0) ||
+            (typeof 敌方?.当前精力 === 'number' && 敌方.当前精力 <= 0) ||
+            变量标记结束;
+
+        if (shouldClear) {
+            return {
+                是否战斗中: false,
+                敌方: null
+            };
+        }
+
+        return battle;
+    };
+
     const 创建开场空白剧情 = () => ({
         当前章节: {
             ID: '',
@@ -510,6 +552,7 @@ ${anchor}
             环境: 创建开场空白环境(),
             社交: [],
             世界: 创建开场空白世界(),
+            战斗: 创建开场空白战斗(),
             玩家门派: sectState,
             任务列表: initialTasks,
             约定列表: initialAgreements,
@@ -549,6 +592,7 @@ ${anchor}
                 角色: source.角色,
                 环境: source.环境,
                 世界: source.世界,
+                战斗: source.战斗,
                 玩家门派: source.玩家门派,
                 任务列表: Array.isArray(source.任务列表) ? source.任务列表 : [],
                 约定列表: Array.isArray(source.约定列表) ? source.约定列表 : [],
@@ -556,11 +600,33 @@ ${anchor}
             };
         };
 
+        const perspectivePromptIds = [
+            'write_perspective_first',
+            'write_perspective_second',
+            'write_perspective_third'
+        ];
+        const selectedPerspectiveIdMap: Record<string, string> = {
+            第一人称: 'write_perspective_first',
+            第二人称: 'write_perspective_second',
+            第三人称: 'write_perspective_third'
+        };
+        const selectedPerspectiveId = selectedPerspectiveIdMap[gameConfig.叙事人称] || 'write_perspective_second';
+        const selectedPerspectivePrompt = promptPool.find(p => p.id === selectedPerspectiveId);
+        const fallbackPerspectivePrompt = promptPool.find(p => perspectivePromptIds.includes(p.id) && p.启用);
+
+        const playerName = statePayload?.角色?.姓名 || 角色?.姓名 || '未命名';
+        const 渲染提示词文本 = (content: string) => content.replace(/\$\{playerName\}/g, playerName);
+
         const enabledPrompts = promptPool.filter(p => p.启用);
-        const worldPrompt = enabledPrompts.find(p => p.id === 'core_world')?.内容 || '';
-        const otherPrompts = enabledPrompts
-            .filter(p => p.id !== 'core_world')
-            .map(p => p.内容)
+        const worldPrompt = 渲染提示词文本(enabledPrompts.find(p => p.id === 'core_world')?.内容 || '');
+        const otherPromptContents = enabledPrompts
+            .filter(p => p.id !== 'core_world' && !perspectivePromptIds.includes(p.id))
+            .map(p => 渲染提示词文本(p.内容));
+        const activePerspectiveContent = 渲染提示词文本(
+            selectedPerspectivePrompt?.内容 || fallbackPerspectivePrompt?.内容 || ''
+        );
+        const otherPrompts = [activePerspectiveContent, ...otherPromptContents]
+            .filter(Boolean)
             .join('\n\n');
 
         const npcContext = 构建NPC上下文(socialData || []);
@@ -710,6 +776,7 @@ ${enabledDifficultyPrompts || '未提供'}
             设置环境(openingBase.环境);
             设置社交(openingBase.社交);
             设置世界(openingBase.世界);
+            设置战斗(openingBase.战斗);
             设置玩家门派(openingBase.玩家门派);
             设置任务列表(openingBase.任务列表 || []);
             设置约定列表(openingBase.约定列表 || []);
@@ -759,6 +826,8 @@ ${enabledDifficultyPrompts || '未提供'}
    - \`gameState.社交\`：按开场剧情实际出场角色初始化；不强制固定人数。未出场角色可不建档。
    - \`gameState.世界\`：完整初始化（当前时代/混乱度/势力列表/活跃NPC列表/进行中事件/已结算事件/江湖史册）。
      其中“天下大势正在发生的事件”（\`gameState.世界.进行中事件\`）开场必须生成 **>=3 条**（推荐 5 条），且每条都需具备真实关联势力或人物，禁止空事件凑数。
+   - \`gameState.战斗\`：开场默认必须初始化为非战斗状态，除非玩家建档信息明确要求“战斗开局”。
+     - 默认值：\`{"是否战斗中":false,"敌方":null}\`
    - \`gameState.剧情\`：完整初始化（当前章节/下一章预告/历史卷宗/剧情变量）。
 5. 非可写域初始化原则（随建档决定）：
    - \`玩家门派/任务列表/约定列表\` 在本地状态中也需完成初始化。
@@ -779,8 +848,14 @@ ${enabledDifficultyPrompts || '未提供'}
    - 至少包含：章节阶段变量、关键抉择变量、线索进度变量、阵营倾向变量、风险压力变量。
    - 开场必须生成可改变剧情路线的变量组合（例如站队、线索完成度、追杀热度），并与本回合叙事一致。
 12. **开场质量约束（必须执行）**：
-   - 需要出现“可执行的下一步选择点”，并体现风险与收益差异。
+   - 需要出现“可执行的下一步选择点”，并至少包含 1 个低风险日常选项（例如打听、采购、休整、拜访）。
    - 出场角色、冲突与伏笔数量不设固定下限，但必须与开场剧情规模和世界观一致。
+13. **平缓开局节奏硬约束（必须执行）**：
+   - 开局前 1 回合默认采用“低压起步”，禁止强制玩家立刻陷入生死战、追杀战、围攻战、必输战。
+   - 高风险事件可作为“远处传闻/背景线索/延迟触发条件”出现，但不得在开局第一幕直接压到玩家脸上。
+   - 冲突强度需与建档信息一致：平民/流民/新手出身默认从生活场景切入；有门派或仇杀背景才可提高紧张度。
+   - 即便在困难/极限难度，第一幕也应先建立人物关系与目标，再递进压力，不得开局即重伤濒死。
+   - 若玩家未主动选择危险行动，禁止代替玩家触发高危战斗。
         `;
 
         const initialHistory: 聊天记录结构[] = [
@@ -804,6 +879,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 角色: contextData.角色 || 角色,
                 环境: contextData.环境 || 环境,
                 世界: contextData.世界 || 世界,
+                战斗: contextData.战斗 || 战斗,
                 玩家门派: contextData.玩家门派 || 玩家门派,
                 任务列表: contextData.任务列表 || 任务列表,
                 约定列表: contextData.约定列表 || 约定列表,
@@ -866,6 +942,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 环境: contextData.环境 || 环境,
                 社交: contextData.社交 || 社交,
                 世界: contextData.世界 || 世界,
+                战斗: contextData.战斗 || 战斗,
                 剧情: contextData.剧情 || 剧情
             });
 
@@ -926,6 +1003,7 @@ ${enabledDifficultyPrompts || '未提供'}
             环境: typeof 环境;
             社交: typeof 社交;
             世界: typeof 世界;
+            战斗: typeof 战斗;
             剧情: typeof 剧情;
         }
     ) => {
@@ -935,21 +1013,26 @@ ${enabledDifficultyPrompts || '未提供'}
         let envBuffer = baseState?.环境 || 环境;
         let socialBuffer = baseState?.社交 || 社交;
         let worldBuffer = baseState?.世界 || 世界;
-        let storyBuffer = baseState?.剧情 || 剧情; 
+        let battleBuffer = 规范化战斗状态(baseState?.战斗 || 战斗);
+        let storyBuffer = baseState?.剧情 || 剧情;
 
         response.tavern_commands.forEach(cmd => {
-            const res = applyStateCommand(charBuffer, envBuffer, socialBuffer, worldBuffer, storyBuffer, cmd.key, cmd.value, cmd.action);
+            const res = applyStateCommand(charBuffer, envBuffer, socialBuffer, worldBuffer, battleBuffer, storyBuffer, cmd.key, cmd.value, cmd.action);
             charBuffer = res.char;
             envBuffer = res.env;
             socialBuffer = 规范化社交列表(res.social);
             worldBuffer = res.world;
-            storyBuffer = res.story; 
+            battleBuffer = res.battle;
+            storyBuffer = res.story;
         });
+
+        battleBuffer = 战斗结束自动清空(battleBuffer, storyBuffer);
 
         设置角色(charBuffer);
         设置环境(envBuffer);
         设置社交(规范化社交列表(socialBuffer));
         设置世界(worldBuffer);
+        设置战斗(battleBuffer);
         设置剧情(storyBuffer);
     };
 
@@ -1017,6 +1100,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 环境: 深拷贝(环境),
                 社交: 深拷贝(社交),
                 世界: 深拷贝(世界),
+                战斗: 深拷贝(战斗),
                 玩家门派: 深拷贝(玩家门派),
                 任务列表: 深拷贝(任务列表),
                 约定列表: 深拷贝(约定列表),
@@ -1053,7 +1137,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 prompts,
                 updatedMemSys,
                 社交,
-                { 角色, 环境, 世界, 玩家门派, 任务列表, 约定列表, 当前地点: 环境?.具体地点 || '', 剧情 }
+                { 角色, 环境, 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 环境?.具体地点 || '', 剧情 }
             );
             const contextImmediate = [
                 builtContext.npcMemoryContext,
@@ -1212,6 +1296,7 @@ ${enabledDifficultyPrompts || '未提供'}
             历史记录: 历史记录,
             社交: 社交,
             世界: 世界,
+            战斗: 战斗,
             玩家门派: 玩家门派,
             任务列表: 任务列表,
             约定列表: 约定列表,
@@ -1242,6 +1327,7 @@ ${enabledDifficultyPrompts || '未提供'}
             设置环境(save.环境信息 || 创建开场空白环境());
             设置社交(规范化社交列表(save.社交 || [])); 
             设置世界(save.世界 || 创建开场空白世界());
+            设置战斗(规范化战斗状态(save.战斗 || 创建开场空白战斗()));
             设置玩家门派(save.玩家门派 || 创建空门派状态());
             设置任务列表(save.任务列表 || []);
             设置约定列表(save.约定列表 || []);

@@ -44,6 +44,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         onChange={(e) => setForm({...form, 叙事人称: e.target.value as any})}
                         className="w-full bg-black/30 border border-gray-600/50 p-3 text-paper-white focus:border-wuxia-gold outline-none"
                     >
+                        <option value="第一人称">第一人称 (我)</option>
                         <option value="第二人称">第二人称 (你)</option>
                         <option value="第三人称">第三人称 (他/姓名)</option>
                     </select>

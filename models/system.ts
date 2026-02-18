@@ -8,6 +8,7 @@ import { 世界数据结构 } from './world';
 import { 详细门派结构 } from './sect';
 import { 任务结构, 约定结构 } from './task';
 import { 剧情系统结构 } from './story';
+import { 战斗状态结构 } from './battle';
 
 export interface 接口设置结构 {
     baseUrl: string;
@@ -23,7 +24,7 @@ export interface 视觉设置结构 {
 
 export interface 游戏设置结构 {
     字数要求: string; // e.g. "200字以上"
-    叙事人称: '第二人称' | '第三人称';
+    叙事人称: '第一人称' | '第二人称' | '第三人称';
     额外提示词: string; // Custom prompt injected at the end
 }
 
@@ -63,6 +64,7 @@ export interface 存档结构 {
     // Extended fields
     社交?: NPC结构[];
     世界?: 世界数据结构;
+    战斗?: 战斗状态结构;
     玩家门派?: 详细门派结构;
     任务列表?: 任务结构[];
     约定列表?: 约定结构[];

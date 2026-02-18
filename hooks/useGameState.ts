@@ -17,7 +17,9 @@ import {
     剧情系统结构,
     游戏设置结构,
     记忆配置结构,
-    记忆系统结构
+    记忆系统结构,
+    战斗状态结构,
+    默认战斗状态
 } from '../types';
 import { 默认提示词 } from '../prompts';
 import { 默认节日 } from '../data/world'; 
@@ -93,6 +95,7 @@ export const useGameState = () => {
     const [环境, 设置环境] = useState<环境信息结构>(() => 创建空环境());
     const [社交, 设置社交] = useState<NPC结构[]>([]);
     const [世界, 设置世界] = useState<世界数据结构>(() => 创建空世界()); 
+    const [战斗, 设置战斗] = useState<战斗状态结构>(() => ({ ...默认战斗状态 }));
     const [玩家门派, 设置玩家门派] = useState<详细门派结构>(() => 创建空门派());
     const [任务列表, 设置任务列表] = useState<任务结构[]>([]);
     const [约定列表, 设置约定列表] = useState<约定结构[]>([]);
@@ -224,6 +227,7 @@ Activate the following requirements ONLY when generating a sexual scene:
         环境, 设置环境,
         社交, 设置社交,
         世界, 设置世界,
+        战斗, 设置战斗,
         玩家门派, 设置玩家门派,
         任务列表, 设置任务列表,
         约定列表, 设置约定列表,
