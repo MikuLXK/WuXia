@@ -121,11 +121,11 @@ const LeftPanel: React.FC<Props> = ({ 角色 }) => {
                         </div>
                     </div>
 
-                    <div className="text-[9px] text-wuxia-gold/60 italic text-center mb-1 leading-tight w-full whitespace-nowrap overflow-hidden text-ellipsis">
-                        {角色.称号}
+                    <div className="text-[9px] text-wuxia-gold/70 italic text-center mb-1 leading-tight w-full whitespace-nowrap overflow-hidden text-ellipsis">
+                        {角色.称号 || '无称号'}
                     </div>
 
-                    <div className="text-[9px] bg-wuxia-red/90 border border-red-800/50 text-white px-2 py-0.5 rounded-sm whitespace-nowrap shadow-sm scale-90">
+                    <div className="mt-2 text-[9px] bg-wuxia-red/90 border border-red-800/50 text-white px-2 py-0.5 rounded-sm whitespace-nowrap shadow-sm scale-90">
                         {角色.境界}
                     </div>
                 </div>
