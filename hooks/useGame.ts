@@ -50,6 +50,19 @@ type 最近开局配置结构 = {
     openingStreaming: boolean;
 };
 
+type 上下文段 = {
+    id: string;
+    title: string;
+    category: string;
+    order: number;
+    content: string;
+};
+
+type 上下文快照 = {
+    sections: 上下文段[];
+    fullText: string;
+};
+
 export const useGame = () => {
     const gameState = useGameState();
     const {
@@ -570,6 +583,16 @@ ${anchor}
         systemPrompt: string;
         shortMemoryContext: string;
         npcMemoryContext: string;
+        contextPieces: {
+            worldPrompt: string;
+            otherPrompts: string;
+            离场NPC档案: string;
+            长期记忆: string;
+            中期记忆: string;
+            在场NPC档案: string;
+            游戏设置: string;
+            游戏数值设定: string;
+        };
     } => {
         const 构建去重GameState快照 = (payload: any) => {
             const source = payload || {};
@@ -616,16 +639,31 @@ ${anchor}
 
         const playerName = statePayload?.角色?.姓名 || 角色?.姓名 || '未命名';
         const 渲染提示词文本 = (content: string) => content.replace(/\$\{playerName\}/g, playerName);
+        const 应用写作设置 = (promptId: string, content: string) => {
+            if (promptId !== 'write_req') return content;
+            const lengthRule = `- 单条旁白字数要求：${gameConfig.字数要求 || '200字左右'}；长段需拆分多条 logs。`;
+            if (content.includes('单条旁白建议')) {
+                return content.replace(/- 单条旁白建议.*$/m, lengthRule);
+            }
+            return `${content.trim()}\n${lengthRule}`;
+        };
 
         const enabledPrompts = promptPool.filter(p => p.启用);
         const worldPrompt = 渲染提示词文本(enabledPrompts.find(p => p.id === 'core_world')?.内容 || '');
         const otherPromptContents = enabledPrompts
             .filter(p => p.id !== 'core_world' && !perspectivePromptIds.includes(p.id))
-            .map(p => 渲染提示词文本(p.内容));
-        const activePerspectiveContent = 渲染提示词文本(
-            selectedPerspectivePrompt?.内容 || fallbackPerspectivePrompt?.内容 || ''
+            .map(p => 应用写作设置(p.id, 渲染提示词文本(p.内容)));
+        const activePerspectiveContent = 应用写作设置(
+            selectedPerspectivePrompt?.id || '',
+            渲染提示词文本(selectedPerspectivePrompt?.内容 || fallbackPerspectivePrompt?.内容 || '')
         );
-        const otherPrompts = [activePerspectiveContent, ...otherPromptContents]
+        const dynamicWritingConfig = `
+【写作规格（来自游戏设置）】
+- 字数要求: ${gameConfig.字数要求 || '未设定'}
+- 叙事人称: ${gameConfig.叙事人称 || '第二人称'}
+        `.trim();
+
+        const otherPrompts = [dynamicWritingConfig, activePerspectiveContent, ...otherPromptContents]
             .filter(Boolean)
             .join('\n\n');
 
@@ -636,7 +674,9 @@ ${anchor}
             otherPrompts.trim()
         ].filter(Boolean).join('\n\n');
 
-        const contextMemory = `【长期记忆】\n${memoryData.长期记忆.join('\n') || '暂无'}\n【中期记忆】\n${memoryData.中期记忆.join('\n') || '暂无'}`;
+        const longMemory = `【长期记忆】\n${memoryData.长期记忆.join('\n') || '暂无'}`;
+        const midMemory = `【中期记忆】\n${memoryData.中期记忆.join('\n') || '暂无'}`;
+        const contextMemory = `${longMemory}\n${midMemory}`;
         const contextNPCData = npcContext.在场数据块;
         const contextSettings = `【游戏设置】\n字数要求: ${gameConfig.字数要求}\n叙事人称: ${gameConfig.叙事人称}`;
         const contextWorldState = `【游戏数值设定 (GameState)】\n${JSON.stringify(构建去重GameState快照(statePayload))}`;
@@ -648,7 +688,17 @@ ${anchor}
                 .filter(Boolean)
                 .join('\n\n'),
             shortMemoryContext,
-            npcMemoryContext
+            npcMemoryContext,
+            contextPieces: {
+                worldPrompt: worldPrompt.trim(),
+                otherPrompts: otherPrompts.trim(),
+                离场NPC档案: npcContext.离场数据块,
+                长期记忆: longMemory,
+                中期记忆: midMemory,
+                在场NPC档案: contextNPCData,
+                游戏设置: contextSettings,
+                游戏数值设定: contextWorldState
+            }
         };
     };
 
@@ -974,8 +1024,8 @@ ${enabledDifficultyPrompts || '未提供'}
                 设置历史记录([...initialHistory, newAiMsg]);
             }
             
-            // Trigger auto-save after opening
-            setTimeout(() => performAutoSave(), 1000);
+            // Trigger auto-save after full opening response
+            performAutoSave();
 
         } catch (e: any) {
             if (e?.name === 'AbortError') {
@@ -1068,13 +1118,56 @@ ${enabledDifficultyPrompts || '未提供'}
                 return `${timeStr}玩家：${h.content}`;
             } else if (h.role === 'assistant' && h.structuredResponse) {
                 // Extract scripts from logs
-                const lines = h.structuredResponse.logs
+                const logs = Array.isArray(h.structuredResponse.logs) ? h.structuredResponse.logs : [];
+                const lines = logs
                     .filter(l => l.sender !== '【判定】' && l.sender !== '【NSFW判定】')
                     .map(l => `${l.sender}：${l.text}`).join('\n');
                 return `${timeStr}${lines}`;
             }
             return '';
         }).join('\n\n');
+    };
+
+    const buildContextSnapshot = (): 上下文快照 => {
+        const normalizedMem = 规范化记忆系统(记忆系统);
+        const builtContext = 构建系统提示词(
+            prompts,
+            normalizedMem,
+            社交,
+            { 角色, 环境, 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 环境?.具体地点 || '', 剧情 }
+        );
+        const historyScript = formatHistoryToScript(历史记录) || '暂无';
+
+        const sections: 上下文段[] = [];
+        let order = 1;
+        const pushSection = (id: string, title: string, category: string, content: string) => {
+            const trimmed = (content || '').trim();
+            if (!trimmed) return;
+            sections.push({
+                id,
+                title,
+                category,
+                order: order++,
+                content: trimmed
+            });
+        };
+
+        pushSection('world_prompt', '世界观提示词', '系统', builtContext.contextPieces.worldPrompt);
+        pushSection('npc_away', '离场NPC档案', '系统', builtContext.contextPieces.离场NPC档案);
+        pushSection('other_prompts', '叙事/规则提示词', '系统', builtContext.contextPieces.otherPrompts);
+        pushSection('memory_long', '长期记忆', '记忆', builtContext.contextPieces.长期记忆);
+        pushSection('memory_mid', '中期记忆', '记忆', builtContext.contextPieces.中期记忆);
+        pushSection('npc_present', '当前场景NPC档案', '系统', builtContext.contextPieces.在场NPC档案);
+        pushSection('game_settings', '游戏设置', '系统', builtContext.contextPieces.游戏设置);
+        pushSection('game_state', '游戏数值设定 (GameState)', '系统', builtContext.contextPieces.游戏数值设定);
+        pushSection('npc_memory', 'NPC记忆历史', '记忆', builtContext.npcMemoryContext);
+        pushSection('memory_short', '短期记忆', '记忆', builtContext.shortMemoryContext);
+        pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
+
+        return {
+            sections,
+            fullText: sections.map(section => section.content).join('\n\n')
+        };
     };
 
     // --- Core Send Logic ---
@@ -1088,7 +1181,7 @@ ${enabledDifficultyPrompts || '未提供'}
 
         // 1. Calculate Game Time String
         const canonicalTime = normalizeCanonicalGameTime(环境.时间);
-        const currentGameTime = canonicalTime || `第${环境.日期 || 1}日 ${环境.时间 || '未知时间'}`;
+        const currentGameTime = canonicalTime || 环境.时间 || `第${环境.日期 || 1}日`;
         const sendInput = content.trim();
         const historyBeforeSend = [...历史记录];
         const memBeforeSend = 规范化记忆系统(记忆系统);
@@ -1369,7 +1462,8 @@ ${enabledDifficultyPrompts || '未提供'}
             handleStartNewGameWizard,
             handleGenerateWorld,
             handleQuickRestart,
-            handleReturnToHome
+            handleReturnToHome,
+            getContextSnapshot: buildContextSnapshot
         }
     };
 };

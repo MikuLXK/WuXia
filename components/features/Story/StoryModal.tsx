@@ -8,8 +8,11 @@ interface Props {
 }
 
 const StoryModal: React.FC<Props> = ({ story, onClose }) => {
+    const [revealNext, setRevealNext] = React.useState(false);
+    const pressTimerRef = React.useRef<number | null>(null);
+
     return (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] hidden md:flex items-center justify-center p-4 animate-fadeIn">
             {/* Modal Container - Resized to max-w-5xl h-[650px] */}
             <div className="bg-ink-black/95 border border-wuxia-gold/30 w-full max-w-5xl h-[650px] flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] relative overflow-hidden rounded-2xl">
                 
@@ -196,14 +199,49 @@ const StoryModal: React.FC<Props> = ({ story, onClose }) => {
                             {/* Section 4: Teaser */}
                             <div className="pt-8 border-t border-gray-800/30">
                                 <h4 className="text-gray-600 font-bold text-[10px] uppercase tracking-widest mb-3 text-center">下一章预告</h4>
-                                <div className="relative group cursor-help mx-auto max-w-xl">
-                                    <div className="absolute inset-0 backdrop-blur-[6px] bg-black/60 z-20 group-hover:backdrop-blur-[2px] group-hover:bg-black/40 transition-all duration-700 flex flex-col items-center justify-center">
-                                         <div className="text-gray-500 font-serif text-xs tracking-[0.3em] opacity-80 border border-gray-600 px-3 py-1 rounded mb-1">
-                                             天机不可泄露
-                                         </div>
-                                    </div>
+                                <div
+                                    className="relative mx-auto max-w-xl select-none"
+                                    onMouseDown={() => {
+                                        if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
+                                        pressTimerRef.current = window.setTimeout(() => setRevealNext(true), 450);
+                                    }}
+                                    onMouseUp={() => {
+                                        if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
+                                        pressTimerRef.current = null;
+                                        setRevealNext(false);
+                                    }}
+                                    onMouseLeave={() => {
+                                        if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
+                                        pressTimerRef.current = null;
+                                        setRevealNext(false);
+                                    }}
+                                    onTouchStart={() => {
+                                        if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
+                                        pressTimerRef.current = window.setTimeout(() => setRevealNext(true), 450);
+                                    }}
+                                    onTouchEnd={() => {
+                                        if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
+                                        pressTimerRef.current = null;
+                                        setRevealNext(false);
+                                    }}
+                                    onTouchCancel={() => {
+                                        if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
+                                        pressTimerRef.current = null;
+                                        setRevealNext(false);
+                                    }}
+                                >
+                                    {!revealNext && (
+                                        <div className="absolute inset-0 backdrop-blur-[6px] bg-black/60 z-20 transition-all duration-300 flex flex-col items-center justify-center">
+                                            <div className="text-gray-500 font-serif text-xs tracking-[0.3em] opacity-80 border border-gray-600 px-3 py-1 rounded mb-1">
+                                                天机不可泄露
+                                            </div>
+                                            <div className="text-[10px] text-gray-600 tracking-[0.3em]">长按查看原文</div>
+                                        </div>
+                                    )}
 
-                                    <div className="bg-[#0f0f0f] p-4 rounded border border-gray-800 text-center relative overflow-hidden">
+                                    <div className={`bg-[#0f0f0f] p-4 rounded border border-gray-800 text-center relative overflow-hidden transition-all ${
+                                        revealNext ? 'blur-0 opacity-100' : 'blur-[2px] opacity-60'
+                                    }`}>
                                         <div className="text-lg text-gray-400 font-serif font-bold mb-2">{story.下一章预告.标题}</div>
                                         <p className="text-xs text-gray-500 leading-relaxed font-serif">
                                             {story.下一章预告.大纲}

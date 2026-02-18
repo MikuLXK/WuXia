@@ -9,15 +9,29 @@ import WorldSettings from './WorldSettings';
 import GameSettings from './GameSettings'; 
 import MemorySettings from './MemorySettings'; 
 import HistoryViewer from './HistoryViewer'; // New
+import ContextViewer from './ContextViewer';
 import { OrnateBorder } from '../../ui/decorations/OrnateBorder';
 import { 
     接口设置结构, 提示词结构, ThemePreset, 视觉设置结构, 节日结构, 聊天记录结构,
     游戏设置结构, 记忆配置结构
 } from '../../../types';
 
+type ContextSection = {
+    id: string;
+    title: string;
+    category: string;
+    order: number;
+    content: string;
+};
+
+type ContextSnapshot = {
+    sections: ContextSection[];
+    fullText: string;
+};
+
 interface Props {
-    activeTab: 'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history';
-    onTabChange: (tab: 'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history') => void;
+    activeTab: 'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context';
+    onTabChange: (tab: 'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context') => void;
     onClose: () => void;
     
     // Config Props
@@ -31,6 +45,7 @@ interface Props {
     
     // Data Props
     history: 聊天记录结构[]; 
+    contextSnapshot?: ContextSnapshot;
 
     // Actions
     onSaveApi: (config: 接口设置结构) => void;
@@ -48,7 +63,7 @@ interface Props {
 
 const SettingsModal: React.FC<Props> = ({ 
     activeTab, onTabChange, onClose,
-    apiConfig, visualConfig, gameConfig, memoryConfig, prompts, festivals, currentTheme, history,
+    apiConfig, visualConfig, gameConfig, memoryConfig, prompts, festivals, currentTheme, history, contextSnapshot,
     onSaveApi, onSaveVisual, onSaveGame, onSaveMemory, onUpdatePrompts, onUpdateFestivals, onThemeChange,
     onReturnToHome, isHome
 }) => {
@@ -66,6 +81,7 @@ const SettingsModal: React.FC<Props> = ({
                                 { id: 'memory', label: '记忆配置' },
                                 { id: 'visual', label: '视觉显示' },
                                 { id: 'history', label: '互动历史' }, // Added
+                                { id: 'context', label: '上下文' },
                                 { id: 'api', label: '接口连接' },
                                 { id: 'prompt', label: '提示词' },
                                 { id: 'theme', label: '界面风格' },
@@ -117,6 +133,9 @@ const SettingsModal: React.FC<Props> = ({
                         {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
                         {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} />} 
                         {activeTab === 'history' && <HistoryViewer history={history} />} 
+                        {activeTab === 'context' && contextSnapshot && (
+                            <ContextViewer snapshot={contextSnapshot} />
+                        )}
                         
                         {activeTab === 'game' && gameConfig && onSaveGame && (
                             <GameSettings settings={gameConfig} onSave={onSaveGame} />

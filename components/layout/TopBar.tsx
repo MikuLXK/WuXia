@@ -9,12 +9,12 @@ interface Props {
 }
 
 const TopItem: React.FC<{ label: string; value: string | number; highlight?: boolean }> = ({ label, value, highlight }) => (
-    <div className="flex flex-col items-center justify-center mx-3 md:mx-6 relative group cursor-default">
+    <div className="flex flex-col items-center justify-center mx-2 md:mx-6 relative group cursor-default">
         {/* Subtle hover bracket */}
         <div className="absolute -inset-2 border-x border-wuxia-gold/0 group-hover:border-wuxia-gold/20 transition-all duration-500 scale-y-50 group-hover:scale-y-100"></div>
         
-        <div className="text-[10px] text-wuxia-gold/60 font-serif tracking-widest mb-1">{label}</div>
-        <div className={`font-serif whitespace-nowrap text-lg drop-shadow-md transition-colors ${highlight ? 'text-wuxia-red font-bold animate-pulse' : 'text-paper-white group-hover:text-wuxia-gold'}`}>
+        <div className="text-[9px] md:text-[10px] text-wuxia-gold/60 font-serif tracking-widest mb-1">{label}</div>
+        <div className={`font-serif whitespace-nowrap text-base md:text-lg drop-shadow-md transition-colors ${highlight ? 'text-wuxia-red font-bold animate-pulse' : 'text-paper-white group-hover:text-wuxia-gold'}`}>
             {value}
         </div>
     </div>
@@ -149,7 +149,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
     };
 
     return (
-        <div className="h-24 w-full flex items-center justify-center relative overflow-visible z-50 bg-[#080808]">
+        <div className="h-20 md:h-24 w-full flex items-center justify-center relative overflow-visible z-50 bg-[#080808]">
             {/* Top Border with Pattern */}
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-ink-black via-wuxia-gold/40 to-ink-black"></div>
             
@@ -157,7 +157,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
             <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')]"></div>
             
             {/* Main Content Flex */}
-            <div className="flex items-center justify-between w-full px-8 md:px-20 relative z-10 h-full">
+            <div className="flex items-center justify-between w-full px-4 md:px-20 relative z-10 h-full">
                 
                 {/* Left Side Information */}
                 <div className="flex items-center">
@@ -169,7 +169,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                 {/* Center Plaque - The "Hanging" UI Element */}
                 <div className="absolute left-1/2 top-0 transform -translate-x-1/2 h-full flex flex-col items-center justify-start pt-0 z-20">
                      {/* The Ropes */}
-                     <div className="flex gap-16 w-full justify-center absolute top-0">
+                    <div className="flex gap-10 md:gap-16 w-full justify-center absolute top-0">
                          <div className="w-[2px] h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
                          <div className="w-[2px] h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
                      </div>
@@ -177,7 +177,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                      {/* The Plaque Body */}
                      <div 
                         onClick={toggleFullScreen}
-                        className="mt-4 bg-[#111] border-2 border-double border-wuxia-gold/50 px-10 py-3 rounded-lg shadow-[0_10px_20px_rgba(0,0,0,0.8)] relative flex flex-col items-center min-w-[240px] transform hover:scale-105 transition-transform duration-500 cursor-pointer"
+                        className="mt-3 md:mt-4 bg-[#111] border-2 border-double border-wuxia-gold/50 px-6 md:px-10 py-2 md:py-3 rounded-lg shadow-[0_10px_20px_rgba(0,0,0,0.8)] relative flex flex-col items-center min-w-[200px] md:min-w-[240px] transform hover:scale-105 transition-transform duration-500 cursor-pointer"
                      >
                          
                          {/* Inner Corner Decos */}
@@ -187,12 +187,12 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                          <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-wuxia-gold/50"></div>
 
                          {/* Time Display */}
-                         <div className="text-xl font-bold font-serif text-wuxia-gold tracking-[0.1em] text-shadow">
+                         <div className="text-base md:text-xl font-bold font-serif text-wuxia-gold tracking-[0.08em] md:tracking-[0.1em] text-shadow">
                              {fullDateStr}
                          </div>
                          
                          {/* Location Badge (Hanging from Plaque) */}
-                         <div className="absolute -bottom-3 bg-wuxia-red text-white text-[10px] px-3 py-[2px] rounded border border-wuxia-gold/30 shadow-md flex items-center gap-1 z-30 font-bold tracking-widest">
+                         <div className="absolute -bottom-3 bg-wuxia-red text-white text-[9px] md:text-[10px] px-3 py-[2px] rounded border border-wuxia-gold/30 shadow-md flex items-center gap-1 z-30 font-bold tracking-widest">
                             <span className="opacity-90">{环境.国}</span>
                             <span className="text-wuxia-gold opacity-80 font-bold">-</span>
                             <span>{环境.具体地点}</span>

@@ -6,11 +6,12 @@ interface Props {
     history: 聊天记录结构[]; // For immediate context
     memorySystem?: 记忆系统结构; // For Short/Medium/Long
     onClose: () => void;
+    currentTime?: string;
 }
 
 type TabType = 'context' | 'short' | 'medium' | 'long';
 
-const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose }) => {
+const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose, currentTime }) => {
     const [activeTab, setActiveTab] = useState<TabType>('context');
 
     // Fallback immediate data from history for backward compatibility.
@@ -19,7 +20,7 @@ const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose }) => {
         .map((msg, i) => ({
             content: msg.structuredResponse?.shortTerm || "",
             timestamp: msg.timestamp,
-            rawDate: msg.gameTime || "未知时间",
+            rawDate: msg.gameTime || currentTime || "未知时间",
             id: i
         }))
         .reverse();
@@ -46,7 +47,7 @@ const MemoryModal: React.FC<Props> = ({ history, memorySystem, onClose }) => {
     const currentData = getTabContent();
 
     return (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] hidden md:flex items-center justify-center p-4 animate-fadeIn">
             <div className="bg-ink-black/95 border border-wuxia-gold/30 w-full max-w-4xl h-[700px] flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] relative overflow-hidden rounded-2xl">
                 
                 {/* Decorative Texture */}

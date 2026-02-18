@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import GameButton from '../../ui/GameButton';
 import { WorldGenConfig, 角色数据结构, 天赋结构, 背景结构, 游戏难度 } from '../../../types';
 import { 预设天赋, 预设背景 } from '../../../data/presets';
@@ -16,6 +16,63 @@ interface Props {
 }
 
 const STEPS = ['世界观', '角色基础', '天赋背景', '确认生成'];
+
+type DropdownProps = {
+    value: number;
+    options: number[];
+    suffix: string;
+    open: boolean;
+    onToggle: () => void;
+    onSelect: (next: number) => void;
+    containerRef: React.RefObject<HTMLDivElement>;
+};
+
+const CompactDropdown: React.FC<DropdownProps> = ({
+    value,
+    options,
+    suffix,
+    open,
+    onToggle,
+    onSelect,
+    containerRef,
+}) => (
+    <div className="relative" ref={containerRef}>
+        <button
+            type="button"
+            onClick={onToggle}
+            className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md flex items-center justify-between gap-2"
+        >
+            <span className="font-mono text-sm">{value}{suffix}</span>
+            <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+            >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
+        </button>
+        {open && (
+            <div className="absolute left-0 right-0 top-full mt-2 bg-black/95 border border-gray-700 rounded-md shadow-[0_12px_30px_rgba(0,0,0,0.6)] z-50">
+                <div className="max-h-[336px] overflow-y-auto custom-scrollbar py-1">
+                    {options.map((opt) => (
+                        <button
+                            key={opt}
+                            type="button"
+                            onClick={() => onSelect(opt)}
+                            className={`w-full px-3 h-7 flex items-center text-sm font-mono transition-colors ${
+                                opt === value ? 'bg-wuxia-gold/20 text-wuxia-gold' : 'text-gray-300 hover:bg-white/5'
+                            }`}
+                        >
+                            {opt}{suffix}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
+    </div>
+);
 
 const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     const [step, setStep] = useState(0);
@@ -37,6 +94,10 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     const [charAge, setCharAge] = useState(18);
     const [birthMonth, setBirthMonth] = useState(1);
     const [birthDay, setBirthDay] = useState(1);
+    const [monthOpen, setMonthOpen] = useState(false);
+    const [dayOpen, setDayOpen] = useState(false);
+    const monthRef = useRef<HTMLDivElement>(null);
+    const dayRef = useRef<HTMLDivElement>(null);
     
     // Attributes (Total 30 points to distribute)
     const MAX_POINTS = 30;
@@ -56,9 +117,23 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     const [openingStreaming, setOpeningStreaming] = useState(true);
 
     // --- Logic ---
+    const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
+    const dayOptions = useMemo(() => Array.from({ length: 31 }, (_, i) => i + 1), []);
     
     const usedPoints = Object.values(stats).reduce((a, b) => a + b, 0);
     const remainingPoints = MAX_POINTS - usedPoints;
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (monthRef.current && monthRef.current.contains(target)) return;
+            if (dayRef.current && dayRef.current.contains(target)) return;
+            setMonthOpen(false);
+            setDayOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleStatChange = (key: keyof typeof stats, delta: number) => {
         const current = stats[key];
@@ -310,12 +385,36 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                             <div className="space-y-2">
                                                 <label className="text-sm text-wuxia-cyan font-bold">诞辰</label>
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    <select value={birthMonth} onChange={e => setBirthMonth(parseInt(e.target.value))} className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md">
-                                                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
-                                                    </select>
-                                                    <select value={birthDay} onChange={e => setBirthDay(parseInt(e.target.value))} className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md">
-                                                        {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}日</option>)}
-                                                    </select>
+                                                    <CompactDropdown
+                                                        value={birthMonth}
+                                                        options={monthOptions}
+                                                        suffix="月"
+                                                        open={monthOpen}
+                                                        onToggle={() => {
+                                                            setMonthOpen((prev) => !prev);
+                                                            setDayOpen(false);
+                                                        }}
+                                                        onSelect={(next) => {
+                                                            setBirthMonth(next);
+                                                            setMonthOpen(false);
+                                                        }}
+                                                        containerRef={monthRef}
+                                                    />
+                                                    <CompactDropdown
+                                                        value={birthDay}
+                                                        options={dayOptions}
+                                                        suffix="日"
+                                                        open={dayOpen}
+                                                        onToggle={() => {
+                                                            setDayOpen((prev) => !prev);
+                                                            setMonthOpen(false);
+                                                        }}
+                                                        onSelect={(next) => {
+                                                            setBirthDay(next);
+                                                            setDayOpen(false);
+                                                        }}
+                                                        containerRef={dayRef}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>

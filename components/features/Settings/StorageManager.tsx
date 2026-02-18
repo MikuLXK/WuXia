@@ -45,21 +45,24 @@ const StorageManager: React.FC<Props> = ({ history, prompts = [] }) => {
 
     // Calculate Dynamic Context Tokens (History)
     const contextItems = history.map((h, idx) => {
-        const str = JSON.stringify(h);
-        // Rough estimation: 1.2 tokens per char
-        const estimatedTokens = Math.ceil(str.length); 
-        
+        let tokenSource = '';
         let preview = '';
+
         if (h.role === 'user') {
-            preview = h.content;
+            tokenSource = h.content || '';
+            preview = h.content || '';
         } else if (h.role === 'assistant' && h.structuredResponse) {
-            preview = h.structuredResponse.logs
-                .map(l => `${l.sender}: ${l.text}`)
-                .join(' | ');
+            const logs = h.structuredResponse.logs || [];
+            tokenSource = logs.map(l => (l.text || '').trim()).filter(Boolean).join('\n');
+            preview = logs.map(l => `${l.sender}: ${l.text}`).join(' | ');
         } else {
-            preview = h.content;
+            tokenSource = h.content || '';
+            preview = h.content || '';
         }
-        
+
+        // Rough estimation: 1 token per char (log text only)
+        const estimatedTokens = Math.ceil(tokenSource.length);
+
         if (preview.length > 60) preview = preview.substring(0, 60) + '...';
 
         return {
@@ -68,7 +71,7 @@ const StorageManager: React.FC<Props> = ({ history, prompts = [] }) => {
             preview: preview,
             gameTime: h.gameTime,
             tokens: estimatedTokens,
-            size: str.length 
+            size: tokenSource.length 
         };
     });
 

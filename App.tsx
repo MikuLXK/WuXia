@@ -5,6 +5,7 @@ import LeftPanel from './components/layout/LeftPanel';
 import RightPanel from './components/layout/RightPanel';
 import MobileQuickMenu from './components/layout/MobileQuickMenu';
 import CharacterModal from './components/features/Character/CharacterModal';
+import MobileCharacter from './components/features/Character/MobileCharacter';
 import ChatList from './components/features/Chat/ChatList';
 import InputArea from './components/features/Chat/InputArea';
 import LandingPage from './components/layout/LandingPage';
@@ -13,20 +14,26 @@ import SettingsModal from './components/features/Settings/SettingsModal';
 import InventoryModal from './components/features/Inventory/InventoryModal'; 
 import EquipmentModal from './components/features/Equipment/EquipmentModal'; 
 import SocialModal from './components/features/Social/SocialModal'; 
+import MobileSocial from './components/features/Social/MobileSocial';
 import TeamModal from './components/features/Team/TeamModal';
 import KungfuModal from './components/features/Kungfu/KungfuModal';
 import WorldModal from './components/features/World/WorldModal';
 import SectModal from './components/features/Sect/SectModal';
+import MobileSect from './components/features/Sect/MobileSect';
 import TaskModal from './components/features/Task/TaskModal'; 
+import MobileTask from './components/features/Task/MobileTask';
 import AgreementModal from './components/features/Agreement/AgreementModal';
 import StoryModal from './components/features/Story/StoryModal'; 
+import MobileStory from './components/features/Story/MobileStory';
 import MemoryModal from './components/features/Memory/MemoryModal'; 
+import MobileMemory from './components/features/Memory/MobileMemory';
 import SaveLoadModal from './components/features/SaveLoad/SaveLoadModal'; // New
 import { useGame } from './hooks/useGame';
 
 const App: React.FC = () => {
     const { state, meta, setters, actions } = useGame();
     const [showCharacter, setShowCharacter] = React.useState(false);
+    const contextSnapshot = actions.getContextSnapshot();
 
     const parseActionOptionText = (option: unknown): string => {
         if (typeof option === 'string') return option.trim();
@@ -71,6 +78,12 @@ const App: React.FC = () => {
 
         return formatted.length > 0 ? formatted : state.worldEvents;
     }, [state.世界, state.worldEvents]);
+
+    const renderTickerItems = (items: string[], keyPrefix: string) => (
+        items.map((e, i) => (
+            <span key={`${keyPrefix}-${i}`} className="mx-5 inline-block">{e}</span>
+        ))
+    );
 
     // Extract options from the latest assistant message
     const lastMessage = state.历史记录[state.历史记录.length - 1];
@@ -280,10 +293,18 @@ const App: React.FC = () => {
                             <div className="absolute left-0 top-0 bottom-0 w-5 bg-gradient-to-r from-ink-black to-transparent z-10 pointer-events-none"></div>
                             <div className="absolute right-0 top-0 bottom-0 w-5 bg-gradient-to-l from-ink-black to-transparent z-10 pointer-events-none"></div>
                             {tickerEvents && tickerEvents.length > 0 ? (
-                                <div className="whitespace-nowrap animate-marquee text-[10px] text-wuxia-gold/70 tracking-wide">
-                                    {tickerEvents.map((e, i) => (
-                                        <span key={i} className="mx-5 inline-block">{e}</span>
-                                    ))}
+                                <div className="w-full overflow-hidden">
+                                    <div
+                                        className="flex items-center gap-8 whitespace-nowrap min-w-max animate-marquee-linear text-[10px] text-wuxia-gold/70 tracking-wide"
+                                        style={{ ['--marquee-duration' as any]: '28s' }}
+                                    >
+                                        <div className="flex items-center gap-8">
+                                            {renderTickerItems(tickerEvents, 'm')}
+                                        </div>
+                                        <div className="flex items-center gap-8" aria-hidden>
+                                            {renderTickerItems(tickerEvents, 'm-dup')}
+                                        </div>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="w-full text-center text-[10px] text-gray-700 tracking-wider">
@@ -307,10 +328,18 @@ const App: React.FC = () => {
                             <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-ink-black to-transparent z-10 pointer-events-none"></div>
                             
                             {tickerEvents && tickerEvents.length > 0 ? (
-                                <div className="whitespace-nowrap animate-marquee text-[10px] text-wuxia-gold/70 font-mono tracking-wider">
-                                    {tickerEvents.map((e, i) => (
-                                        <span key={i} className="mx-8 inline-block">{e}</span>
-                                    ))}
+                                <div className="w-full overflow-hidden">
+                                    <div
+                                        className="flex items-center gap-10 whitespace-nowrap min-w-max animate-marquee-linear text-[10px] text-wuxia-gold/70 font-mono tracking-wider"
+                                        style={{ ['--marquee-duration' as any]: '36s' }}
+                                    >
+                                        <div className="flex items-center gap-10">
+                                            {renderTickerItems(tickerEvents, 'd')}
+                                        </div>
+                                        <div className="flex items-center gap-10" aria-hidden>
+                                            {renderTickerItems(tickerEvents, 'd-dup')}
+                                        </div>
+                                    </div>
                                 </div>
                             ) : (
                                  <div className="w-full text-center text-[10px] text-gray-700 font-mono tracking-widest">
@@ -364,6 +393,7 @@ const App: React.FC = () => {
                     festivals={state.festivals}
                     currentTheme={state.currentTheme}
                     history={state.历史记录}
+                    contextSnapshot={contextSnapshot}
                     onSaveApi={actions.saveSettings}
                     onSaveVisual={actions.saveVisualSettings}
                     onSaveGame={actions.saveGameSettings} 
@@ -393,10 +423,16 @@ const App: React.FC = () => {
                     )}
 
                     {showCharacter && (
-                        <CharacterModal
-                            character={state.角色}
-                            onClose={() => setShowCharacter(false)}
-                        />
+                        <>
+                            <CharacterModal
+                                character={state.角色}
+                                onClose={() => setShowCharacter(false)}
+                            />
+                            <MobileCharacter
+                                character={state.角色}
+                                onClose={() => setShowCharacter(false)}
+                            />
+                        </>
                     )}
 
                     {state.showEquipment && (
@@ -415,11 +451,18 @@ const App: React.FC = () => {
                     )}
 
                     {state.showSocial && (
-                        <SocialModal 
-                            socialList={state.社交} 
-                            onClose={() => setters.setShowSocial(false)} 
-                            playerName={state.角色.姓名} 
-                        />
+                        <>
+                            <SocialModal 
+                                socialList={state.社交} 
+                                onClose={() => setters.setShowSocial(false)} 
+                                playerName={state.角色.姓名} 
+                            />
+                            <MobileSocial
+                                socialList={state.社交}
+                                onClose={() => setters.setShowSocial(false)}
+                                playerName={state.角色.姓名}
+                            />
+                        </>
                     )}
 
                     {state.showKungfu && (
@@ -437,18 +480,31 @@ const App: React.FC = () => {
                     )}
 
                     {state.showSect && (
-                        <SectModal
-                            sectData={state.玩家门派}
-                            currentTime={state.环境.时间} 
-                            onClose={() => setters.setShowSect(false)}
-                        />
+                        <>
+                            <SectModal
+                                sectData={state.玩家门派}
+                                currentTime={state.环境.时间} 
+                                onClose={() => setters.setShowSect(false)}
+                            />
+                            <MobileSect
+                                sectData={state.玩家门派}
+                                currentTime={state.环境.时间}
+                                onClose={() => setters.setShowSect(false)}
+                            />
+                        </>
                     )}
 
                     {state.showTask && (
-                        <TaskModal
-                            tasks={state.任务列表}
-                            onClose={() => setters.setShowTask(false)}
-                        />
+                        <>
+                            <TaskModal
+                                tasks={state.任务列表}
+                                onClose={() => setters.setShowTask(false)}
+                            />
+                            <MobileTask
+                                tasks={state.任务列表}
+                                onClose={() => setters.setShowTask(false)}
+                            />
+                        </>
                     )}
 
                     {state.showAgreement && (
@@ -459,18 +515,33 @@ const App: React.FC = () => {
                     )}
 
                     {state.showStory && (
-                        <StoryModal
-                            story={state.剧情}
-                            onClose={() => setters.setShowStory(false)}
-                        />
+                        <>
+                            <StoryModal
+                                story={state.剧情}
+                                onClose={() => setters.setShowStory(false)}
+                            />
+                            <MobileStory
+                                story={state.剧情}
+                                onClose={() => setters.setShowStory(false)}
+                            />
+                        </>
                     )}
 
                     {state.showMemory && (
-                        <MemoryModal
-                            history={state.历史记录}
-                            memorySystem={state.记忆系统} // Pass Memory System
-                            onClose={() => setters.setShowMemory(false)}
-                        />
+                        <>
+                            <MemoryModal
+                                history={state.历史记录}
+                                memorySystem={state.记忆系统} // Pass Memory System
+                                onClose={() => setters.setShowMemory(false)}
+                                currentTime={state.环境?.时间}
+                            />
+                            <MobileMemory
+                                history={state.历史记录}
+                                memorySystem={state.记忆系统}
+                                onClose={() => setters.setShowMemory(false)}
+                                currentTime={state.环境?.时间}
+                            />
+                        </>
                     )}
                 </>
             )}
