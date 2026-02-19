@@ -121,36 +121,344 @@ export const useGame = () => {
         return undefined;
     };
 
-    const 规范化社交列表 = (list: any[]): any[] => {
-        if (!Array.isArray(list)) return [];
-        return list.map(npc => {
-            const 外貌描写 = 取首个非空文本(
-                npc?.外貌描写,
-                npc?.外貌,
-                npc?.档案?.外貌要点,
-                npc?.档案?.外貌描写
-            );
-            const 身材描写 = 取首个非空文本(
-                npc?.身材描写,
-                npc?.身材,
-                npc?.档案?.身材要点,
-                npc?.档案?.身材描写
-            );
-            const 衣着风格 = 取首个非空文本(
-                npc?.衣着风格,
-                npc?.衣着,
-                npc?.档案?.衣着风格,
-                npc?.档案?.衣着要点
-            );
-            return {
-                ...npc,
-                是否在场: typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true,
-                是否队友: typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0),
-                ...(外貌描写 ? { 外貌描写 } : {}),
-                ...(身材描写 ? { 身材描写 } : {}),
-                ...(衣着风格 ? { 衣着风格 } : {})
-            };
+    const 取字段文本 = (obj: any, key: string): string | undefined => {
+        return typeof obj?.[key] === 'string' ? obj[key].trim() : undefined;
+    };
+
+    const 文本质量分 = (raw?: string): number => {
+        if (!raw || raw.trim().length === 0) return 0;
+        const text = raw.trim();
+        if (/^(未知|暂无|无|未记录|未命名|\?+|n\/a)$/i.test(text)) return 1;
+        return 2 + Math.min(text.length, 200) / 1000;
+    };
+
+    const 取更优文本 = (left?: string, right?: string): string | undefined => {
+        const l = left?.trim();
+        const r = right?.trim();
+        const lScore = 文本质量分(l);
+        const rScore = 文本质量分(r);
+        if (rScore > lScore) return r;
+        if (lScore > rScore) return l;
+        if ((r?.length || 0) > (l?.length || 0)) return r;
+        return l || r;
+    };
+
+    const 归一化键 = (raw: unknown): string => {
+        if (typeof raw !== 'string') return '';
+        return raw.trim().replace(/\s+/g, '').toLowerCase();
+    };
+
+    const 解析记忆时间排序值 = (raw?: string): number => {
+        if (!raw) return Number.MAX_SAFE_INTEGER;
+        const canonical = normalizeCanonicalGameTime(raw);
+        if (!canonical) return Number.MAX_SAFE_INTEGER;
+        const m = canonical.match(/^(\d{1,6}):(\d{2}):(\d{2}):(\d{2}):(\d{2})$/);
+        if (!m) return Number.MAX_SAFE_INTEGER;
+        const year = Number(m[1]);
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        const hour = Number(m[4]);
+        const minute = Number(m[5]);
+        return (((year * 12 + month) * 31 + day) * 24 + hour) * 60 + minute;
+    };
+
+    const 标准化NPC记忆 = (memoryRaw: any): Array<{ 内容: string; 时间: string }> => {
+        if (!Array.isArray(memoryRaw)) return [];
+
+        const normalized = memoryRaw
+            .map((m: any) => {
+                const 内容 = typeof m?.内容 === 'string' ? m.内容.trim() : '';
+                const 原始时间 = typeof m?.时间 === 'string' ? m.时间.trim() : '';
+                const 时间 = 原始时间 ? (normalizeCanonicalGameTime(原始时间) || 原始时间) : '';
+                return { 内容, 时间 };
+            })
+            .filter((m) => m.内容.length > 0 || m.时间.length > 0);
+
+        const timeByContent = new Map<string, string>();
+        const contentByTime = new Map<string, string>();
+        normalized.forEach((m) => {
+            if (m.内容 && m.时间 && !timeByContent.has(m.内容)) {
+                timeByContent.set(m.内容, m.时间);
+            }
+            if (m.时间 && m.内容 && !contentByTime.has(m.时间)) {
+                contentByTime.set(m.时间, m.内容);
+            }
         });
+
+        normalized.forEach((m) => {
+            if (!m.时间 && m.内容 && timeByContent.has(m.内容)) {
+                m.时间 = timeByContent.get(m.内容)!;
+            }
+            if (!m.内容 && m.时间 && contentByTime.has(m.时间)) {
+                m.内容 = contentByTime.get(m.时间)!;
+            }
+        });
+
+        const unique = new Map<string, { 内容: string; 时间: string }>();
+        normalized
+            .filter((m) => m.内容.length > 0)
+            .forEach((m) => {
+                const key = `${m.时间}__${m.内容}`;
+                if (!unique.has(key)) {
+                    unique.set(key, { 内容: m.内容, 时间: m.时间 || '未知时间' });
+                }
+            });
+
+        return Array.from(unique.values())
+            .sort((a, b) => 解析记忆时间排序值(a.时间) - 解析记忆时间排序值(b.时间));
+    };
+
+    const 合并字符串数组 = (a: any, b: any): string[] | undefined => {
+        const merged: string[] = [];
+        const seen = new Set<string>();
+        const push = (value: unknown) => {
+            if (typeof value !== 'string') return;
+            const text = value.trim();
+            if (!text) return;
+            if (seen.has(text)) return;
+            seen.add(text);
+            merged.push(text);
+        };
+        if (Array.isArray(a)) a.forEach(push);
+        if (Array.isArray(b)) b.forEach(push);
+        return merged.length > 0 ? merged : undefined;
+    };
+
+    const 合并内射记录 = (a: any, b: any): any[] | undefined => {
+        const merged = new Map<string, any>();
+        const process = (raw: any) => {
+            if (!Array.isArray(raw)) return;
+            raw.forEach((item) => {
+                const 日期Raw = typeof item?.日期 === 'string' ? item.日期.trim() : '';
+                const 日期 = 日期Raw ? (normalizeCanonicalGameTime(日期Raw) || 日期Raw) : '';
+                const 描述 = typeof item?.描述 === 'string' ? item.描述.trim() : '';
+                const 怀孕判定日Raw = typeof item?.怀孕判定日 === 'string' ? item.怀孕判定日.trim() : '';
+                const 怀孕判定日 = 怀孕判定日Raw ? (normalizeCanonicalGameTime(怀孕判定日Raw) || 怀孕判定日Raw) : '';
+                if (!日期 && !描述 && !怀孕判定日) return;
+                const key = `${日期}__${描述}`;
+                const existing = merged.get(key);
+                if (!existing) {
+                    merged.set(key, { 日期: 日期 || '未知时间', 描述, 怀孕判定日: 怀孕判定日 || '未知时间' });
+                    return;
+                }
+                merged.set(key, {
+                    日期: 取更优文本(existing.日期, 日期) || existing.日期 || '未知时间',
+                    描述: 取更优文本(existing.描述, 描述) || existing.描述 || '',
+                    怀孕判定日: 取更优文本(existing.怀孕判定日, 怀孕判定日) || existing.怀孕判定日 || '未知时间'
+                });
+            });
+        };
+
+        process(a);
+        process(b);
+        const out = Array.from(merged.values());
+        return out.length > 0 ? out : undefined;
+    };
+
+    const 标准化单个NPC = (rawNpc: any, fallbackIndex: number): any => {
+        const npc = rawNpc && typeof rawNpc === 'object' ? rawNpc : {};
+        const 外貌描写 = 取首个非空文本(
+            npc?.外貌描写,
+            npc?.外貌,
+            npc?.档案?.外貌要点,
+            npc?.档案?.外貌描写
+        );
+        const 身材描写 = 取首个非空文本(
+            npc?.身材描写,
+            npc?.身材,
+            npc?.档案?.身材要点,
+            npc?.档案?.身材描写
+        );
+        const 衣着风格 = 取首个非空文本(
+            npc?.衣着风格,
+            npc?.衣着,
+            npc?.档案?.衣着风格,
+            npc?.档案?.衣着要点
+        );
+        const 记忆 = 标准化NPC记忆(npc?.记忆);
+
+        return {
+            ...npc,
+            id: 取首个非空文本(npc?.id, `npc_${fallbackIndex}`) || `npc_${fallbackIndex}`,
+            姓名: 取首个非空文本(npc?.姓名, `角色${fallbackIndex}`) || `角色${fallbackIndex}`,
+            性别: typeof npc?.性别 === 'string' ? npc.性别 : '未知',
+            年龄: Number.isFinite(Number(npc?.年龄)) ? Number(npc.年龄) : undefined,
+            境界: typeof npc?.境界 === 'string' ? npc.境界 : '未知境界',
+            身份: typeof npc?.身份 === 'string' ? npc.身份 : '未知身份',
+            是否在场: typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true,
+            是否队友: typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0),
+            是否主要角色: typeof npc?.是否主要角色 === 'boolean' ? npc.是否主要角色 : false,
+            好感度: Number.isFinite(Number(npc?.好感度)) ? Number(npc.好感度) : 0,
+            关系状态: typeof npc?.关系状态 === 'string' ? npc.关系状态 : '未知',
+            简介: typeof npc?.简介 === 'string' ? npc.简介 : '暂无简介',
+            记忆,
+            ...(外貌描写 ? { 外貌描写 } : {}),
+            ...(身材描写 ? { 身材描写 } : {}),
+            ...(衣着风格 ? { 衣着风格 } : {})
+        };
+    };
+
+    const 合并NPC对象 = (leftRaw: any, rightRaw: any, fallbackIndex: number): any => {
+        const left = 标准化单个NPC(leftRaw, fallbackIndex);
+        const right = 标准化单个NPC(rightRaw, fallbackIndex);
+        const mergedMemory = 标准化NPC记忆([...(left.记忆 || []), ...(right.记忆 || [])]);
+
+        const mergedWomb = (() => {
+            const leftWomb = left?.子宫 && typeof left.子宫 === 'object' ? left.子宫 : undefined;
+            const rightWomb = right?.子宫 && typeof right.子宫 === 'object' ? right.子宫 : undefined;
+            if (!leftWomb && !rightWomb) return undefined;
+            const mergedRecords = 合并内射记录(leftWomb?.内射记录, rightWomb?.内射记录);
+            return {
+                状态: 取更优文本(
+                    取字段文本(leftWomb, '状态'),
+                    取字段文本(rightWomb, '状态')
+                ) || '未知',
+                宫口状态: 取更优文本(
+                    取字段文本(leftWomb, '宫口状态'),
+                    取字段文本(rightWomb, '宫口状态')
+                ) || '未知',
+                ...(mergedRecords
+                    ? { 内射记录: mergedRecords }
+                    : {})
+            };
+        })();
+
+        const mergedEquip = (() => {
+            const leftEquip = left?.当前装备 && typeof left.当前装备 === 'object' ? left.当前装备 : undefined;
+            const rightEquip = right?.当前装备 && typeof right.当前装备 === 'object' ? right.当前装备 : undefined;
+            if (!leftEquip && !rightEquip) return undefined;
+            const keys = ['主武器', '副武器', '服装', '饰品', '内衣', '内裤', '袜饰', '鞋履'];
+            const out: Record<string, string> = {};
+            keys.forEach((k) => {
+                const text = 取更优文本(取字段文本(leftEquip, k), 取字段文本(rightEquip, k));
+                if (text) out[k] = text;
+            });
+            return Object.keys(out).length > 0 ? out : undefined;
+        })();
+
+        return {
+            ...left,
+            ...right,
+            id: 取首个非空文本(right.id, left.id, `npc_${fallbackIndex}`) || `npc_${fallbackIndex}`,
+            姓名: 取首个非空文本(right.姓名, left.姓名, `角色${fallbackIndex}`) || `角色${fallbackIndex}`,
+            性别: 取更优文本(取字段文本(left, '性别'), 取字段文本(right, '性别')) || '未知',
+            年龄: Number.isFinite(Number(right?.年龄))
+                ? Number(right.年龄)
+                : (Number.isFinite(Number(left?.年龄)) ? Number(left.年龄) : undefined),
+            境界: 取更优文本(取字段文本(left, '境界'), 取字段文本(right, '境界')) || '未知境界',
+            身份: 取更优文本(取字段文本(left, '身份'), 取字段文本(right, '身份')) || '未知身份',
+            是否在场: typeof right?.是否在场 === 'boolean'
+                ? right.是否在场
+                : (typeof left?.是否在场 === 'boolean' ? left.是否在场 : true),
+            是否队友: typeof right?.是否队友 === 'boolean'
+                ? right.是否队友
+                : (typeof left?.是否队友 === 'boolean' ? left.是否队友 : false),
+            是否主要角色: Boolean(left?.是否主要角色) || Boolean(right?.是否主要角色),
+            好感度: Number.isFinite(Number(right?.好感度))
+                ? Number(right.好感度)
+                : (Number.isFinite(Number(left?.好感度)) ? Number(left.好感度) : 0),
+            关系状态: 取更优文本(取字段文本(left, '关系状态'), 取字段文本(right, '关系状态')) || '未知',
+            简介: 取更优文本(取字段文本(left, '简介'), 取字段文本(right, '简介')) || '暂无简介',
+            外貌描写: 取更优文本(取字段文本(left, '外貌描写'), 取字段文本(right, '外貌描写')),
+            身材描写: 取更优文本(取字段文本(left, '身材描写'), 取字段文本(right, '身材描写')),
+            衣着风格: 取更优文本(取字段文本(left, '衣着风格'), 取字段文本(right, '衣着风格')),
+            胸部大小: 取更优文本(取字段文本(left, '胸部大小'), 取字段文本(right, '胸部大小')),
+            乳头颜色: 取更优文本(取字段文本(left, '乳头颜色'), 取字段文本(right, '乳头颜色')),
+            小穴颜色: 取更优文本(取字段文本(left, '小穴颜色'), 取字段文本(right, '小穴颜色')),
+            后穴颜色: 取更优文本(取字段文本(left, '后穴颜色'), 取字段文本(right, '后穴颜色')),
+            臀部大小: 取更优文本(取字段文本(left, '臀部大小'), 取字段文本(right, '臀部大小')),
+            私密特质: 取更优文本(取字段文本(left, '私密特质'), 取字段文本(right, '私密特质')),
+            私密总描述: 取更优文本(取字段文本(left, '私密总描述'), 取字段文本(right, '私密总描述')),
+            子宫: mergedWomb,
+            是否处女: typeof right?.是否处女 === 'boolean'
+                ? right.是否处女
+                : (typeof left?.是否处女 === 'boolean' ? left.是否处女 : undefined),
+            初夜夺取者: 取更优文本(取字段文本(left, '初夜夺取者'), 取字段文本(right, '初夜夺取者')),
+            初夜时间: (() => {
+                const leftTime = 取字段文本(left, '初夜时间');
+                const rightTime = 取字段文本(right, '初夜时间');
+                const l = leftTime ? (normalizeCanonicalGameTime(leftTime) || leftTime) : undefined;
+                const r = rightTime ? (normalizeCanonicalGameTime(rightTime) || rightTime) : undefined;
+                return 取更优文本(l, r);
+            })(),
+            初夜描述: 取更优文本(取字段文本(left, '初夜描述'), 取字段文本(right, '初夜描述')),
+            次数_口部: Math.max(Number(left?.次数_口部) || 0, Number(right?.次数_口部) || 0),
+            次数_胸部: Math.max(Number(left?.次数_胸部) || 0, Number(right?.次数_胸部) || 0),
+            次数_阴部: Math.max(Number(left?.次数_阴部) || 0, Number(right?.次数_阴部) || 0),
+            次数_后庭: Math.max(Number(left?.次数_后庭) || 0, Number(right?.次数_后庭) || 0),
+            次数_高潮: Math.max(Number(left?.次数_高潮) || 0, Number(right?.次数_高潮) || 0),
+            攻击力: Number.isFinite(Number(right?.攻击力))
+                ? Number(right.攻击力)
+                : (Number.isFinite(Number(left?.攻击力)) ? Number(left.攻击力) : undefined),
+            防御力: Number.isFinite(Number(right?.防御力))
+                ? Number(right.防御力)
+                : (Number.isFinite(Number(left?.防御力)) ? Number(left.防御力) : undefined),
+            上次更新时间: (() => {
+                const leftTime = 取字段文本(left, '上次更新时间');
+                const rightTime = 取字段文本(right, '上次更新时间');
+                const l = leftTime ? (normalizeCanonicalGameTime(leftTime) || leftTime) : undefined;
+                const r = rightTime ? (normalizeCanonicalGameTime(rightTime) || rightTime) : undefined;
+                return 取更优文本(l, r);
+            })(),
+            当前血量: Number.isFinite(Number(right?.当前血量))
+                ? Number(right.当前血量)
+                : (Number.isFinite(Number(left?.当前血量)) ? Number(left.当前血量) : undefined),
+            最大血量: Number.isFinite(Number(right?.最大血量))
+                ? Number(right.最大血量)
+                : (Number.isFinite(Number(left?.最大血量)) ? Number(left.最大血量) : undefined),
+            当前精力: Number.isFinite(Number(right?.当前精力))
+                ? Number(right.当前精力)
+                : (Number.isFinite(Number(left?.当前精力)) ? Number(left.当前精力) : undefined),
+            最大精力: Number.isFinite(Number(right?.最大精力))
+                ? Number(right.最大精力)
+                : (Number.isFinite(Number(left?.最大精力)) ? Number(left.最大精力) : undefined),
+            当前装备: mergedEquip,
+            背包: 合并字符串数组(left?.背包, right?.背包),
+            记忆: mergedMemory
+        };
+    };
+
+    const 合并同名NPC列表 = (list: any[]): any[] => {
+        if (!Array.isArray(list)) return [];
+        const merged: any[] = [];
+        const nameIndexMap = new Map<string, number>();
+        const idIndexMap = new Map<string, number>();
+
+        list.forEach((rawNpc, index) => {
+            const normalized = 标准化单个NPC(rawNpc, index);
+            const nameKey = 归一化键(normalized?.姓名);
+            const idKey = 归一化键(normalized?.id);
+            const idMatchedIndex = idKey ? idIndexMap.get(idKey) : undefined;
+            const nameMatchedIndex = nameKey ? nameIndexMap.get(nameKey) : undefined;
+            const targetIndex = typeof idMatchedIndex === 'number'
+                ? idMatchedIndex
+                : (typeof nameMatchedIndex === 'number' ? nameMatchedIndex : -1);
+
+            if (targetIndex < 0) {
+                const pushIndex = merged.length;
+                merged.push(normalized);
+                const newNameKey = 归一化键(normalized?.姓名);
+                const newIdKey = 归一化键(normalized?.id);
+                if (newNameKey) nameIndexMap.set(newNameKey, pushIndex);
+                if (newIdKey) idIndexMap.set(newIdKey, pushIndex);
+                return;
+            }
+
+            merged[targetIndex] = 合并NPC对象(merged[targetIndex], normalized, targetIndex);
+            const mergedNameKey = 归一化键(merged[targetIndex]?.姓名);
+            const mergedIdKey = 归一化键(merged[targetIndex]?.id);
+            if (mergedNameKey) nameIndexMap.set(mergedNameKey, targetIndex);
+            if (mergedIdKey) idIndexMap.set(mergedIdKey, targetIndex);
+        });
+
+        return merged;
+    };
+
+    const 规范化社交列表 = (list: any[], options?: { 合并同名?: boolean }): any[] => {
+        if (!Array.isArray(list)) return [];
+        const normalized = list.map((npc, index) => 标准化单个NPC(npc, index));
+        if (options?.合并同名 === false) return normalized;
+        return 合并同名NPC列表(normalized);
     };
 
     const 同步重Roll计数 = () => {
@@ -176,7 +484,7 @@ export const useGame = () => {
     const 回档到快照 = (snapshot: 回合快照结构) => {
         设置角色(深拷贝(snapshot.回档前状态.角色));
         设置环境(深拷贝(snapshot.回档前状态.环境));
-        设置社交(深拷贝(snapshot.回档前状态.社交));
+        设置社交(规范化社交列表(深拷贝(snapshot.回档前状态.社交)));
         设置世界(深拷贝(snapshot.回档前状态.世界));
         设置战斗(深拷贝(snapshot.回档前状态.战斗));
         设置玩家门派(深拷贝(snapshot.回档前状态.玩家门派));
@@ -1045,7 +1353,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const openingBase = 创建开场基础状态(charData, worldConfig);
             设置角色(openingBase.角色);
             设置环境(openingBase.环境);
-            设置社交(openingBase.社交);
+            设置社交(规范化社交列表(openingBase.社交));
             设置世界(openingBase.世界);
             设置战斗(openingBase.战斗);
             设置玩家门派(openingBase.玩家门派);
@@ -1306,20 +1614,22 @@ ${enabledDifficultyPrompts || '未提供'}
                 const res = applyStateCommand(charBuffer, envBuffer, socialBuffer, worldBuffer, battleBuffer, storyBuffer, cmd.key, cmd.value, cmd.action);
                 charBuffer = res.char;
                 envBuffer = res.env;
-                socialBuffer = 规范化社交列表(res.social);
+                socialBuffer = 规范化社交列表(res.social, { 合并同名: false });
                 worldBuffer = res.world;
                 battleBuffer = res.battle;
                 storyBuffer = res.story;
             });
 
             battleBuffer = 战斗结束自动清空(battleBuffer, storyBuffer);
+            const mergedSocial = 规范化社交列表(socialBuffer);
 
             设置角色(charBuffer);
             设置环境(envBuffer);
-            设置社交(规范化社交列表(socialBuffer));
+            设置社交(mergedSocial);
             设置世界(worldBuffer);
             设置战斗(battleBuffer);
             设置剧情(storyBuffer);
+            socialBuffer = mergedSocial;
         }
 
         return {

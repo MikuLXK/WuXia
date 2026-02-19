@@ -14,6 +14,7 @@ const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少�
     );
 
     const currentNPC = socialList.find(n => n.id === selectedId);
+    const 展示女性扩展 = currentNPC?.性别 === '女' && Boolean(currentNPC?.是否主要角色);
     const 取首个非空文本 = (...values: unknown[]): string => {
         for (const value of values) {
             if (typeof value === 'string' && value.trim().length > 0) return value.trim();
@@ -149,8 +150,8 @@ const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少�
                                     </p>
                                 </div>
 
-                                {/* Female Specific Content */}
-                                {currentNPC.性别 === '女' && (
+                                {/* Female Main Role Extension */}
+                                {展示女性扩展 && (
                                     <div className="space-y-8 animate-fadeIn">
                                         
                                         {/* Appearance Section */}

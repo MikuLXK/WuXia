@@ -33,6 +33,7 @@ const MobileSocial: React.FC<Props> = ({ socialList, onClose, playerName = "少�
     );
 
     const currentNPC = socialList.find(n => n.id === selectedId);
+    const 展示女性扩展 = currentNPC?.性别 === '女' && Boolean(currentNPC?.是否主要角色);
     const 取首个非空文本 = (...values: unknown[]): string => {
         for (const value of values) {
             if (typeof value === 'string' && value.trim().length > 0) return value.trim();
@@ -143,7 +144,7 @@ const MobileSocial: React.FC<Props> = ({ socialList, onClose, playerName = "少�
                                 </p>
                             </div>
 
-                            {currentNPC.性别 === '女' && (
+                            {展示女性扩展 && (
                                 <div className="bg-black/30 border border-pink-900/40 rounded-xl p-4 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <div className="text-pink-400 font-serif font-bold text-sm">香闺秘档</div>
