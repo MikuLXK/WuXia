@@ -17,7 +17,8 @@ import {
     战斗状态结构,
     默认战斗状态,
     详细门派结构,
-    剧情系统结构
+    剧情系统结构,
+    装备槽位
 } from '../types';
 import { useRef, useState } from 'react';
 import * as dbService from '../services/dbService';
@@ -113,10 +114,43 @@ export const useGame = () => {
     // --- Actions ---
     const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
     const 规范化角色物品容器映射 = (rawRole: 角色数据结构): 角色数据结构 => {
+        const 装备槽位列表: 装备槽位[] = ['头部', '胸部', '腿部', '手部', '足部', '主武器', '副武器', '暗器', '背部', '腰部', '坐骑'];
+        const 装备槽位集合 = new Set<string>(装备槽位列表);
+        const 槽位ID片段映射: Record<装备槽位, string> = {
+            头部: 'head',
+            胸部: 'chest',
+            腿部: 'legs',
+            手部: 'hands',
+            足部: 'feet',
+            主武器: 'main_weapon',
+            副武器: 'off_weapon',
+            暗器: 'hidden_weapon',
+            背部: 'back',
+            腰部: 'waist',
+            坐骑: 'mount'
+        };
+        const 槽位类型映射: Record<装备槽位, '武器' | '防具' | '容器' | '杂物'> = {
+            头部: '防具',
+            胸部: '防具',
+            腿部: '防具',
+            手部: '防具',
+            足部: '防具',
+            主武器: '武器',
+            副武器: '武器',
+            暗器: '武器',
+            背部: '容器',
+            腰部: '容器',
+            坐骑: '杂物'
+        };
+
         const role = 深拷贝(rawRole);
         if (typeof (role as any).外貌 !== 'string' || !(role as any).外貌.trim()) {
             (role as any).外貌 = '相貌平常，衣着朴素。';
         }
+
+        const rawEquip = role?.装备 && typeof role.装备 === 'object' ? role.装备 : ({} as any);
+        role.装备 = { ...默认角色数据.装备, ...(rawEquip as any) };
+
         const sourceList = Array.isArray(role?.物品列表) ? role.物品列表 : [];
 
         const deduped: any[] = [];
@@ -136,6 +170,107 @@ export const useGame = () => {
                 .filter((item) => item?.容器属性 && typeof item?.ID === 'string')
                 .map((item) => item.ID)
         );
+        const findItemByRef = (idOrName: string): any | undefined => {
+            return itemById.get(idOrName) || deduped.find((item) => item?.名称 === idOrName);
+        };
+        const createFallbackEquippedItem = (slot: 装备槽位, itemName: string): any => {
+            let baseId = `itm_auto_equip_${槽位ID片段映射[slot]}`;
+            let candidate = baseId;
+            let suffix = 1;
+            while (seenIds.has(candidate)) {
+                candidate = `${baseId}_${suffix++}`;
+            }
+            seenIds.add(candidate);
+            const type = 槽位类型映射[slot];
+            const generated: any = {
+                ID: candidate,
+                名称: itemName,
+                描述: `由装备栏位自动补全的${slot}装备。`,
+                类型: type,
+                品质: '凡品',
+                重量: slot === '坐骑' ? 30 : 1,
+                占用空间: 1,
+                价值: 0,
+                当前耐久: 100,
+                最大耐久: 100,
+                词条列表: [],
+                当前装备部位: slot,
+                当前容器ID: slot
+            };
+            if (type === '容器') {
+                generated.装备位置 = slot;
+                generated.容器属性 = {
+                    最大容量: slot === '背部' ? 20 : 8,
+                    当前已用空间: 0,
+                    最大单物大小: slot === '背部' ? 5 : 3,
+                    减重比例: 0
+                };
+                containerIds.add(candidate);
+            }
+            if (type === '武器') {
+                generated.武器子类 = slot === '暗器' ? '暗器' : '剑';
+                generated.最小攻击 = 1;
+                generated.最大攻击 = 3;
+                generated.攻速修正 = 1;
+                generated.格挡率 = 0;
+            }
+            if (type === '防具') {
+                const 防具位置映射: Record<string, '头部' | '胸部' | '腿部' | '手部' | '足部'> = {
+                    头部: '头部',
+                    胸部: '胸部',
+                    腿部: '腿部',
+                    手部: '手部',
+                    足部: '足部'
+                };
+                generated.装备位置 = 防具位置映射[slot] || '胸部';
+                generated.覆盖部位 = slot === '头部'
+                    ? ['头部']
+                    : slot === '胸部'
+                        ? ['胸部', '腹部']
+                        : slot === '腿部'
+                            ? ['左腿', '右腿']
+                            : slot === '手部'
+                                ? ['左臂', '右臂', '手掌']
+                                : ['足部'];
+                generated.物理防御 = 1;
+                generated.内功防御 = 1;
+            }
+            deduped.push(generated);
+            itemById.set(candidate, generated);
+            return generated;
+        };
+
+        const equippedByItemId = new Map<string, 装备槽位>();
+        装备槽位列表.forEach((slot) => {
+            const rawRef = (role.装备 as any)[slot];
+            const normalizedRef = typeof rawRef === 'string' ? rawRef.trim() : '';
+            if (!normalizedRef || normalizedRef === '无') {
+                (role.装备 as any)[slot] = '无';
+                return;
+            }
+            (role.装备 as any)[slot] = normalizedRef;
+            const matched = findItemByRef(normalizedRef) || createFallbackEquippedItem(slot, normalizedRef);
+            const existedSlot = equippedByItemId.get(matched.ID);
+            if (existedSlot && existedSlot !== slot) {
+                (role.装备 as any)[slot] = '无';
+                return;
+            }
+            equippedByItemId.set(matched.ID, slot);
+        });
+
+        deduped.forEach((item) => {
+            const equipSlotRaw = typeof item?.当前装备部位 === 'string' ? item.当前装备部位.trim() : '';
+            if (!equipSlotRaw || !装备槽位集合.has(equipSlotRaw) || equippedByItemId.has(item.ID)) return;
+            const equipSlot = equipSlotRaw as 装备槽位;
+            const slotRef = typeof (role.装备 as any)[equipSlot] === 'string' ? (role.装备 as any)[equipSlot].trim() : '';
+            if (!slotRef || slotRef === '无') {
+                (role.装备 as any)[equipSlot] = item.ID;
+            } else {
+                const slotMatchedItem = findItemByRef(slotRef);
+                if (!slotMatchedItem || slotMatchedItem.ID !== item.ID) return;
+            }
+            equippedByItemId.set(item.ID, equipSlot);
+        });
 
         // Migration fallback: old saves may still store legacy "内容物"
         const fallbackOwners = new Map<string, Set<string>>();
@@ -153,8 +288,20 @@ export const useGame = () => {
 
         const locationById = new Map<string, string | undefined>();
         deduped.forEach((item) => {
+            const equippedSlot = equippedByItemId.get(item.ID);
+            if (equippedSlot) {
+                locationById.set(item.ID, equippedSlot);
+                return;
+            }
+
+            const explicitEquip = typeof item?.当前装备部位 === 'string' ? item.当前装备部位.trim() : '';
+            if (explicitEquip && 装备槽位集合.has(explicitEquip)) {
+                locationById.set(item.ID, explicitEquip);
+                return;
+            }
+
             const explicit = typeof item?.当前容器ID === 'string' ? item.当前容器ID.trim() : '';
-            if (explicit && explicit !== item.ID && containerIds.has(explicit)) {
+            if (explicit && explicit !== item.ID && (containerIds.has(explicit) || 装备槽位集合.has(explicit))) {
                 locationById.set(item.ID, explicit);
                 return;
             }
@@ -169,8 +316,14 @@ export const useGame = () => {
 
         deduped.forEach((item) => {
             const location = locationById.get(item.ID);
-            if (location) item.当前容器ID = location;
-            else delete item.当前容器ID;
+            if (!location) {
+                delete item.当前容器ID;
+                delete item.当前装备部位;
+                return;
+            }
+            item.当前容器ID = location;
+            if (装备槽位集合.has(location)) item.当前装备部位 = location as 装备槽位;
+            else delete item.当前装备部位;
         });
 
         deduped.forEach((container) => {
@@ -1483,9 +1636,11 @@ ${enabledDifficultyPrompts || '未提供'}
 4. 可写域初始化标准（全部必须命中）：
    - \`gameState.角色\`：按当前角色建档数据完整初始化（基础身份、六维、生存值、部位血量与状态、装备、物品列表、功法列表、经验与BUFF）。
      - \`物品列表\` 必须使用“最新容器结构”初始化：
-       - 物品基础字段按当前项目定义写全：\`ID/名称/描述/类型/品质/重量/占用空间/价值/当前耐久/最大耐久/词条列表/当前容器ID?\`。
+       - 物品基础字段按当前项目定义写全：\`ID/名称/描述/类型/品质/重量(单位:斤)/占用空间/价值/当前耐久/最大耐久/词条列表/当前容器ID?/当前装备部位?\`。
        - 容器字段仅允许：\`容器属性={最大容量, 当前已用空间, 最大单物大小, 减重比例}\`；禁止写旧字段 \`容器属性.内容物\`。
        - 除明确“穿戴中/手持中”的剧情态外，已收纳物品必须写 \`当前容器ID\`，且该 ID 必须指向 \`物品列表\` 内真实存在的容器物品。
+       - 对“已装备在身”的物品，\`当前装备部位\` 必须填写，且 \`当前容器ID\` 必须等于该装备部位（如 \`主武器/头部/背部\`）。
+       - \`gameState.角色.装备\` 允许仅写“名称或ID”，但 \`物品列表\` 必须同时存在该装备的完整物品对象（不得只留名称空壳）。
        - 每个容器的 \`当前已用空间\` 必须与“指向该容器的物品占用空间总和”一致，禁止留空或与实际收纳不一致。
        - 若容器为软质袋类，需按当前已用空间同步其自身 \`占用空间\`（默认口径：空载=1，非空=\`max(1, ceil(当前已用空间*0.35))\`）。
      - \`称号\` 必须生成且非空：若建档已给定称号则沿用；若建档留空，需根据“出身背景 + 当前境界 + 开局处境”生成一个武侠风称号后写入。

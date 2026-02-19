@@ -50,7 +50,7 @@ export interface 角色数据结构 {
     最大口渴: number;
 
     // 负重系统
-    当前负重: number; // 单位: 斤 或 通用单位
+    当前负重: number; // 单位: 斤
     最大负重: number; // 由力量决定
 
     // 六维属性

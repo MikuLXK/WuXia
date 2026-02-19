@@ -52,7 +52,7 @@ const EquipmentModal: React.FC<Props> = ({ character, onClose }) => {
                     <h3 className="text-wuxia-gold font-serif font-bold text-2xl tracking-[0.3em] drop-shadow-md">全身披挂</h3>
                     <div className="flex gap-4 items-center">
                         <div className="text-xs text-gray-500 font-mono">
-                            总负重: <span className={character.当前负重 > character.最大负重 ? 'text-red-500' : 'text-gray-300'}>{character.当前负重}/{character.最大负重}</span>
+                            总负重: <span className={character.当前负重 > character.最大负重 ? 'text-red-500' : 'text-gray-300'}>{character.当前负重}/{character.最大负重}斤</span>
                         </div>
                         <button 
                             onClick={onClose}
@@ -96,7 +96,7 @@ const EquipmentModal: React.FC<Props> = ({ character, onClose }) => {
                                             {/* Main Stats Grid */}
                                             <div className="bg-black/20 rounded p-2 border border-gray-800/50 text-[10px] space-y-1 flex-1">
                                                 <div className="flex justify-between text-gray-400 border-b border-gray-800 pb-1 mb-1">
-                                                    <span>重量: {item.重量}</span>
+                                                    <span>重量: {item.重量}斤</span>
                                                     <span>价值: {item.价值}</span>
                                                 </div>
                                                 

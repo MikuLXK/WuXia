@@ -10,6 +10,7 @@ import { 核心_世界观 } from './core/world'; // New
 import { 核心_思维链 } from './core/cot';   // New
 import { 核心_剧情推动 } from './core/story';
 import { 核心_行动选项规范 } from './core/actionOptions';
+import { 核心_时间推进法则 } from './core/timeProgress';
 
 // Stats
 import { 数值_角色属性 } from './stats/character';
@@ -24,6 +25,7 @@ import { 数值_修炼体系 } from './stats/cultivation';
 import { 数值_NPC参考 } from './stats/npc';
 import { 数值_掉落资源 } from './stats/drop';
 import { 数值_恢复休整 } from './stats/recovery';
+import { 数值_物品重量参考 } from './stats/itemWeight';
 
 // Difficulty
 import { 难度_游戏 } from './difficulty/game';
@@ -41,6 +43,7 @@ export const 默认提示词: 提示词结构[] = [
     核心_输出格式,
     核心_核心规则,
     核心_剧情推动,
+    核心_时间推进法则,
     核心_行动选项规范,
     核心_数据格式,
     核心_记忆法则,
@@ -59,6 +62,7 @@ export const 默认提示词: 提示词结构[] = [
     数值_NPC参考,
     数值_掉落资源,
     数值_恢复休整,
+    数值_物品重量参考,
 
     // Difficulty (Arrays)
     ...难度_游戏,

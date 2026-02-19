@@ -71,7 +71,7 @@ const MobileCharacter: React.FC<Props> = ({ character, onClose }) => {
     const getEquipName = (key: keyof typeof character.装备) => {
         const idOrName = character.装备[key];
         if (idOrName === '无') return '无';
-        const item = character.物品列表.find(i => i.ID === idOrName);
+        const item = character.物品列表.find(i => i.ID === idOrName || i.名称 === idOrName);
         return item ? item.名称 : idOrName;
     };
 
