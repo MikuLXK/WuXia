@@ -114,6 +114,9 @@ export const useGame = () => {
     const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
     const 规范化角色物品容器映射 = (rawRole: 角色数据结构): 角色数据结构 => {
         const role = 深拷贝(rawRole);
+        if (typeof (role as any).外貌 !== 'string' || !(role as any).外貌.trim()) {
+            (role as any).外貌 = '相貌平常，衣着朴素。';
+        }
         const sourceList = Array.isArray(role?.物品列表) ? role.物品列表 : [];
 
         const deduped: any[] = [];
@@ -940,6 +943,7 @@ export const useGame = () => {
 【主角建档锚点】
 - 姓名/性别/年龄: ${charData.姓名}/${charData.性别}/${charData.年龄}
 - 出生日期: ${charData.出生日期}
+- 外貌: ${charData.外貌 || '未描述'}
 - 初始境界: ${charData.境界}
 - 六维: 力量${charData.力量} 敏捷${charData.敏捷} 体质${charData.体质} 根骨${charData.根骨} 悟性${charData.悟性} 福源${charData.福源}
 - 天赋: ${charData.天赋列表.map(t => t.名称).join('、') || '无'}
@@ -1136,6 +1140,7 @@ ${anchor}
                     性别: role.性别,
                     年龄: role.年龄,
                     出生日期: role.出生日期,
+                    外貌: role.外貌,
                     称号: role.称号,
                     境界: role.境界,
                     天赋列表: role.天赋列表,

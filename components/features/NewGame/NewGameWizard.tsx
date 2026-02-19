@@ -3,6 +3,7 @@ import GameButton from '../../ui/GameButton';
 import { WorldGenConfig, 角色数据结构, 天赋结构, 背景结构, 游戏难度 } from '../../../types';
 import { 预设天赋, 预设背景 } from '../../../data/presets';
 import { OrnateBorder } from '../../ui/decorations/OrnateBorder';
+import * as dbService from '../../../services/dbService';
 
 interface Props {
     onComplete: (
@@ -16,6 +17,8 @@ interface Props {
 }
 
 const STEPS = ['世界观', '角色基础', '天赋背景', '确认生成'];
+const 自定义天赋存储键 = 'new_game_custom_talents';
+const 自定义背景存储键 = 'new_game_custom_backgrounds';
 
 type DropdownProps = {
     value: number;
@@ -92,6 +95,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     const [charName, setCharName] = useState('');
     const [charGender, setCharGender] = useState<'男' | '女'>('男');
     const [charAge, setCharAge] = useState(18);
+    const [charAppearance, setCharAppearance] = useState('黑发黑眸，面容清秀，衣着朴素利落。');
     const [birthMonth, setBirthMonth] = useState(1);
     const [birthDay, setBirthDay] = useState(1);
     const [monthOpen, setMonthOpen] = useState(false);
@@ -108,6 +112,8 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     // Talents & Background
     const [selectedBackground, setSelectedBackground] = useState<背景结构>(预设背景[0]);
     const [selectedTalents, setSelectedTalents] = useState<天赋结构[]>([]);
+    const [自定义天赋列表, 设置自定义天赋列表] = useState<天赋结构[]>([]);
+    const [自定义背景列表, 设置自定义背景列表] = useState<背景结构[]>([]);
     
     // Custom Inputs
     const [customTalent, setCustomTalent] = useState<天赋结构>({ 名称: '', 描述: '', 效果: '' });
@@ -119,6 +125,46 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
     // --- Logic ---
     const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
     const dayOptions = useMemo(() => Array.from({ length: 31 }, (_, i) => i + 1), []);
+    const 标准化天赋 = (raw: 天赋结构): 天赋结构 | null => {
+        const 名称 = raw?.名称?.trim() || '';
+        const 描述 = raw?.描述?.trim() || '';
+        const 效果 = raw?.效果?.trim() || '';
+        if (!名称 || !描述 || !效果) return null;
+        return { 名称, 描述, 效果 };
+    };
+    const 标准化背景 = (raw: 背景结构): 背景结构 | null => {
+        const 名称 = raw?.名称?.trim() || '';
+        const 描述 = raw?.描述?.trim() || '';
+        const 效果 = raw?.效果?.trim() || '';
+        if (!名称 || !描述 || !效果) return null;
+        return { 名称, 描述, 效果 };
+    };
+    const 合并去重天赋 = (rawList: 天赋结构[]): 天赋结构[] => {
+        const map = new Map<string, 天赋结构>();
+        rawList.forEach((item) => {
+            const normalized = 标准化天赋(item);
+            if (!normalized) return;
+            map.set(normalized.名称, normalized);
+        });
+        return Array.from(map.values());
+    };
+    const 合并去重背景 = (rawList: 背景结构[]): 背景结构[] => {
+        const map = new Map<string, 背景结构>();
+        rawList.forEach((item) => {
+            const normalized = 标准化背景(item);
+            if (!normalized) return;
+            map.set(normalized.名称, normalized);
+        });
+        return Array.from(map.values());
+    };
+    const 全部背景选项 = useMemo(
+        () => [...预设背景, ...自定义背景列表.filter(item => !预设背景.some(p => p.名称 === item.名称))],
+        [自定义背景列表]
+    );
+    const 全部天赋选项 = useMemo(
+        () => [...预设天赋, ...自定义天赋列表.filter(item => !预设天赋.some(p => p.名称 === item.名称))],
+        [自定义天赋列表]
+    );
     
     const usedPoints = Object.values(stats).reduce((a, b) => a + b, 0);
     const remainingPoints = MAX_POINTS - usedPoints;
@@ -133,6 +179,24 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        const 加载自定义建角配置 = async () => {
+            try {
+                const savedTalents = await dbService.读取设置(自定义天赋存储键);
+                const savedBackgrounds = await dbService.读取设置(自定义背景存储键);
+                if (Array.isArray(savedTalents)) {
+                    设置自定义天赋列表(合并去重天赋(savedTalents as 天赋结构[]));
+                }
+                if (Array.isArray(savedBackgrounds)) {
+                    设置自定义背景列表(合并去重背景(savedBackgrounds as 背景结构[]));
+                }
+            } catch (error) {
+                console.error('加载自定义身份/天赋失败', error);
+            }
+        };
+        加载自定义建角配置();
     }, []);
 
     const handleStatChange = (key: keyof typeof stats, delta: number) => {
@@ -154,18 +218,35 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
         }
     };
 
-    const addCustomTalent = () => {
-        if (!customTalent.名称) return;
-        if (selectedTalents.length >= 3) {
+    const addCustomTalent = async () => {
+        const normalized = 标准化天赋(customTalent);
+        if (!normalized) {
+            alert("请完整填写自定义天赋（名称/描述/效果）");
+            return;
+        }
+        const 已选同名 = selectedTalents.some(x => x.名称 === normalized.名称);
+        if (!已选同名 && selectedTalents.length >= 3) {
             alert("最多选择3个天赋");
             return;
         }
-        setSelectedTalents([...selectedTalents, customTalent]);
+
+        const 下一个自定义天赋列表 = 合并去重天赋([...自定义天赋列表, normalized]);
+        设置自定义天赋列表(下一个自定义天赋列表);
+        setSelectedTalents(
+            已选同名
+                ? selectedTalents.map(item => (item.名称 === normalized.名称 ? normalized : item))
+                : [...selectedTalents, normalized]
+        );
         setCustomTalent({ 名称: '', 描述: '', 效果: '' });
         setShowCustomTalent(false);
+        try {
+            await dbService.保存设置(自定义天赋存储键, 下一个自定义天赋列表);
+        } catch (error) {
+            console.error('保存自定义天赋失败', error);
+        }
     };
 
-    const addCustomBackground = () => {
+    const addCustomBackground = async () => {
         const 名称 = customBackground.名称.trim();
         const 描述 = customBackground.描述.trim();
         const 效果 = customBackground.效果.trim();
@@ -174,9 +255,16 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
             return;
         }
         const nextBg: 背景结构 = { 名称, 描述, 效果 };
+        const 下一个自定义背景列表 = 合并去重背景([...自定义背景列表, nextBg]);
+        设置自定义背景列表(下一个自定义背景列表);
         setSelectedBackground(nextBg);
         setCustomBackground({ 名称: '', 描述: '', 效果: '' });
         setShowCustomBackground(false);
+        try {
+            await dbService.保存设置(自定义背景存储键, 下一个自定义背景列表);
+        } catch (error) {
+            console.error('保存自定义身份失败', error);
+        }
     };
 
     const handleGenerate = (mode: 'all' | 'step') => {
@@ -195,6 +283,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
             姓名: charName.trim(),
             性别: charGender,
             年龄: charAge,
+            外貌: charAppearance.trim() || '相貌平常，衣着朴素。',
             天赋列表: selectedTalents,
             出身背景: selectedBackground,
             
@@ -427,6 +516,17 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                              </div>
                                          </div>
                                      </OrnateBorder>
+                                    <OrnateBorder className="p-6">
+                                        <div className="space-y-2">
+                                            <label className="text-sm text-wuxia-cyan font-bold">外貌</label>
+                                            <textarea
+                                                value={charAppearance}
+                                                onChange={e => setCharAppearance(e.target.value)}
+                                                placeholder="描述角色外貌、气质与常见穿着"
+                                                className="w-full h-24 bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all resize-none"
+                                            />
+                                        </div>
+                                    </OrnateBorder>
                                 </div>
 
                                 {/* Right: Stats */}
@@ -488,7 +588,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                     </div>
                                 )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {预设背景.map((bg, idx) => (
+                                    {全部背景选项.map((bg, idx) => (
                                         <div 
                                             key={idx} 
                                             onClick={() => setSelectedBackground(bg)}
@@ -498,12 +598,15 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                                 : 'border-gray-700 bg-black/20 hover:border-wuxia-gold/50'
                                             }`}
                                         >
-                                            <div className={`font-bold text-sm ${selectedBackground.名称 === bg.名称 ? 'text-wuxia-gold' : 'text-gray-300'}`}>{bg.名称}</div>
+                                            <div className={`font-bold text-sm ${selectedBackground.名称 === bg.名称 ? 'text-wuxia-gold' : 'text-gray-300'}`}>
+                                                {bg.名称}
+                                                {!预设背景.some(p => p.名称 === bg.名称) ? ' (自定义)' : ''}
+                                            </div>
                                             <div className="text-xs text-gray-500 mt-1">{bg.描述}</div>
                                             <div className="text-xs text-wuxia-cyan/80 mt-2 pt-2 border-t border-gray-700/50 font-mono">{bg.效果}</div>
                                         </div>
                                     ))}
-                                    {!预设背景.find(bg => bg.名称 === selectedBackground.名称) && (
+                                    {!全部背景选项.find(bg => bg.名称 === selectedBackground.名称) && (
                                         <div 
                                             onClick={() => setSelectedBackground(selectedBackground)}
                                             className="p-4 border rounded-lg cursor-pointer transition-all duration-300 transform hover:-translate-y-1 border-wuxia-cyan bg-wuxia-cyan/10 shadow-lg shadow-wuxia-cyan/10"
@@ -535,7 +638,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                 )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    {预设天赋.map((t, idx) => {
+                                    {全部天赋选项.map((t, idx) => {
                                         const isSelected = !!selectedTalents.find(x => x.名称 === t.名称);
                                         return (
                                             <div 
@@ -547,24 +650,15 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                                     : 'border-gray-700 bg-black/20 hover:border-wuxia-red/50'
                                                 }`}
                                             >
-                                                <div className={`font-bold text-sm ${isSelected ? 'text-wuxia-red' : 'text-gray-300'}`}>{t.名称}</div>
+                                                <div className={`font-bold text-sm ${isSelected ? 'text-wuxia-red' : 'text-gray-300'}`}>
+                                                    {t.名称}
+                                                    {!预设天赋.some(p => p.名称 === t.名称) ? ' (自定义)' : ''}
+                                                </div>
                                                 <div className="text-xs text-gray-500 mt-1 line-clamp-2" title={t.描述}>{t.描述}</div>
                                                 <div className="text-xs text-wuxia-cyan/80 mt-2 pt-2 border-t border-gray-700/50 font-mono">{t.效果}</div>
                                             </div>
                                         )
                                     })}
-                                    {/* Render Custom Selected Talents */}
-                                    {selectedTalents.filter(st => !预设天赋.find(pt => pt.名称 === st.名称)).map((ct, idx) => (
-                                         <div 
-                                            key={`custom-${idx}`} 
-                                            onClick={() => toggleTalent(ct)}
-                                            className="p-4 border rounded-lg cursor-pointer transition-all duration-300 transform hover:-translate-y-1 border-wuxia-cyan bg-wuxia-cyan/10 shadow-lg shadow-wuxia-cyan/10"
-                                         >
-                                             <div className="font-bold text-sm text-wuxia-cyan">{ct.名称} (自制)</div>
-                                             <div className="text-xs text-gray-500 mt-1">{ct.描述}</div>
-                                             <div className="text-xs text-wuxia-cyan/80 mt-2 pt-2 border-t border-gray-700/50 font-mono">{ct.效果}</div>
-                                         </div>
-                                    ))}
                                 </div>
                              </OrnateBorder>
                         </div>
@@ -583,6 +677,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading }) => {
                                     <p>世界: <span className="text-white">{worldConfig.worldName}</span> <span className='text-gray-500'>({worldConfig.powerLevel})</span></p>
                                     <p>难度: <span className="text-white uppercase">{worldConfig.difficulty}</span></p>
                                     <p>主角: <span className="text-white">{charName.trim() || '未填写姓名'}</span> <span className='text-gray-500'>({charGender}, {charAge}岁)</span></p>
+                                    <p>外貌: <span className="text-white">{charAppearance.trim() || '未填写'}</span></p>
                                     <p>身份: <span className="text-white">{selectedBackground.名称}</span></p>
                                     <p>天赋: <span className="text-white">{selectedTalents.map(t => t.名称).join(', ') || '无'}</span></p>
                                 </div>

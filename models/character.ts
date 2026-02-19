@@ -27,6 +27,7 @@ export interface 角色数据结构 {
     性别: '男' | '女'; // New
     年龄: number;     // New
     出生日期: string;  // New: YYYY:MM:DD
+    外貌: string;      // 角色外貌描述
     
     称号: string;
     境界: string;
@@ -89,6 +90,7 @@ export const 默认角色数据: 角色数据结构 = {
     性别: "男",
     年龄: 16,
     出生日期: "1008:01:01",
+    外貌: "相貌平常，衣着朴素。",
     称号: "无名之辈",
     境界: "凡人",
     
