@@ -112,6 +112,83 @@ export const useGame = () => {
 
     // --- Actions ---
     const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
+    const 规范化角色物品容器映射 = (rawRole: 角色数据结构): 角色数据结构 => {
+        const role = 深拷贝(rawRole);
+        const sourceList = Array.isArray(role?.物品列表) ? role.物品列表 : [];
+
+        const deduped: any[] = [];
+        const seenIds = new Set<string>();
+        sourceList.forEach((item: any, idx: number) => {
+            const id = typeof item?.ID === 'string' && item.ID.trim().length > 0
+                ? item.ID.trim()
+                : `itm_auto_${idx}`;
+            if (seenIds.has(id)) return;
+            seenIds.add(id);
+            deduped.push({ ...item, ID: id });
+        });
+
+        const itemById = new Map<string, any>(deduped.map((item) => [item.ID, item]));
+        const containerIds = new Set<string>(
+            deduped
+                .filter((item) => item?.容器属性 && typeof item?.ID === 'string')
+                .map((item) => item.ID)
+        );
+
+        // Migration fallback: old saves may still store legacy "内容物"
+        const fallbackOwners = new Map<string, Set<string>>();
+        deduped.forEach((container) => {
+            const legacyContents = (container as any)?.容器属性?.内容物;
+            if (!Array.isArray(legacyContents)) return;
+            legacyContents.forEach((contentId: unknown) => {
+                if (typeof contentId !== 'string' || !contentId.trim()) return;
+                const key = contentId.trim();
+                const set = fallbackOwners.get(key) || new Set<string>();
+                set.add(container.ID);
+                fallbackOwners.set(key, set);
+            });
+        });
+
+        const locationById = new Map<string, string | undefined>();
+        deduped.forEach((item) => {
+            const explicit = typeof item?.当前容器ID === 'string' ? item.当前容器ID.trim() : '';
+            if (explicit && explicit !== item.ID && containerIds.has(explicit)) {
+                locationById.set(item.ID, explicit);
+                return;
+            }
+            const owners = Array.from(fallbackOwners.get(item.ID) || []);
+            const validOwners = owners.filter(ownerId => ownerId !== item.ID && containerIds.has(ownerId));
+            if (validOwners.length === 1) {
+                locationById.set(item.ID, validOwners[0]);
+                return;
+            }
+            locationById.set(item.ID, undefined);
+        });
+
+        deduped.forEach((item) => {
+            const location = locationById.get(item.ID);
+            if (location) item.当前容器ID = location;
+            else delete item.当前容器ID;
+        });
+
+        deduped.forEach((container) => {
+            if (!container?.容器属性) return;
+            const containedIds = deduped
+                .filter((item) => item.ID !== container.ID && locationById.get(item.ID) === container.ID)
+                .map((item) => item.ID);
+            const uniqueIds = Array.from(new Set(containedIds));
+            container.容器属性.当前已用空间 = uniqueIds.reduce((sum, id) => {
+                const child = itemById.get(id);
+                return sum + (Number(child?.占用空间) || 0);
+            }, 0);
+            if ((container as any).容器属性 && '内容物' in (container as any).容器属性) {
+                delete (container as any).容器属性.内容物;
+            }
+        });
+
+        role.物品列表 = deduped;
+        return role;
+    };
+
     const 取首个非空文本 = (...values: unknown[]): string | undefined => {
         for (const value of values) {
             if (typeof value === 'string' && value.trim().length > 0) {
@@ -482,7 +559,7 @@ export const useGame = () => {
     };
 
     const 回档到快照 = (snapshot: 回合快照结构) => {
-        设置角色(深拷贝(snapshot.回档前状态.角色));
+        设置角色(规范化角色物品容器映射(深拷贝(snapshot.回档前状态.角色)));
         设置环境(深拷贝(snapshot.回档前状态.环境));
         设置社交(规范化社交列表(深拷贝(snapshot.回档前状态.社交)));
         设置世界(深拷贝(snapshot.回档前状态.世界));
@@ -1351,7 +1428,7 @@ ${enabledDifficultyPrompts || '未提供'}
 
             // Initialize opening base state (full runtime initialization happens in opening story)
             const openingBase = 创建开场基础状态(charData, worldConfig);
-            设置角色(openingBase.角色);
+            设置角色(规范化角色物品容器映射(openingBase.角色));
             设置环境(openingBase.环境);
             设置社交(规范化社交列表(openingBase.社交));
             设置世界(openingBase.世界);
@@ -1621,6 +1698,7 @@ ${enabledDifficultyPrompts || '未提供'}
             });
 
             battleBuffer = 战斗结束自动清空(battleBuffer, storyBuffer);
+            charBuffer = 规范化角色物品容器映射(charBuffer);
             const mergedSocial = 规范化社交列表(socialBuffer);
 
             设置角色(charBuffer);
@@ -1984,7 +2062,7 @@ ${enabledDifficultyPrompts || '未提供'}
         if (view === 'home' || confirm(`读取存档: ${save.描述}?`)) {
             清空重Roll快照();
             设置最近开局配置(null);
-            设置角色(save.角色数据);
+            设置角色(规范化角色物品容器映射(save.角色数据));
             设置环境(save.环境信息 || 创建开场空白环境());
             设置社交(规范化社交列表(save.社交 || [])); 
             设置世界(save.世界 || 创建开场空白世界());
