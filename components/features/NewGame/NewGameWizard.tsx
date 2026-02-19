@@ -280,7 +280,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, request
         // Construct final character data object
         const charData: 角色数据结构 = {
             // Format birthday string from state
-            出生日期: `1024:${String(birthMonth).padStart(2, '0')}:${String(birthDay).padStart(2, '0')}`,
+            出生日期: `${birthMonth}月${birthDay}日`,
 
             ...stats as any, // 力量, 敏捷 etc.
             姓名: charName.trim(),

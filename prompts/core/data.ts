@@ -49,7 +49,7 @@ export const 核心_数据格式: 提示词结构 = {
 - \`姓名\`: String
 - \`性别\`: "男" | "女"
 - \`年龄\`: Number
-- \`出生日期\`: String（YYYY:MM:DD）
+- \`出生日期\`: String（N月N日，例如 3月1日）
 - \`外貌\`: String（角色外貌/气质/常见穿着）
 - \`称号\`: String
 - \`境界\`: String

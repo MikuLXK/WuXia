@@ -26,7 +26,7 @@ export interface 角色数据结构 {
     姓名: string;
     性别: '男' | '女'; // New
     年龄: number;     // New
-    出生日期: string;  // New: YYYY:MM:DD
+    出生日期: string;  // 格式: N月N日
     外貌: string;      // 角色外貌描述
     
     称号: string;
