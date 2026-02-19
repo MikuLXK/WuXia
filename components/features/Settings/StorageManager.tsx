@@ -7,9 +7,10 @@ import { 聊天记录结构, 提示词结构 } from '../../../types';
 interface Props {
     history: 聊天记录结构[];
     prompts?: 提示词结构[]; // Added
+    requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
 }
 
-const StorageManager: React.FC<Props> = ({ history, prompts = [] }) => {
+const StorageManager: React.FC<Props> = ({ history, prompts = [], requestConfirm }) => {
     const [info, setInfo] = useState<dbService.StorageBreakdown>({
         usage: 0,
         quota: 0,
@@ -35,12 +36,19 @@ const StorageManager: React.FC<Props> = ({ history, prompts = [] }) => {
     };
 
     const handleClearAll = async () => {
-        if (confirm(`确定要清空所有数据吗？${protectApiKey ? ' (API Key 将被保留)' : ' (警告：API Key 也会被删除)'}`)) {
-            await dbService.清空数据库(protectApiKey);
-            await updateInfo();
-            alert("数据已清理");
-            window.location.reload();
-        }
+        const ok = requestConfirm
+            ? await requestConfirm({
+                title: '清空数据',
+                message: `确定要清空所有数据吗？${protectApiKey ? ' (API Key 将被保留)' : ' (警告：API Key 也会被删除)'}`,
+                confirmText: '清空',
+                danger: true
+            })
+            : true;
+        if (!ok) return;
+        await dbService.清空数据库(protectApiKey);
+        await updateInfo();
+        alert("数据已清理");
+        window.location.reload();
     };
 
     // Calculate Dynamic Context Tokens (History)

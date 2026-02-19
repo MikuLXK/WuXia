@@ -1,6 +1,6 @@
 
 import { 
-    角色数据结构, 默认角色数据, 
+    角色数据结构,
     环境信息结构,
     聊天记录结构, 
     接口设置结构,
@@ -113,6 +113,64 @@ export const useGame = () => {
 
     // --- Actions ---
     const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
+    const 默认装备模板 = {
+        头部: '无',
+        胸部: '无',
+        腿部: '无',
+        手部: '无',
+        足部: '无',
+        主武器: '无',
+        副武器: '无',
+        暗器: '无',
+        背部: '无',
+        腰部: '无',
+        坐骑: '无'
+    };
+    const 取地点片段 = (raw: unknown): string => (typeof raw === 'string' ? raw.trim() : '');
+    const 去除具体地点冗余 = (specificRaw: string, smallRaw: string): string => {
+        const specific = 取地点片段(specificRaw);
+        const small = 取地点片段(smallRaw);
+        if (!specific || !small) return specific;
+        if (!specific.startsWith(small)) return specific;
+        const stripped = specific.slice(small.length).replace(/^[\s\-—>·/|，,、。:：]+/, '').trim();
+        return stripped || specific;
+    };
+    const 拼接遗留地点 = (...parts: unknown[]): string => {
+        const values = parts
+            .map((part) => 取地点片段(part))
+            .filter(Boolean);
+        const unique = values.filter((part, idx) => values.indexOf(part) === idx);
+        return unique.join('·');
+    };
+    const 规范化环境信息 = (rawEnv?: any): 环境信息结构 => {
+        const source = rawEnv && typeof rawEnv === 'object' ? rawEnv : {};
+        const 大地点 = 取地点片段(source?.大地点) || 拼接遗留地点(source?.洲, source?.国);
+        const 中地点 = 取地点片段(source?.中地点) || 拼接遗留地点(source?.郡, source?.县);
+        const 小地点 = 取地点片段(source?.小地点) || 拼接遗留地点(source?.村);
+        const 原始具体地点 = 取地点片段(source?.具体地点);
+        const 具体地点 = 去除具体地点冗余(原始具体地点, 小地点);
+        return {
+            时间: typeof source?.时间 === 'string' ? source.时间 : '',
+            大地点,
+            中地点,
+            小地点,
+            具体地点,
+            节日: typeof source?.节日 === 'string' ? source.节日 : '',
+            天气: typeof source?.天气 === 'string' ? source.天气 : '',
+            环境描述: typeof source?.环境描述 === 'string' ? source.环境描述 : '',
+            日期: typeof source?.日期 === 'number' && Number.isFinite(source.日期)
+                ? Math.max(1, Math.floor(source.日期))
+                : 1
+        };
+    };
+    const 构建完整地点文本 = (env: any): string => {
+        const normalized = 规范化环境信息(env);
+        const parts = [normalized.大地点, normalized.中地点, normalized.小地点, normalized.具体地点]
+            .map((part) => part.trim())
+            .filter(Boolean);
+        const unique = parts.filter((part, idx) => parts.indexOf(part) === idx);
+        return unique.length > 0 ? unique.join(' > ') : '未知地点';
+    };
     const 规范化角色物品容器映射 = (rawRole: 角色数据结构): 角色数据结构 => {
         const 装备槽位列表: 装备槽位[] = ['头部', '胸部', '腿部', '手部', '足部', '主武器', '副武器', '暗器', '背部', '腰部', '坐骑'];
         const 装备槽位集合 = new Set<string>(装备槽位列表);
@@ -149,7 +207,7 @@ export const useGame = () => {
         }
 
         const rawEquip = role?.装备 && typeof role.装备 === 'object' ? role.装备 : ({} as any);
-        role.装备 = { ...默认角色数据.装备, ...(rawEquip as any) };
+        role.装备 = { ...默认装备模板, ...(rawEquip as any) };
 
         const sourceList = Array.isArray(role?.物品列表) ? role.物品列表 : [];
 
@@ -716,7 +774,7 @@ export const useGame = () => {
 
     const 回档到快照 = (snapshot: 回合快照结构) => {
         设置角色(规范化角色物品容器映射(深拷贝(snapshot.回档前状态.角色)));
-        设置环境(深拷贝(snapshot.回档前状态.环境));
+        设置环境(规范化环境信息(深拷贝(snapshot.回档前状态.环境)));
         设置社交(规范化社交列表(深拷贝(snapshot.回档前状态.社交)));
         设置世界(深拷贝(snapshot.回档前状态.世界));
         设置战斗(深拷贝(snapshot.回档前状态.战斗));
@@ -1166,11 +1224,9 @@ ${anchor}
 
     const 创建开场空白环境 = () => ({
         时间: '',
-        洲: '',
-        国: '',
-        郡: '',
-        县: '',
-        村: '',
+        大地点: '',
+        中地点: '',
+        小地点: '',
         具体地点: '',
         节日: '',
         天气: '',
@@ -1281,36 +1337,48 @@ ${anchor}
             在场NPC档案: string;
             游戏设置: string;
             剧情安排: string;
-            游戏数值设定: string;
+            世界状态: string;
+            环境状态: string;
+            角色状态: string;
+            战斗状态: string;
+            门派状态: string;
+            任务状态: string;
+            约定状态: string;
         };
     } => {
-        const 构建去重GameState快照 = (payload: any) => {
+        const 构建环境状态文本 = (payload: any) => {
             const source = payload || {};
-            const role = source.角色 || {};
-            return {
-                角色基础信息: {
-                    姓名: role.姓名,
-                    性别: role.性别,
-                    年龄: role.年龄,
-                    出生日期: role.出生日期,
-                    外貌: role.外貌,
-                    称号: role.称号,
-                    境界: role.境界,
-                    天赋列表: role.天赋列表,
-                    出身背景: role.出身背景
-                },
-                角色装备: role.装备 || {},
-                角色背包: Array.isArray(role.物品列表) ? role.物品列表 : [],
-                角色功法: Array.isArray(role.功法列表) ? role.功法列表 : [],
-                当前地点: source.当前地点 || source?.环境?.具体地点 || '',
-                角色: source.角色,
-                环境: source.环境,
-                世界: source.世界,
-                战斗: source.战斗,
-                玩家门派: source.玩家门派,
-                任务列表: Array.isArray(source.任务列表) ? source.任务列表 : [],
-                约定列表: Array.isArray(source.约定列表) ? source.约定列表 : []
-            };
+            const env = 规范化环境信息(source?.环境);
+            const fullLocation = 构建完整地点文本(env);
+            return [
+                '【当前环境】',
+                `当前时间: ${typeof env?.时间 === 'string' && env.时间.trim() ? env.时间.trim() : '未知时间'}`,
+                `当前地点: ${fullLocation}`,
+                `环境数据: ${JSON.stringify(env)}`
+            ].join('\n');
+        };
+
+        const 构建角色状态文本 = (payload: any) => {
+            const source = payload || {};
+            const role = source?.角色 && typeof source.角色 === 'object' ? source.角色 : {};
+            const {
+                姓名,
+                称号,
+                境界,
+                性别,
+                年龄,
+                出生日期,
+                外貌,
+                天赋列表,
+                出身背景,
+                ...角色其余信息
+            } = role;
+            return [
+                '【角色】',
+                `姓名: ${typeof 姓名 === 'string' && 姓名.trim() ? 姓名.trim() : '未命名'}`,
+                `角色基础信息: ${JSON.stringify({ 称号, 境界, 性别, 年龄, 出生日期, 外貌, 天赋列表, 出身背景 })}`,
+                `角色其余信息: ${JSON.stringify(角色其余信息)}`
+            ].join('\n');
         };
         const 构建剧情安排 = (payload: any) => {
             const story = payload?.剧情 || {};
@@ -1438,7 +1506,18 @@ ${anchor}
             writeReqContent || '未配置'
         ].join('\n');
         const contextStoryPlan = 构建剧情安排(statePayload);
-        const contextWorldState = `【游戏数值设定 (GameState)】\n${JSON.stringify(构建去重GameState快照(statePayload))}`;
+        const worldData = statePayload?.世界 && typeof statePayload.世界 === 'object' ? statePayload.世界 : {};
+        const battleData = statePayload?.战斗 && typeof statePayload.战斗 === 'object' ? statePayload.战斗 : {};
+        const sectData = statePayload?.玩家门派 && typeof statePayload.玩家门派 === 'object' ? statePayload.玩家门派 : {};
+        const tasksData = Array.isArray(statePayload?.任务列表) ? statePayload.任务列表 : [];
+        const agreementsData = Array.isArray(statePayload?.约定列表) ? statePayload.约定列表 : [];
+        const contextWorldState = `【世界】\n${JSON.stringify(worldData)}`;
+        const contextEnvironmentState = 构建环境状态文本(statePayload);
+        const contextRoleState = 构建角色状态文本(statePayload);
+        const contextBattleState = `【战斗】\n${JSON.stringify(battleData)}`;
+        const contextSectState = `【玩家门派】\n${JSON.stringify(sectData)}`;
+        const contextTaskState = `【任务列表】\n${JSON.stringify(tasksData)}`;
+        const contextAgreementState = `【约定列表】\n${JSON.stringify(agreementsData)}`;
         const shortMemoryEntries = memoryData.短期记忆
             .slice(-30)
             .map(item => item.trim())
@@ -1448,7 +1527,20 @@ ${anchor}
             : '';
 
         return {
-            systemPrompt: [promptHeader, contextMemory, contextNPCData, contextSettings, contextStoryPlan, contextWorldState]
+            systemPrompt: [
+                promptHeader,
+                contextMemory,
+                contextNPCData,
+                contextSettings,
+                contextStoryPlan,
+                contextWorldState,
+                contextEnvironmentState,
+                contextRoleState,
+                contextBattleState,
+                contextSectState,
+                contextTaskState,
+                contextAgreementState
+            ]
                 .filter(Boolean)
                 .join('\n\n'),
             shortMemoryContext,
@@ -1461,7 +1553,13 @@ ${anchor}
                 在场NPC档案: contextNPCData,
                 游戏设置: contextSettings,
                 剧情安排: contextStoryPlan,
-                游戏数值设定: contextWorldState
+                世界状态: contextWorldState,
+                环境状态: contextEnvironmentState,
+                角色状态: contextRoleState,
+                战斗状态: contextBattleState,
+                门派状态: contextSectState,
+                任务状态: contextTaskState,
+                约定状态: contextAgreementState
             }
         };
     };
@@ -1504,6 +1602,8 @@ ${anchor}
 
         setLoading(true);
 
+        let worldStreamHeartbeat: ReturnType<typeof setInterval> | null = null;
+        let worldDeltaReceived = false;
         try {
             // 1. Build worldview seed prompt (for world-prompt generation only)
             const worldPromptSeed = 构建世界观提示词(worldConfig, charData);
@@ -1550,6 +1650,29 @@ ${enabledDifficultyPrompts || '未提供'}
             `.trim();
 
             // 2. Call AI Service
+            if (openingStreaming) {
+                let pulse = 0;
+                worldStreamHeartbeat = setInterval(() => {
+                    if (worldDeltaReceived) return;
+                    pulse = (pulse + 1) % 4;
+                    const dots = '.'.repeat(pulse) || '.';
+                    设置历史记录(prev => prev.map(item => {
+                        if (
+                            item.role === 'assistant' &&
+                            !item.structuredResponse &&
+                            typeof item.content === 'string' &&
+                            item.content.startsWith('【生成中】')
+                        ) {
+                            return {
+                                ...item,
+                                content: `【生成中】世界观生成${dots}`
+                            };
+                        }
+                        return item;
+                    }));
+                }, 420);
+            }
+
             const generatedWorldPrompt = await aiService.generateWorldData(
                 worldGenerationContext,
                 charData,
@@ -1558,6 +1681,7 @@ ${enabledDifficultyPrompts || '未提供'}
                     ? {
                         stream: openingStreaming,
                         onDelta: (_delta, accumulated) => {
+                            worldDeltaReceived = true;
                             设置历史记录(prev => prev.map(item => {
                                 if (
                                     item.role === 'assistant' &&
@@ -1576,6 +1700,7 @@ ${enabledDifficultyPrompts || '未提供'}
                     }
                     : undefined
             );
+            if (worldStreamHeartbeat) clearInterval(worldStreamHeartbeat);
 
             const worldPromptContent = generatedWorldPrompt?.trim() || worldPromptSeed;
             const finalPrompts = updatedPrompts.map(p => (
@@ -1587,7 +1712,7 @@ ${enabledDifficultyPrompts || '未提供'}
             // Initialize opening base state (full runtime initialization happens in opening story)
             const openingBase = 创建开场基础状态(charData, worldConfig);
             设置角色(规范化角色物品容器映射(openingBase.角色));
-            设置环境(openingBase.环境);
+            设置环境(规范化环境信息(openingBase.环境));
             设置社交(规范化社交列表(openingBase.社交));
             设置世界(openingBase.世界);
             设置战斗(openingBase.战斗);
@@ -1612,6 +1737,7 @@ ${enabledDifficultyPrompts || '未提供'}
             }
 
         } catch (error: any) {
+            if (worldStreamHeartbeat) clearInterval(worldStreamHeartbeat);
             console.error(error);
             alert("世界生成失败: " + error.message);
             if (openingStreaming) {
@@ -1644,11 +1770,13 @@ ${enabledDifficultyPrompts || '未提供'}
        - 每个容器的 \`当前已用空间\` 必须与“指向该容器的物品占用空间总和”一致，禁止留空或与实际收纳不一致。
        - 若容器为软质袋类，需按当前已用空间同步其自身 \`占用空间\`（默认口径：空载=1，非空=\`max(1, ceil(当前已用空间*0.35))\`）。
      - \`称号\` 必须生成且非空：若建档已给定称号则沿用；若建档留空，需根据“出身背景 + 当前境界 + 开局处境”生成一个武侠风称号后写入。
-   - \`gameState.环境\`：完整初始化 时间(YYYY:MM:DD:HH:MM)、天气、节日、洲/国/郡/县/村、具体地点、日期(第几日)。
+   - \`gameState.环境\`：完整初始化 时间(YYYY:MM:DD:HH:MM)、天气、节日、大地点/中地点/小地点/具体地点、日期(第几日)。
+     - \`具体地点\` 仅写小地点内部的微观位置（如“茶棚内侧角桌”），禁止重复拼接小地点名称。
    - \`gameState.当前地点\`：必须显式初始化，并与 \`gameState.环境.具体地点\` 保持一致。
    - \`gameState.社交\`：按开场剧情实际出场角色初始化；不强制固定人数。未出场角色可不建档。
    - \`gameState.世界\`：完整初始化（当前时代/混乱度/势力列表/活跃NPC列表/进行中事件/已结算事件/江湖史册）。
      其中“天下大势正在发生的事件”（\`gameState.世界.进行中事件\`）开场必须生成 **>=3 条**（推荐 5 条），且每条都需具备真实关联势力或人物，禁止空事件凑数。
+     - 每条 \`进行中事件\` 必须写全：\`开始时间\` 与 \`预计结束时间\`（\`YYYY:MM:DD:HH:MM\`），禁止省略结束时间或改用其他字段名。
    - \`gameState.战斗\`：开场默认必须初始化为非战斗状态，除非玩家建档信息明确要求“战斗开局”。
      - 默认值：\`{"是否战斗中":false,"敌方":null}\`
    - \`gameState.剧情\`：完整初始化（当前章节/下一章预告/历史卷宗/剧情变量）。
@@ -1700,18 +1828,21 @@ ${enabledDifficultyPrompts || '未提供'}
             }
         ];
         设置历史记录(initialHistory);
+        let openingStreamHeartbeat: ReturnType<typeof setInterval> | null = null;
+        let openingDeltaReceived = false;
 
         try {
             const controller = new AbortController();
             abortControllerRef.current = controller;
 
             const openingMem: 记忆系统结构 = { 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] };
+            const openingEnv = 规范化环境信息(contextData?.环境 || 环境);
             const openingCurrentLocation = Object.prototype.hasOwnProperty.call(contextData || {}, '当前地点')
                 ? contextData.当前地点
-                : (contextData?.环境?.具体地点 ?? '');
+                : (openingEnv?.具体地点 ?? '');
             const openingStatePayload = {
                 角色: contextData.角色 || 角色,
-                环境: contextData.环境 || 环境,
+                环境: openingEnv,
                 世界: contextData.世界 || 世界,
                 战斗: contextData.战斗 || 战斗,
                 玩家门派: contextData.玩家门派 || 玩家门派,
@@ -1739,9 +1870,25 @@ ${enabledDifficultyPrompts || '未提供'}
                         role: 'assistant',
                         content: '',
                         timestamp: streamMarker,
-                        gameTime: contextData.环境?.时间 || "未知时间"
+                        gameTime: openingEnv?.时间 || "未知时间"
                     }
                 ]);
+                let pulse = 0;
+                openingStreamHeartbeat = setInterval(() => {
+                    if (openingDeltaReceived) return;
+                    pulse = (pulse + 1) % 4;
+                    const dots = '.'.repeat(pulse) || '.';
+                    设置历史记录(prev => prev.map(item => {
+                        if (
+                            item.timestamp === streamMarker &&
+                            item.role === 'assistant' &&
+                            !item.structuredResponse
+                        ) {
+                            return { ...item, content: `【生成中】开场剧情生成${dots}` };
+                        }
+                        return item;
+                    }));
+                }, 420);
             }
 
             const aiData = await aiService.generateStoryResponse(
@@ -1754,6 +1901,7 @@ ${enabledDifficultyPrompts || '未提供'}
                     ? {
                         stream: true,
                         onDelta: (_delta, accumulated) => {
+                            openingDeltaReceived = true;
                             设置历史记录(prev => prev.map(item => {
                                 if (
                                     item.timestamp === streamMarker &&
@@ -1769,6 +1917,7 @@ ${enabledDifficultyPrompts || '未提供'}
                     : undefined,
                 gameConfig.额外提示词
             );
+            if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
 
             // Apply commands (use generated opening state as base to avoid stale state race)
             const openingStateAfterCommands = processResponseCommands(aiData, {
@@ -1816,22 +1965,21 @@ ${enabledDifficultyPrompts || '未提供'}
             performAutoSave();
 
         } catch (e: any) {
+            if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
             if (e?.name === 'AbortError') {
                 设置历史记录(initialHistory);
                 return;
             }
             console.error("Story Gen Failed", e);
         } finally {
+            if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
             abortControllerRef.current = null;
         }
     };
 
     const handleReturnToHome = () => {
-        if (confirm("确定要返回首页吗？未保存的进度将会丢失。")) {
-            setView('home');
-            return true;
-        }
-        return false;
+        setView('home');
+        return true;
     };
 
     const processResponseCommands = (
@@ -1846,7 +1994,7 @@ ${enabledDifficultyPrompts || '未提供'}
         }
     ) => {
         let charBuffer = baseState?.角色 || 角色;
-        let envBuffer = baseState?.环境 || 环境;
+        let envBuffer = 规范化环境信息(baseState?.环境 || 环境);
         let socialBuffer = baseState?.社交 || 社交;
         let worldBuffer = baseState?.世界 || 世界;
         let battleBuffer = 规范化战斗状态(baseState?.战斗 || 战斗);
@@ -1856,7 +2004,7 @@ ${enabledDifficultyPrompts || '未提供'}
             response.tavern_commands.forEach(cmd => {
                 const res = applyStateCommand(charBuffer, envBuffer, socialBuffer, worldBuffer, battleBuffer, storyBuffer, cmd.key, cmd.value, cmd.action);
                 charBuffer = res.char;
-                envBuffer = res.env;
+                envBuffer = 规范化环境信息(res.env);
                 socialBuffer = 规范化社交列表(res.social, { 合并同名: false });
                 worldBuffer = res.world;
                 battleBuffer = res.battle;
@@ -1868,7 +2016,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const mergedSocial = 规范化社交列表(socialBuffer);
 
             设置角色(charBuffer);
-            设置环境(envBuffer);
+            设置环境(规范化环境信息(envBuffer));
             设置社交(mergedSocial);
             设置世界(worldBuffer);
             设置战斗(battleBuffer);
@@ -1878,7 +2026,7 @@ ${enabledDifficultyPrompts || '未提供'}
 
         return {
             角色: charBuffer,
-            环境: envBuffer,
+            环境: 规范化环境信息(envBuffer),
             社交: 规范化社交列表(socialBuffer),
             世界: worldBuffer,
             战斗: battleBuffer,
@@ -1934,7 +2082,7 @@ ${enabledDifficultyPrompts || '未提供'}
             prompts,
             normalizedMem,
             社交,
-            { 角色, 环境, 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 环境?.具体地点 || '', 剧情 }
+            { 角色, 环境: 规范化环境信息(环境), 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 规范化环境信息(环境)?.具体地点 || '', 剧情 }
         );
         const historyScript = formatHistoryToScript(历史记录) || '暂无';
         const latestUserInput = [...历史记录]
@@ -1968,7 +2116,13 @@ ${enabledDifficultyPrompts || '未提供'}
         pushSection('npc_present', '当前场景NPC档案', '系统', builtContext.contextPieces.在场NPC档案);
         pushSection('game_settings', '游戏设置', '系统', builtContext.contextPieces.游戏设置);
         pushSection('story_plan', '剧情安排', '系统', builtContext.contextPieces.剧情安排);
-        pushSection('game_state', '游戏数值设定 (GameState)', '系统', builtContext.contextPieces.游戏数值设定);
+        pushSection('state_world', '世界', '系统', builtContext.contextPieces.世界状态);
+        pushSection('state_environment', '当前环境', '系统', builtContext.contextPieces.环境状态);
+        pushSection('state_role', '角色', '系统', builtContext.contextPieces.角色状态);
+        pushSection('state_battle', '战斗', '系统', builtContext.contextPieces.战斗状态);
+        pushSection('state_sect', '玩家门派', '系统', builtContext.contextPieces.门派状态);
+        pushSection('state_tasks', '任务列表', '系统', builtContext.contextPieces.任务状态);
+        pushSection('state_agreements', '约定列表', '系统', builtContext.contextPieces.约定状态);
         pushSection('memory_short', '短期记忆', '记忆', builtContext.shortMemoryContext);
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
         pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);
@@ -2000,7 +2154,7 @@ ${enabledDifficultyPrompts || '未提供'}
             游戏时间: currentGameTime,
             回档前状态: {
                 角色: 深拷贝(角色),
-                环境: 深拷贝(环境),
+                环境: 规范化环境信息(深拷贝(环境)),
                 社交: 深拷贝(社交),
                 世界: 深拷贝(世界),
                 战斗: 深拷贝(战斗),
@@ -2040,7 +2194,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 prompts,
                 updatedMemSys,
                 社交,
-                { 角色, 环境, 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 环境?.具体地点 || '', 剧情 }
+                { 角色, 环境: 规范化环境信息(环境), 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 规范化环境信息(环境)?.具体地点 || '', 剧情 }
             );
             const contextImmediate = [
                 builtContext.shortMemoryContext,
@@ -2197,7 +2351,7 @@ ${enabledDifficultyPrompts || '未提供'}
             时间戳: Date.now(),
             描述: desc,
             角色数据: 角色,
-            环境信息: 环境,
+            环境信息: 规范化环境信息(环境),
             历史记录: 历史记录,
             社交: 社交,
             世界: 世界,
@@ -2219,37 +2373,35 @@ ${enabledDifficultyPrompts || '未提供'}
     };
 
     const performAutoSave = async () => {
-        const desc = `[自动] ${环境.具体地点} - ${new Date().toLocaleTimeString()}`;
+        const desc = `[自动] ${构建完整地点文本(环境)} - ${new Date().toLocaleTimeString()}`;
         const save = createSaveData(desc, 'auto');
         await dbService.保存存档(save);
     };
 
     const handleLoadGame = async (save: 存档结构) => {
-        if (view === 'home' || confirm(`读取存档: ${save.描述}?`)) {
-            清空重Roll快照();
-            设置最近开局配置(null);
-            设置角色(规范化角色物品容器映射(save.角色数据));
-            设置环境(save.环境信息 || 创建开场空白环境());
-            设置社交(规范化社交列表(save.社交 || [])); 
-            设置世界(save.世界 || 创建开场空白世界());
-            设置战斗(规范化战斗状态(save.战斗 || 创建开场空白战斗()));
-            设置玩家门派(save.玩家门派 || 创建空门派状态());
-            设置任务列表(save.任务列表 || []);
-            设置约定列表(save.约定列表 || []);
-            设置剧情(save.剧情 || 创建开场空白剧情());
-            设置历史记录(save.历史记录);
-            设置记忆系统(规范化记忆系统(save.记忆系统));
-            
-            if (save.游戏设置) setGameConfig(规范化游戏设置(save.游戏设置));
-            if (save.记忆配置) setMemoryConfig(规范化记忆配置(save.记忆配置));
-            if (save.提示词快照) {
-                setPrompts(save.提示词快照); // Restore world settings etc.
-                await dbService.保存设置('prompts', save.提示词快照);
-            }
-            
-            setView('game');
-            setShowSaveLoad({ show: false, mode: 'load' }); // Close modal
+        清空重Roll快照();
+        设置最近开局配置(null);
+        设置角色(规范化角色物品容器映射(save.角色数据));
+        设置环境(规范化环境信息(save.环境信息 || 创建开场空白环境()));
+        设置社交(规范化社交列表(save.社交 || [])); 
+        设置世界(save.世界 || 创建开场空白世界());
+        设置战斗(规范化战斗状态(save.战斗 || 创建开场空白战斗()));
+        设置玩家门派(save.玩家门派 || 创建空门派状态());
+        设置任务列表(save.任务列表 || []);
+        设置约定列表(save.约定列表 || []);
+        设置剧情(save.剧情 || 创建开场空白剧情());
+        设置历史记录(save.历史记录);
+        设置记忆系统(规范化记忆系统(save.记忆系统));
+        
+        if (save.游戏设置) setGameConfig(规范化游戏设置(save.游戏设置));
+        if (save.记忆配置) setMemoryConfig(规范化记忆配置(save.记忆配置));
+        if (save.提示词快照) {
+            setPrompts(save.提示词快照); // Restore world settings etc.
+            await dbService.保存设置('prompts', save.提示词快照);
         }
+        
+        setView('game');
+        setShowSaveLoad({ show: false, mode: 'load' }); // Close modal
     };
 
     return {

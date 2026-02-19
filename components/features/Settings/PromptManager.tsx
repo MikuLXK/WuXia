@@ -6,11 +6,12 @@ import GameButton from '../../ui/GameButton';
 interface Props {
     prompts: 提示词结构[];
     onUpdate: (prompts: 提示词结构[]) => void;
+    requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
 }
 
 const CATEGORIES: PromptCategory[] = ['核心设定', '数值设定', '难度设定', '写作设定', '自定义'];
 
-const PromptManager: React.FC<Props> = ({ prompts, onUpdate }) => {
+const PromptManager: React.FC<Props> = ({ prompts, onUpdate, requestConfirm }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<提示词结构 | null>(null);
     const [activeCategory, setActiveCategory] = useState<PromptCategory | 'ALL'>('ALL');
@@ -31,10 +32,12 @@ const PromptManager: React.FC<Props> = ({ prompts, onUpdate }) => {
         setEditForm(null);
     };
 
-    const handleDelete = (id: string) => {
-        if (confirm('确定删除此提示词吗？')) {
-            onUpdate(prompts.filter(p => p.id !== id));
-        }
+    const handleDelete = async (id: string) => {
+        const ok = requestConfirm
+            ? await requestConfirm({ title: '删除提示词', message: '确定删除此提示词吗？', confirmText: '删除', danger: true })
+            : true;
+        if (!ok) return;
+        onUpdate(prompts.filter(p => p.id !== id));
     };
 
     const handleAddNew = () => {

@@ -9,9 +9,10 @@ interface Props {
     onLoadGame: (save: 存档结构) => void;
     onSaveGame?: (desc: string) => void; // Optional if in read-only mode
     mode: 'save' | 'load';
+    requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
 }
 
-const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode }) => {
+const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode, requestConfirm }) => {
     const [saves, setSaves] = useState<存档结构[]>([]);
     const [activeTab, setActiveTab] = useState<'auto' | 'manual'>('manual');
     const [loading, setLoading] = useState(true);
@@ -35,10 +36,25 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode 
 
     const handleDelete = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (confirm("确定删除此存档吗？")) {
-            await dbService.删除存档(id);
-            await loadSaves();
-        }
+        const ok = requestConfirm
+            ? await requestConfirm({ title: '删除存档', message: '确定删除此存档吗？', confirmText: '删除', danger: true })
+            : true;
+        if (!ok) return;
+        await dbService.删除存档(id);
+        await loadSaves();
+    };
+
+    const handleLoadClick = async (save: 存档结构) => {
+        if (mode !== 'load') return;
+        const ok = requestConfirm
+            ? await requestConfirm({
+                title: '读取存档',
+                message: `读取存档：${save.描述}？`,
+                confirmText: '读取'
+            })
+            : true;
+        if (!ok) return;
+        onLoadGame(save);
     };
 
     const handleSave = async () => {
@@ -113,7 +129,7 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode 
                             {filteredSaves.map(save => (
                                 <div 
                                     key={save.id}
-                                    onClick={() => mode === 'load' && onLoadGame(save)}
+                                    onClick={() => { void handleLoadClick(save); }}
                                     className={`relative bg-black/40 border border-gray-700 p-4 rounded-lg group transition-all flex flex-col gap-2 ${mode === 'load' ? 'cursor-pointer hover:border-wuxia-gold/50 hover:bg-black/60' : ''}`}
                                 >
                                     <div className="flex justify-between items-start">

@@ -59,34 +59,37 @@ interface Props {
     
     onReturnToHome?: () => void;
     isHome?: boolean;
+    requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
     activeTab, onTabChange, onClose,
     apiConfig, visualConfig, gameConfig, memoryConfig, prompts, festivals, currentTheme, history, contextSnapshot,
     onSaveApi, onSaveVisual, onSaveGame, onSaveMemory, onUpdatePrompts, onUpdateFestivals, onThemeChange,
-    onReturnToHome, isHome
+    onReturnToHome, isHome, requestConfirm
 }) => {
+    const tabItems = [
+        { id: 'game', label: '游戏设定' },
+        { id: 'world', label: '世界设定' },
+        { id: 'memory', label: '记忆配置' },
+        { id: 'visual', label: '视觉显示' },
+        { id: 'history', label: '互动历史' },
+        { id: 'context', label: '上下文' },
+        { id: 'api', label: '接口连接' },
+        { id: 'prompt', label: '提示词' },
+        { id: 'theme', label: '界面风格' },
+        { id: 'storage', label: '数据存储' }
+    ] as const;
+
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fadeIn">
-            <OrnateBorder className="w-full max-w-4xl h-[700px] flex shadow-[0_0_80px_rgba(0,0,0,0.9)] p-0 overflow-hidden backdrop-blur-md">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-0 md:p-4 animate-fadeIn">
+            <OrnateBorder className="w-full h-full md:max-w-4xl md:h-[700px] flex shadow-[0_0_80px_rgba(0,0,0,0.9)] p-0 overflow-hidden backdrop-blur-md rounded-none md:rounded-xl">
                 <div className="flex w-full h-full">
                     {/* Sidebar */}
-                    <div className="w-1/4 bg-black/40 border-r border-wuxia-gold/10 flex flex-col pt-12 relative z-10">
+                    <div className="hidden md:flex w-1/4 bg-black/40 border-r border-wuxia-gold/10 flex-col pt-12 relative z-10">
                         <h2 className="text-2xl text-wuxia-gold font-serif font-black px-6 mb-8 italic">设置</h2>
                         <div className="flex-1 overflow-y-auto custom-scrollbar">
-                            {[
-                                { id: 'game', label: '游戏设定' },
-                                { id: 'world', label: '世界设定' },
-                                { id: 'memory', label: '记忆配置' },
-                                { id: 'visual', label: '视觉显示' },
-                                { id: 'history', label: '互动历史' }, // Added
-                                { id: 'context', label: '上下文' },
-                                { id: 'api', label: '接口连接' },
-                                { id: 'prompt', label: '提示词' },
-                                { id: 'theme', label: '界面风格' },
-                                { id: 'storage', label: '数据存储' }
-                            ].map(item => (
+                            {tabItems.map(item => (
                                 <button 
                                     key={item.id}
                                     onClick={() => onTabChange(item.id as any)}
@@ -124,14 +127,81 @@ const SettingsModal: React.FC<Props> = ({
                         </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 p-8 overflow-y-auto relative z-10 custom-scrollbar">
+                    {/* Mobile Header */}
+                    <div className="md:hidden w-full h-full flex flex-col">
+                        <div className="shrink-0 border-b border-wuxia-gold/20 bg-black/60">
+                            <div className="px-4 py-3 flex items-center justify-between">
+                                <h2 className="text-lg text-wuxia-gold font-serif font-black tracking-wider">设置</h2>
+                                <div className="flex items-center gap-2">
+                                    {!isHome && onReturnToHome && (
+                                        <button
+                                            onClick={onReturnToHome}
+                                            className="px-2 py-1 text-[10px] border border-red-900/60 text-red-400 rounded"
+                                        >
+                                            返回
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={onClose}
+                                        className="px-2 py-1 text-[10px] border border-wuxia-gold/50 text-wuxia-gold rounded"
+                                    >
+                                        关闭
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="px-2 pb-2 overflow-x-auto no-scrollbar">
+                                <div className="flex gap-2 min-w-max">
+                                    {tabItems.map(item => (
+                                        <button
+                                            key={`m-${item.id}`}
+                                            onClick={() => onTabChange(item.id as any)}
+                                            className={`px-3 py-1.5 rounded border text-xs whitespace-nowrap transition-colors ${
+                                                activeTab === item.id
+                                                    ? 'border-wuxia-gold bg-wuxia-gold/10 text-wuxia-gold'
+                                                    : 'border-gray-700 text-gray-400'
+                                            }`}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 p-4 overflow-y-auto relative z-10 custom-scrollbar">
+                            {activeTab === 'api' && <ApiSettings settings={apiConfig} onSave={onSaveApi} />}
+                            {activeTab === 'prompt' && <PromptManager prompts={prompts} onUpdate={onUpdatePrompts} requestConfirm={requestConfirm} />}
+                            {activeTab === 'world' && <WorldSettings festivals={festivals || []} onUpdate={onUpdateFestivals} requestConfirm={requestConfirm} />}
+                            {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}
+                            {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
+                            {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} requestConfirm={requestConfirm} />} 
+                            {activeTab === 'history' && <HistoryViewer history={history} />} 
+                            {activeTab === 'context' && contextSnapshot && (
+                                <ContextViewer
+                                    snapshot={contextSnapshot}
+                                    memoryConfig={memoryConfig}
+                                    onSaveMemory={onSaveMemory}
+                                />
+                            )}
+                            
+                            {activeTab === 'game' && gameConfig && onSaveGame && (
+                                <GameSettings settings={gameConfig} onSave={onSaveGame} />
+                            )}
+                            {activeTab === 'memory' && memoryConfig && onSaveMemory && (
+                                <MemorySettings settings={memoryConfig} onSave={onSaveMemory} />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Desktop Content */}
+                    <div className="hidden md:block flex-1 p-8 overflow-y-auto relative z-10 custom-scrollbar">
                         {activeTab === 'api' && <ApiSettings settings={apiConfig} onSave={onSaveApi} />}
-                        {activeTab === 'prompt' && <PromptManager prompts={prompts} onUpdate={onUpdatePrompts} />}
-                        {activeTab === 'world' && <WorldSettings festivals={festivals || []} onUpdate={onUpdateFestivals} />}
+                        {activeTab === 'prompt' && <PromptManager prompts={prompts} onUpdate={onUpdatePrompts} requestConfirm={requestConfirm} />}
+                        {activeTab === 'world' && <WorldSettings festivals={festivals || []} onUpdate={onUpdateFestivals} requestConfirm={requestConfirm} />}
                         {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}
                         {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
-                        {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} />} 
+                        {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} requestConfirm={requestConfirm} />} 
                         {activeTab === 'history' && <HistoryViewer history={history} />} 
                         {activeTab === 'context' && contextSnapshot && (
                             <ContextViewer

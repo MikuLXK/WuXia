@@ -10,7 +10,9 @@ import ChatList from './components/features/Chat/ChatList';
 import InputArea from './components/features/Chat/InputArea';
 import LandingPage from './components/layout/LandingPage';
 import NewGameWizard from './components/features/NewGame/NewGameWizard';
+import MobileNewGameWizard from './components/features/NewGame/mobile/MobileNewGameWizard';
 import SettingsModal from './components/features/Settings/SettingsModal';
+import MobileSettingsModal from './components/features/Settings/mobile/MobileSettingsModal';
 import InventoryModal from './components/features/Inventory/InventoryModal'; 
 import EquipmentModal from './components/features/Equipment/EquipmentModal'; 
 import SocialModal from './components/features/Social/SocialModal'; 
@@ -28,12 +30,56 @@ import MobileStory from './components/features/Story/MobileStory';
 import MemoryModal from './components/features/Memory/MemoryModal'; 
 import MobileMemory from './components/features/Memory/MobileMemory';
 import SaveLoadModal from './components/features/SaveLoad/SaveLoadModal'; // New
+import InAppConfirmModal, { ConfirmOptions } from './components/ui/InAppConfirmModal';
 import { useGame } from './hooks/useGame';
 
 const App: React.FC = () => {
     const { state, meta, setters, actions } = useGame();
     const [showCharacter, setShowCharacter] = React.useState(false);
+    const [isMobile, setIsMobile] = React.useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return window.matchMedia('(max-width: 767px)').matches;
+    });
     const contextSnapshot = actions.getContextSnapshot();
+    const confirmResolverRef = React.useRef<((value: boolean) => void) | null>(null);
+    const [confirmState, setConfirmState] = React.useState<(ConfirmOptions & { open: boolean })>({
+        open: false,
+        title: '请确认',
+        message: '',
+        confirmText: '确认',
+        cancelText: '取消',
+        danger: false
+    });
+
+    const requestConfirm = React.useCallback((options: ConfirmOptions) => {
+        return new Promise<boolean>((resolve) => {
+            confirmResolverRef.current = resolve;
+            setConfirmState({
+                open: true,
+                title: options.title || '请确认',
+                message: options.message,
+                confirmText: options.confirmText || '确认',
+                cancelText: options.cancelText || '取消',
+                danger: options.danger || false
+            });
+        });
+    }, []);
+
+    const resolveConfirm = React.useCallback((accepted: boolean) => {
+        if (confirmResolverRef.current) {
+            confirmResolverRef.current(accepted);
+            confirmResolverRef.current = null;
+        }
+        setConfirmState((prev) => ({ ...prev, open: false }));
+    }, []);
+
+    React.useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)');
+        const update = () => setIsMobile(mq.matches);
+        update();
+        mq.addEventListener('change', update);
+        return () => mq.removeEventListener('change', update);
+    }, []);
 
     const parseActionOptionText = (option: unknown): string => {
         if (typeof option === 'string') return option.trim();
@@ -197,11 +243,21 @@ const App: React.FC = () => {
             )}
 
             {state.view === 'new_game' && (
-                <NewGameWizard 
-                    onComplete={actions.handleGenerateWorld}
-                    onCancel={() => { state.setView('home'); }}
-                    loading={state.loading}
-                />
+                isMobile ? (
+                    <MobileNewGameWizard
+                        onComplete={actions.handleGenerateWorld}
+                        onCancel={() => { state.setView('home'); }}
+                        loading={state.loading}
+                        requestConfirm={requestConfirm}
+                    />
+                ) : (
+                    <NewGameWizard
+                        onComplete={actions.handleGenerateWorld}
+                        onCancel={() => { state.setView('home'); }}
+                        loading={state.loading}
+                        requestConfirm={requestConfirm}
+                    />
+                )
             )}
 
             {state.view === 'game' && (
@@ -376,41 +432,95 @@ const App: React.FC = () => {
                     onLoadGame={actions.handleLoadGame}
                     onSaveGame={actions.handleSaveGame}
                     mode={state.showSaveLoad.mode}
+                    requestConfirm={requestConfirm}
                 />
             )}
 
             {/* Settings Modal - Visible in both views if requested */}
             {state.showSettings && (
-                <SettingsModal 
-                    activeTab={state.activeTab}
-                    onTabChange={setters.setActiveTab}
-                    onClose={() => setters.setShowSettings(false)}
-                    apiConfig={state.apiConfig}
-                    visualConfig={state.visualConfig}
-                    gameConfig={state.gameConfig} 
-                    memoryConfig={state.memoryConfig} 
-                    prompts={state.prompts}
-                    festivals={state.festivals}
-                    currentTheme={state.currentTheme}
-                    history={state.历史记录}
-                    contextSnapshot={contextSnapshot}
-                    onSaveApi={actions.saveSettings}
-                    onSaveVisual={actions.saveVisualSettings}
-                    onSaveGame={actions.saveGameSettings} 
-                    onSaveMemory={actions.saveMemorySettings} 
-                    onUpdatePrompts={actions.updatePrompts}
-                    onUpdateFestivals={actions.updateFestivals}
-                    onThemeChange={setters.setCurrentTheme}
-                    
-                    // New props for return home
-                    onReturnToHome={() => {
-                        if (actions.handleReturnToHome()) {
+                isMobile ? (
+                    <MobileSettingsModal
+                        activeTab={state.activeTab}
+                        onTabChange={setters.setActiveTab}
+                        onClose={() => setters.setShowSettings(false)}
+                        apiConfig={state.apiConfig}
+                        visualConfig={state.visualConfig}
+                        gameConfig={state.gameConfig}
+                        memoryConfig={state.memoryConfig}
+                        prompts={state.prompts}
+                        festivals={state.festivals}
+                        currentTheme={state.currentTheme}
+                        history={state.历史记录}
+                        contextSnapshot={contextSnapshot}
+                        onSaveApi={actions.saveSettings}
+                        onSaveVisual={actions.saveVisualSettings}
+                        onSaveGame={actions.saveGameSettings}
+                        onSaveMemory={actions.saveMemorySettings}
+                        onUpdatePrompts={actions.updatePrompts}
+                        onUpdateFestivals={actions.updateFestivals}
+                        onThemeChange={setters.setCurrentTheme}
+                        requestConfirm={requestConfirm}
+                        onReturnToHome={async () => {
+                            const ok = await requestConfirm({
+                                title: '返回首页',
+                                message: '确定要返回首页吗？未保存的进度将会丢失。',
+                                confirmText: '返回',
+                                danger: true
+                            });
+                            if (!ok) return;
+                            actions.handleReturnToHome();
                             setters.setShowSettings(false);
-                        }
-                    }}
-                    isHome={state.view === 'home'}
-                />
+                        }}
+                        isHome={state.view === 'home'}
+                    />
+                ) : (
+                    <SettingsModal
+                        activeTab={state.activeTab}
+                        onTabChange={setters.setActiveTab}
+                        onClose={() => setters.setShowSettings(false)}
+                        apiConfig={state.apiConfig}
+                        visualConfig={state.visualConfig}
+                        gameConfig={state.gameConfig}
+                        memoryConfig={state.memoryConfig}
+                        prompts={state.prompts}
+                        festivals={state.festivals}
+                        currentTheme={state.currentTheme}
+                        history={state.历史记录}
+                        contextSnapshot={contextSnapshot}
+                        onSaveApi={actions.saveSettings}
+                        onSaveVisual={actions.saveVisualSettings}
+                        onSaveGame={actions.saveGameSettings}
+                        onSaveMemory={actions.saveMemorySettings}
+                        onUpdatePrompts={actions.updatePrompts}
+                        onUpdateFestivals={actions.updateFestivals}
+                        onThemeChange={setters.setCurrentTheme}
+                        requestConfirm={requestConfirm}
+                        onReturnToHome={async () => {
+                            const ok = await requestConfirm({
+                                title: '返回首页',
+                                message: '确定要返回首页吗？未保存的进度将会丢失。',
+                                confirmText: '返回',
+                                danger: true
+                            });
+                            if (!ok) return;
+                            actions.handleReturnToHome();
+                            setters.setShowSettings(false);
+                        }}
+                        isHome={state.view === 'home'}
+                    />
+                )
             )}
+
+            <InAppConfirmModal
+                open={confirmState.open}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText={confirmState.confirmText}
+                cancelText={confirmState.cancelText}
+                danger={confirmState.danger}
+                onConfirm={() => resolveConfirm(true)}
+                onCancel={() => resolveConfirm(false)}
+            />
 
             {/* In-Game Modals */}
             {state.view === 'game' && (

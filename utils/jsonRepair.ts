@@ -104,6 +104,59 @@ const trimIllegalTailPunctuation = (input: string): string => {
     return input.replace(/([}\]])[，。；;]+/g, '$1');
 };
 
+const findPrevNonWhitespaceIndex = (text: string, from: number): number => {
+    for (let i = Math.min(from, text.length - 1); i >= 0; i--) {
+        if (!/\s/.test(text[i])) return i;
+    }
+    return -1;
+};
+
+const findNextNonWhitespaceIndex = (text: string, from: number): number => {
+    for (let i = Math.max(0, from); i < text.length; i++) {
+        if (!/\s/.test(text[i])) return i;
+    }
+    return -1;
+};
+
+const repairMissingCommaByParseError = (input: string, errorMessage?: string): string => {
+    if (!errorMessage) return input;
+    if (!/Expected ',' or '}' after property value in JSON/i.test(errorMessage)) return input;
+    const posMatch = errorMessage.match(/position\s+(\d+)/i);
+    const pos = posMatch ? Number(posMatch[1]) : NaN;
+    if (!Number.isFinite(pos)) return input;
+
+    const nextIdx = findNextNonWhitespaceIndex(input, pos);
+    if (nextIdx < 0) return input;
+
+    const prevIdx = findPrevNonWhitespaceIndex(input, nextIdx - 1);
+    if (prevIdx < 0) return input;
+
+    const prevCh = input[prevIdx];
+    const nextCh = input[nextIdx];
+    const beforeHasComma = prevCh === ',';
+    const looksLikeAdjacentNextKey = nextCh === '"' || nextCh === '{' || nextCh === '[';
+    const valueEnded = prevCh === '"' || prevCh === '}' || prevCh === ']' || /[0-9a-zA-Z]/.test(prevCh);
+
+    if (!beforeHasComma && looksLikeAdjacentNextKey && valueEnded) {
+        return `${input.slice(0, nextIdx)},${input.slice(nextIdx)}`;
+    }
+    return input;
+};
+
+const errorGuidedRepair = (input: string, firstError?: string): string => {
+    let text = input;
+    let lastError = firstError;
+    for (let i = 0; i < 3; i++) {
+        const next = repairMissingCommaByParseError(text, lastError);
+        if (next === text) break;
+        text = next;
+        const parsed = tryParse(text);
+        if (parsed.ok) return text;
+        lastError = parsed.error;
+    }
+    return text;
+};
+
 const normalizeBracketBalance = (input: string): string => {
     let result = '';
     const stack: string[] = [];
@@ -265,6 +318,18 @@ export const parseJsonWithRepair = <T = any>(input: string): JsonRepairResult<T>
                 repairedText: repaired,
                 usedRepair: true,
             };
+        }
+        const guided = errorGuidedRepair(repaired, parsed.error);
+        if (guided !== repaired) {
+            const guidedParsed = tryParse<T>(guided);
+            if (guidedParsed.ok) {
+                return {
+                    value: guidedParsed.value,
+                    repairedText: guided,
+                    usedRepair: true,
+                };
+            }
+            if (guidedParsed.error) lastError = guidedParsed.error;
         }
         if (parsed.error) lastError = parsed.error;
     }

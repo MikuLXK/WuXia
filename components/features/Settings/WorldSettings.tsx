@@ -6,9 +6,10 @@ import GameButton from '../../ui/GameButton';
 interface Props {
     festivals: 节日结构[];
     onUpdate: (festivals: 节日结构[]) => void;
+    requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
 }
 
-const WorldSettings: React.FC<Props> = ({ festivals, onUpdate }) => {
+const WorldSettings: React.FC<Props> = ({ festivals, onUpdate, requestConfirm }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<节日结构 | null>(null);
 
@@ -43,10 +44,12 @@ const WorldSettings: React.FC<Props> = ({ festivals, onUpdate }) => {
         setEditForm(null);
     };
 
-    const handleDelete = (id: string) => {
-        if (confirm('确定删除此节日吗？')) {
-            onUpdate(festivals.filter(f => f.id !== id));
-        }
+    const handleDelete = async (id: string) => {
+        const ok = requestConfirm
+            ? await requestConfirm({ title: '删除节日', message: '确定删除此节日吗？', confirmText: '删除', danger: true })
+            : true;
+        if (!ok) return;
+        onUpdate(festivals.filter(f => f.id !== id));
     };
 
     const handleAddNew = () => {

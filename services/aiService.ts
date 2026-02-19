@@ -94,19 +94,23 @@ ${JSON.stringify(charData)}
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let accumulated = '';
+    let rawStreamText = '';
+    let sawSseFrame = false;
     let doneSignal = false;
 
     while (!doneSignal) {
         const { value, done } = await reader.read();
         if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+        const chunkText = decoder.decode(value, { stream: true });
+        rawStreamText += chunkText;
+        buffer += chunkText;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         for (const rawLine of lines) {
             const line = rawLine.trim();
             if (!line.startsWith('data:')) continue;
+            sawSseFrame = true;
             const payload = line.slice(5).trim();
             if (!payload) continue;
             if (payload === '[DONE]') {
@@ -134,6 +138,7 @@ ${JSON.stringify(charData)}
         const lines = buffer.split('\n').map(l => l.trim()).filter(Boolean);
         for (const line of lines) {
             if (!line.startsWith('data:')) continue;
+            sawSseFrame = true;
             const payload = line.slice(5).trim();
             if (!payload || payload === '[DONE]') continue;
             try {
@@ -149,6 +154,14 @@ ${JSON.stringify(charData)}
             } catch {
                 // ignore malformed tail chunk
             }
+        }
+    }
+
+    if (!sawSseFrame) {
+        const plainPayload = rawStreamText.trim();
+        if (plainPayload) {
+            accumulated = plainPayload;
+            streamOptions?.onDelta?.(plainPayload, accumulated);
         }
     }
 
@@ -263,19 +276,23 @@ export const generateStoryResponse = async (
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let accumulated = '';
+    let rawStreamText = '';
+    let sawSseFrame = false;
     let doneSignal = false;
 
     while (!doneSignal) {
         const { value, done } = await reader.read();
         if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+        const chunkText = decoder.decode(value, { stream: true });
+        rawStreamText += chunkText;
+        buffer += chunkText;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         for (const rawLine of lines) {
             const line = rawLine.trim();
             if (!line.startsWith('data:')) continue;
+            sawSseFrame = true;
 
             const payload = line.slice(5).trim();
             if (!payload) continue;
@@ -305,6 +322,7 @@ export const generateStoryResponse = async (
         const trailingLines = buffer.split('\n').map(l => l.trim()).filter(Boolean);
         for (const line of trailingLines) {
             if (!line.startsWith('data:')) continue;
+            sawSseFrame = true;
             const payload = line.slice(5).trim();
             if (!payload || payload === '[DONE]') continue;
             try {
@@ -320,6 +338,14 @@ export const generateStoryResponse = async (
             } catch {
                 // Ignore trailing parse errors.
             }
+        }
+    }
+
+    if (!sawSseFrame) {
+        const plainPayload = rawStreamText.trim();
+        if (plainPayload) {
+            accumulated = plainPayload;
+            streamOptions?.onDelta?.(plainPayload, accumulated);
         }
     }
 

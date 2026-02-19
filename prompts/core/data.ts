@@ -29,12 +29,10 @@ export const 核心_数据格式: 提示词结构 = {
 
 ## 1. 环境结构（gameState.环境）完整定义
 - \`时间\`: String（**必须**为 \`YYYY:MM:DD:HH:MM\`，例如 \`1024:03:01:09:00\`）
-- \`洲\`: String
-- \`国\`: String
-- \`郡\`: String
-- \`县\`: String
-- \`村\`: String
-- \`具体地点\`: String
+- \`大地点\`: String
+- \`中地点\`: String
+- \`小地点\`: String
+- \`具体地点\`: String（只写“小地点内部的具体位置”，禁止重复包含小地点名称）
 - \`节日\`: String
 - \`天气\`: String
 - \`环境描述\`: String
@@ -285,6 +283,7 @@ export const 核心_数据格式: 提示词结构 = {
   开始时间(YYYY:MM:DD:HH:MM), 预计结束时间(YYYY:MM:DD:HH:MM), 当前状态("进行中"|"已结算"),
   事件结果?, 消逝时间?(YYYY:MM:DD:HH:MM), 是否重大事件, 关联势力[], 关联人物[]
 }>
+- 命名约束：事件结束时间字段固定为 \`预计结束时间\`，禁止使用别名（如 \`结束时间\`）替代。
 
 ## 5. 战斗结构（gameState.战斗）完整定义
 - \`是否战斗中\`: Boolean
@@ -344,7 +343,11 @@ export const 核心_数据格式: 提示词结构 = {
 5. 不得把本定义之外字段当作“既定存在”强行写入。
 
 ## 9. 最小合法示例
-- \`set gameState.环境.具体地点 "青牛县西市"\`
+- \`set gameState.环境.大地点 "中土神洲"\`
+- \`set gameState.环境.中地点 "大乾王朝·天水郡"\`
+- \`set gameState.环境.小地点 "青牛县·西市"\`
+- \`set gameState.环境.具体地点 "茶摊"\`
+- \`set gameState.当前地点 "茶摊"\`
 - \`add gameState.角色.当前精力 -15\`
 - \`push gameState.社交 {"id":"npc_lin","姓名":"林清月","是否在场":true,"是否队友":false,...,"记忆":[]}\`
 - \`set gameState.剧情.剧情变量.第一章_完结 true\`

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import GameButton from '../../ui/GameButton';
-import { WorldGenConfig, 角色数据结构, 天赋结构, 背景结构, 游戏难度 } from '../../../types';
-import { 预设天赋, 预设背景 } from '../../../data/presets';
-import { OrnateBorder } from '../../ui/decorations/OrnateBorder';
-import * as dbService from '../../../services/dbService';
+import GameButton from '../../../ui/GameButton';
+import { WorldGenConfig, 角色数据结构, 天赋结构, 背景结构, 游戏难度 } from '../../../../types';
+import { 预设天赋, 预设背景 } from '../../../../data/presets';
+import { OrnateBorder } from '../../../ui/decorations/OrnateBorder';
+import * as dbService from '../../../../services/dbService';
 
 interface Props {
     onComplete: (
@@ -78,7 +78,7 @@ const CompactDropdown: React.FC<DropdownProps> = ({
     </div>
 );
 
-const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, requestConfirm }) => {
+const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, requestConfirm }) => {
     const [step, setStep] = useState(0);
 
     // --- State: World Config ---
@@ -334,11 +334,11 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, request
     }
 
     return (
-        <div className="h-full w-full flex flex-col items-center justify-center bg-ink-black/95 relative overflow-hidden p-2 md:p-10 z-50">
+        <div className="h-full w-full flex flex-col items-center justify-center bg-ink-black/95 relative overflow-hidden p-2 z-50 md:hidden">
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-20 pointer-events-none"></div>
             
             {/* Main Container */}
-            <div className="w-full max-w-5xl h-full border border-wuxia-gold/30 rounded-lg md:rounded-xl bg-black/50 shadow-2xl flex flex-col overflow-hidden relative backdrop-blur-sm">
+            <div className="w-full max-w-[620px] h-[86vh] border border-wuxia-gold/30 rounded-2xl bg-black/50 shadow-2xl flex flex-col overflow-hidden relative backdrop-blur-sm">
                  
                 {/* Header Steps */}
                 <div className="hidden md:flex h-16 border-b border-gray-800 items-center justify-between px-8 bg-black/40">
@@ -721,10 +721,8 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, request
                                 </div>
                             </OrnateBorder>
 
-                            <div className="flex flex-col gap-4 w-full max-w-md">
-                                <GameButton onClick={() => { void handleGenerate(); }} variant="primary" className="w-full py-4 text-lg">
-                                    一键生成 (世界+剧情)
-                                </GameButton>
+                            <div className="text-center text-[11px] text-gray-500">
+                                请在底部点击“一键生成”开始入世
                             </div>
                         </div>
                     )}
@@ -779,4 +777,4 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, request
     );
 };
 
-export default NewGameWizard;
+export default MobileNewGameWizard;

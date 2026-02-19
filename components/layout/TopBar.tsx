@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 环境信息结构, 节日结构 } from '../../types';
 
 interface Props {
@@ -72,6 +72,8 @@ const mapMinuteToKe = (minute: number): string => {
 };
 
 const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
+    const [mobileLeftMode, setMobileLeftMode] = useState<'weather' | 'environment'>('weather');
+    const [mobileRightMode, setMobileRightMode] = useState<'journey' | 'festival'>('journey');
     const parsedTime = parseCanonicalGameTime(环境?.时间);
     const month = parsedTime?.month ?? null;
     const day = parsedTime?.day ?? null;
@@ -103,6 +105,35 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
     const festivalDisplay = 环境?.节日 && 环境.节日 !== '无'
         ? 环境.节日
         : (currentFestival ? currentFestival.名称 : '平常日');
+    const environmentDisplay = (
+        环境?.具体地点?.trim() ||
+        环境?.小地点?.trim() ||
+        环境?.中地点?.trim() ||
+        环境?.大地点?.trim() ||
+        '风起云涌'
+    );
+    const mobileLeftLabel = mobileLeftMode === 'weather' ? '天气' : '环境';
+    const mobileLeftValue = mobileLeftMode === 'weather'
+        ? (环境?.天气 || '未知')
+        : environmentDisplay;
+    const mobileRightLabel = mobileRightMode === 'journey' ? '历程' : '节日';
+    const mobileRightValue = mobileRightMode === 'journey'
+        ? `第 ${环境?.日期 || 1} 天`
+        : festivalDisplay;
+    const locationBadge = useMemo(() => {
+        const rawSmall = typeof 环境?.小地点 === 'string' ? 环境.小地点.trim() : '';
+        const rawSpecific = typeof 环境?.具体地点 === 'string' ? 环境.具体地点.trim() : '';
+        let normalizedSpecific = rawSpecific;
+        if (rawSmall && rawSpecific.startsWith(rawSmall)) {
+            const stripped = rawSpecific.slice(rawSmall.length).replace(/^[\s\-—>·/|，,、。:：]+/, '').trim();
+            if (stripped) normalizedSpecific = stripped;
+        }
+        const segments = [环境?.大地点, 环境?.中地点, rawSmall, normalizedSpecific]
+            .map((part) => (typeof part === 'string' ? part.trim() : ''))
+            .filter(Boolean);
+        const uniqueSegments = segments.filter((part, idx) => segments.indexOf(part) === idx);
+        return uniqueSegments.length > 0 ? uniqueSegments.join(' - ') : '未知地点';
+    }, [环境?.大地点, 环境?.中地点, 环境?.小地点, 环境?.具体地点]);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
@@ -129,9 +160,21 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                 
                 {/* Left Side Information */}
                 <div className="flex items-center">
-                    <TopItem label="天气" value={环境.天气} />
-                    <Divider />
-                    <TopItem label="环境" value="风起云涌" />
+                    <div className="md:hidden">
+                        <button
+                            type="button"
+                            onClick={() => setMobileLeftMode(prev => (prev === 'weather' ? 'environment' : 'weather'))}
+                            title="点击切换 天气 / 环境"
+                            className="bg-transparent border-0 p-0"
+                        >
+                            <TopItem label={mobileLeftLabel} value={mobileLeftValue} />
+                        </button>
+                    </div>
+                    <div className="hidden md:flex items-center">
+                        <TopItem label="天气" value={环境.天气 || '未知'} />
+                        <Divider />
+                        <TopItem label="环境" value={environmentDisplay} />
+                    </div>
                 </div>
 
                 {/* Center Plaque - The "Hanging" UI Element */}
@@ -164,23 +207,37 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                          </div>
                          
                          {/* Location Badge (Hanging from Plaque) */}
-                         <div className="absolute -bottom-2.5 md:-bottom-3 bg-wuxia-red text-white text-[8px] md:text-[10px] px-2 md:px-3 py-[1px] md:py-[2px] rounded border border-wuxia-gold/30 shadow-md flex items-center gap-1 z-30 font-bold tracking-widest">
-                            <span className="opacity-90">{环境.国}</span>
-                            <span className="text-wuxia-gold opacity-80 font-bold">-</span>
-                            <span>{环境.具体地点}</span>
+                         <div className="absolute -bottom-2.5 md:-bottom-3 bg-wuxia-red text-white text-[8px] md:text-[10px] px-2 md:px-3 py-[1px] md:py-[2px] rounded border border-wuxia-gold/30 shadow-md flex items-center gap-1 z-30 font-bold tracking-widest max-w-[220px] md:max-w-[460px]">
+                            <span className="opacity-90 truncate" title={locationBadge}>{locationBadge}</span>
                          </div>
                      </div>
                 </div>
 
                 {/* Right Side Information */}
                 <div className="flex items-center">
-                    <TopItem 
-                        label="节日" 
-                        value={festivalDisplay} 
-                        highlight={!!currentFestival} 
-                    />
-                    <Divider />
-                    <TopItem label="历程" value={`第 ${环境.日期 || 1} 天`} />
+                    <div className="md:hidden">
+                        <button
+                            type="button"
+                            onClick={() => setMobileRightMode(prev => (prev === 'journey' ? 'festival' : 'journey'))}
+                            title="点击切换 历程 / 节日"
+                            className="bg-transparent border-0 p-0"
+                        >
+                            <TopItem
+                                label={mobileRightLabel}
+                                value={mobileRightValue}
+                                highlight={mobileRightMode === 'festival' && !!currentFestival}
+                            />
+                        </button>
+                    </div>
+                    <div className="hidden md:flex items-center">
+                        <TopItem
+                            label="节日"
+                            value={festivalDisplay}
+                            highlight={!!currentFestival}
+                        />
+                        <Divider />
+                        <TopItem label="历程" value={`第 ${环境.日期 || 1} 天`} />
+                    </div>
                 </div>
 
             </div>
