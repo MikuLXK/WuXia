@@ -7,31 +7,10 @@ interface Props {
     onClose: () => void;
 }
 
-type TabType = 'overview' | 'events' | 'factions' | 'npcs';
+type TabType = 'overview' | 'events' | 'npcs';
 
 const WorldModal: React.FC<Props> = ({ world, onClose }) => {
     const [activeTab, setActiveTab] = useState<TabType>('events');
-
-    // Helper: Faction Status Color
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case '强盛': return 'text-wuxia-gold';
-            case '正常': return 'text-gray-300';
-            case '衰落': return 'text-orange-400';
-            case '动荡': return 'text-wuxia-red';
-            case '封山': return 'text-blue-400';
-            default: return 'text-gray-500';
-        }
-    };
-
-    // Helper: Attitude Color
-    const getAttitudeColor = (val: number) => {
-        if (val > 50) return 'text-green-400';
-        if (val > 0) return 'text-green-200';
-        if (val === 0) return 'text-gray-400';
-        if (val > -50) return 'text-orange-300';
-        return 'text-red-500';
-    };
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fadeIn">
@@ -42,7 +21,7 @@ const WorldModal: React.FC<Props> = ({ world, onClose }) => {
                     <div>
                         <h3 className="text-wuxia-gold font-serif font-bold text-2xl tracking-[0.3em] drop-shadow-md">天下大势</h3>
                         <p className="text-gray-500 text-[10px] tracking-widest mt-0.5">
-                            时代：{world.当前时代} <span className="mx-2">|</span> 混乱度：{world.混乱度}%
+                            活跃人物与江湖事件总览
                         </p>
                     </div>
                     <button 
@@ -60,7 +39,6 @@ const WorldModal: React.FC<Props> = ({ world, onClose }) => {
                     <div className="w-[25%] bg-black/20 border-r border-gray-800/50 flex flex-col py-4 gap-1">
                         {[
                             { id: 'events', label: '风云变幻' },
-                            { id: 'factions', label: '江湖势力' },
                             { id: 'npcs', label: '绝世强者' },
                             { id: 'overview', label: '史册归档' },
                         ].map(tab => (
@@ -129,53 +107,6 @@ const WorldModal: React.FC<Props> = ({ world, onClose }) => {
                                     ) : (
                                         <div className="text-center py-16 text-gray-600 italic border-2 border-dashed border-gray-800 rounded-xl text-sm">
                                             四海升平，暂无大事发生。
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* --- FACTIONS TAB --- */}
-                            {activeTab === 'factions' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {world.势力列表.length > 0 ? world.势力列表.map(fac => (
-                                        <div key={fac.ID} className="bg-black/30 border border-gray-700/50 p-4 rounded-lg hover:bg-black/50 transition-all group">
-                                            <div className="flex justify-between items-start mb-3 pb-2 border-b border-gray-800/50">
-                                                <div>
-                                                    <h4 className="text-lg font-serif font-bold text-gray-200 group-hover:text-wuxia-gold transition-colors">{fac.名称}</h4>
-                                                    <span className="text-[10px] text-gray-500">{fac.类别}</span>
-                                                </div>
-                                                <div className={`text-xs font-bold ${getStatusColor(fac.当前状态)} px-1.5 py-0.5 bg-black/50 rounded border border-gray-800`}>
-                                                    {fac.当前状态}
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="space-y-2 text-xs">
-                                                <div className="flex justify-between text-gray-400">
-                                                    <span>声望: <span className="text-gray-200">{fac.声望}</span></span>
-                                                    <span>资金: <span className="text-gray-200">{fac.资金}</span></span>
-                                                </div>
-                                                
-                                                <div className="bg-white/5 p-2 rounded text-[10px] text-gray-300 italic border-l-2 border-gray-600">
-                                                    “{fac.当前战略}”
-                                                </div>
-
-                                                {/* Diplomacy Mini-view */}
-                                                <div className="pt-2 mt-1 border-t border-gray-800/50">
-                                                    <div className="text-[9px] text-gray-500 uppercase tracking-widest mb-1">外交关系</div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {Object.entries(fac.外交关系).map(([targetId, val]) => (
-                                                            <span key={targetId} className="text-[9px] bg-black/40 px-1.5 py-0.5 rounded border border-gray-800">
-                                                                <span className="text-gray-400 mr-1">{targetId.replace('fac_', '')}:</span>
-                                                                <span className={getAttitudeColor(val)}>{val}</span>
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )) : (
-                                         <div className="col-span-2 text-center py-16 text-gray-600 italic text-sm">
-                                            江湖混沌，尚未有势力崛起。
                                         </div>
                                     )}
                                 </div>

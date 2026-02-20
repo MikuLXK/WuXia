@@ -70,6 +70,21 @@ const 规范化环境信息 = (rawEnv?: any): 环境信息结构 => {
         : typeof source?.日期 === 'number' && Number.isFinite(source.日期)
             ? source.日期
             : 1;
+    const rawWeather = source?.天气 && typeof source.天气 === 'object' ? source.天气 : {};
+    const 天气 = {
+        天气: typeof rawWeather?.天气 === 'string' ? rawWeather.天气.trim() : '',
+        结束日期: typeof rawWeather?.结束日期 === 'string' ? rawWeather.结束日期.trim() : ''
+    };
+    const rawEnvVar = source?.环境变量;
+    const 环境变量 = rawEnvVar && typeof rawEnvVar === 'object'
+        ? {
+            名称: typeof rawEnvVar?.名称 === 'string' ? rawEnvVar.名称.trim() : '',
+            描述: typeof rawEnvVar?.描述 === 'string' ? rawEnvVar.描述.trim() : '',
+            效果: typeof rawEnvVar?.效果 === 'string' ? rawEnvVar.效果.trim() : ''
+        }
+        : (typeof source?.环境描述 === 'string' && source.环境描述.trim()
+            ? { 名称: '', 描述: source.环境描述.trim(), 效果: '' }
+            : null);
     return {
         时间: typeof source?.时间 === 'string' ? source.时间 : '',
         大地点,
@@ -77,8 +92,8 @@ const 规范化环境信息 = (rawEnv?: any): 环境信息结构 => {
         小地点,
         具体地点,
         节日,
-        天气: typeof source?.天气 === 'string' ? source.天气 : '',
-        环境描述: typeof source?.环境描述 === 'string' ? source.环境描述 : '',
+        天气,
+        环境变量,
         游戏天数: Math.max(1, Math.floor(原始游戏天数))
     };
 };

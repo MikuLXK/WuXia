@@ -4,29 +4,6 @@
 // 严格时间格式: YYYY:MM:DD:HH:MM (例如 1024:03:01:14:00)
 export type 游戏时间格式 = string; 
 
-// --- 势力系统 ---
-
-export type 势力态度 = '死敌' | '敌对' | '中立' | '友好' | '同盟';
-export type 势力状态 = '强盛' | '正常' | '衰落' | '动荡' | '封山';
-
-export interface 势力结构 {
-    ID: string;
-    名称: string;
-    类别: '正道' | '魔教' | '朝廷' | '中立' | '隐世';
-    
-    // 动态参数
-    声望: number;
-    资金: number;
-    当前状态: 势力状态;
-    
-    // 关系网 (Key: 势力名称, Value: 好感度 -100~100)
-    // 示例: { "血煞教": -100, "少林寺": 50 }
-    外交关系: Record<string, number>;
-    
-    // AI驱动
-    当前战略: string; // e.g. "正在全力搜寻失踪的掌门信物"
-}
-
 // --- 活跃NPC (后台模拟) ---
 
 export interface 活跃NPC结构 {
@@ -79,13 +56,7 @@ export interface 世界事件结构 {
 // --- 世界全貌 ---
 
 export interface 世界数据结构 {
-    // 宏观
-    当前时代: string; // e.g. "灵气复苏初期"
-    混乱度: number;   // 0-100
-    全局修正: { 名称: string, 描述: string }[];
-    
     // 数据集
-    势力列表: 势力结构[];
     活跃NPC列表: 活跃NPC结构[];
     
     // 事件流

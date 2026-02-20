@@ -1,6 +1,101 @@
 
 import React from 'react';
 
+type JudgmentModifier = {
+    key: string;
+    label: string;
+    value: number | null;
+    reason?: string;
+    raw: string;
+};
+
+type ParsedJudgment = {
+    eventName: string;
+    result: string;
+    target: string;
+    score: number;
+    difficulty: number;
+    modifiers: JudgmentModifier[];
+};
+
+const createEmptyJudgment = (): ParsedJudgment => ({
+    eventName: '判定事件',
+    result: '未知',
+    target: '自身',
+    score: 0,
+    difficulty: 0,
+    modifiers: []
+});
+
+const MODIFIER_LABELS: Record<string, string> = {
+    基础: '基础',
+    环境: '环境',
+    状态: '状态',
+    幸运: '幸运',
+    装备: '装备'
+};
+
+const parseModifier = (part: string): JudgmentModifier | null => {
+    const modifierMatch = part.match(/^(基础|环境|状态|幸运|装备)\s*([+\-]?\d+(?:\.\d+)?)(?:\s*\((.+)\))?$/);
+    if (!modifierMatch) return null;
+
+    const [, key, valueRaw, reason] = modifierMatch;
+    return {
+        key,
+        label: MODIFIER_LABELS[key] || key,
+        value: Number(valueRaw),
+        reason: reason?.trim(),
+        raw: part
+    };
+};
+
+const parseJudgmentText = (text: string): ParsedJudgment => {
+    const parts = text.split('｜').map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) return createEmptyJudgment();
+
+    const parsed: ParsedJudgment = {
+        ...createEmptyJudgment(),
+        modifiers: [],
+        eventName: parts[0] || '判定事件'
+    };
+
+    const isResultToken = (token: string) => /(成功|失败|大成功|大失败|极成功|极失败)/.test(token);
+
+    if (parts[1] && isResultToken(parts[1])) {
+        parsed.result = parts[1];
+    }
+
+    for (let i = 1; i < parts.length; i++) {
+        const part = parts[i];
+
+        if (isResultToken(part)) {
+            parsed.result = part;
+            continue;
+        }
+
+        const targetMatch = part.match(/^触发对象\s*(.+)$/);
+        if (targetMatch) {
+            parsed.target = targetMatch[1].trim() || parsed.target;
+            continue;
+        }
+
+        const scoreDiffMatch = part.match(/^判定值\s*([+\-]?\d+(?:\.\d+)?)\s*\/\s*难度\s*([+\-]?\d+(?:\.\d+)?)$/);
+        if (scoreDiffMatch) {
+            parsed.score = Number(scoreDiffMatch[1]);
+            parsed.difficulty = Number(scoreDiffMatch[2]);
+            continue;
+        }
+
+        const modifier = parseModifier(part);
+        if (modifier) {
+            parsed.modifiers.push(modifier);
+            continue;
+        }
+    }
+
+    return parsed;
+};
+
 // --- 1. Narrator Renderer (Wuxia/Novel Style) ---
 export const NarratorRenderer: React.FC<{ text: string }> = ({ text }) => (
     <div className="w-full my-6 px-6 py-4 bg-gradient-to-r from-black/60 via-black/40 to-transparent border-l-4 border-gray-600 text-gray-300 font-serif leading-loose italic relative overflow-hidden rounded-r-lg">
@@ -55,48 +150,13 @@ export const CharacterRenderer: React.FC<{ sender: string; text: string }> = ({ 
 
 // --- 3. Judgment Renderer (Refined Visuals - Rounded, Event, Target, Distinct Numbers) ---
 export const JudgmentRenderer: React.FC<{ text: string; isNsfw?: boolean }> = ({ text, isNsfw }) => {
-    // Expected New Format: "Event | Action | Target | Result | Roll/Diff | Mods..."
-    // Fallback support for old format: "Action | Result | Roll/Diff | Mods..."
-    
-    const parts = text.split('｜').map(s => s.trim());
-    
-    let eventName = '判定事件';
-    let action = '未知行动';
-    let target = '自身';
-    let result = '未知';
-    let rollData = '0/0';
-    let details: string[] = [];
+    const parsed = parseJudgmentText(text);
+    const scoreValue = parsed.score;
+    const difficultyValue = parsed.difficulty;
+    const result = parsed.result;
 
-    // Simple heuristic to detect format version
-    if (parts.length >= 5) {
-        eventName = parts[0];
-        action = parts[1];
-        target = parts[2];
-        result = parts[3];
-        rollData = parts[4];
-        details = parts.slice(5);
-    } else {
-        // Fallback to old format
-        action = parts[0] || '未知行动';
-        result = parts[1] || '未知';
-        rollData = parts[2] || '???';
-        details = parts.slice(3);
-    }
-
-    // Parse Roll vs Diff
-    let rollVal = 0;
-    let diffVal = 0;
-    const rollMatch = rollData.match(/(\d+).*?(\d+)/);
-    if (rollMatch) {
-        rollVal = parseInt(rollMatch[1]);
-        diffVal = parseInt(rollMatch[2]);
-    } else {
-        // Try parsing single number
-        rollVal = parseInt(rollData) || 0;
-    }
-
-    const isSuccess = result.includes('成功') || result.includes('大成功');
-    const isCrit = result.includes('大') || result.includes('极');
+    const isSuccess = /(成功|大成功|极成功)/.test(result) && !/(失败|大失败|极失败)/.test(result);
+    const isCrit = /(大成功|极成功|大失败|极失败)/.test(result);
     
     // Theme Config
     const theme = isNsfw 
@@ -126,14 +186,12 @@ export const JudgmentRenderer: React.FC<{ text: string; isNsfw?: boolean }> = ({
                 <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/20">
                     <div className="flex items-center gap-2">
                         <span className="text-lg">{theme.icon}</span>
-                        <span className={`font-bold text-sm tracking-wider ${theme.accent}`}>{eventName}</span>
-                        <span className="text-gray-600">/</span>
-                        <span className="text-xs text-gray-300 font-mono uppercase">{action}</span>
+                        <span className={`font-bold text-sm tracking-wider ${theme.accent}`}>{parsed.eventName}</span>
                     </div>
                     {/* Target Badge */}
                     <div className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-gray-400 border border-white/5">
-                        <span className="opacity-50 mr-1">TARGET:</span>
-                        <span className="text-gray-200">{target}</span>
+                        <span className="opacity-50 mr-1">触发对象:</span>
+                        <span className="text-gray-200">{parsed.target}</span>
                     </div>
                 </div>
 
@@ -144,9 +202,9 @@ export const JudgmentRenderer: React.FC<{ text: string; isNsfw?: boolean }> = ({
                     <div className="flex items-center gap-6 mb-4">
                         {/* Requirement */}
                         <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">要求</span>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">难度</span>
                             <div className="w-12 h-12 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center text-gray-400 font-mono font-bold text-lg shadow-inner">
-                                {diffVal}
+                                {difficultyValue}
                             </div>
                         </div>
 
@@ -155,9 +213,9 @@ export const JudgmentRenderer: React.FC<{ text: string; isNsfw?: boolean }> = ({
 
                         {/* Actual Roll */}
                         <div className="flex flex-col items-center relative">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">投掷</span>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">判定值</span>
                             <div className={`w-16 h-16 rounded-xl border-2 ${isSuccess ? theme.border : 'border-gray-700'} ${isSuccess ? 'bg-white/10' : 'bg-black/40'} flex items-center justify-center font-serif font-black text-3xl shadow-[0_0_15px_rgba(0,0,0,0.5)] ${theme.successColor} relative overflow-hidden`}>
-                                {rollVal}
+                                {scoreValue}
                                 {/* Shine effect */}
                                 {isSuccess && <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-transparent via-white/10 to-transparent"></div>}
                             </div>
@@ -167,14 +225,14 @@ export const JudgmentRenderer: React.FC<{ text: string; isNsfw?: boolean }> = ({
                     {/* Result & Details */}
                     <div className="w-full flex flex-col items-center text-center">
                          <div className={`text-2xl font-black italic tracking-widest mb-3 ${theme.successColor}`}>
-                             {result}
+                             {parsed.result}
                          </div>
                          
                          {/* Modifiers Chips */}
                          <div className="flex flex-wrap gap-1.5 justify-center">
-                             {details.map((detail, i) => (
-                                 <span key={i} className={`text-[9px] px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-300 whitespace-nowrap`}>
-                                     {detail}
+                             {parsed.modifiers.map((detail, i) => (
+                                 <span key={`${detail.key}-${i}`} className={`text-[9px] px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-300 whitespace-nowrap`}>
+                                     {detail.value === null ? detail.raw : `${detail.label} ${detail.value >= 0 ? `+${detail.value}` : detail.value}${detail.reason ? ` (${detail.reason})` : ''}`}
                                  </span>
                              ))}
                          </div>

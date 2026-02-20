@@ -105,6 +105,14 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
     const festivalDisplay = 环境?.节日?.名称?.trim()
         ? 环境.节日.名称.trim()
         : (currentFestival ? currentFestival.名称 : '平常日');
+    const weatherDisplay = useMemo(() => {
+        const rawWeather = (环境 as any)?.天气;
+        if (rawWeather && typeof rawWeather === 'object') {
+            const current = typeof rawWeather?.天气 === 'string' ? rawWeather.天气.trim() : '';
+            return current || '未知';
+        }
+        return '未知';
+    }, [环境]);
     const environmentDisplay = (
         环境?.具体地点?.trim() ||
         环境?.小地点?.trim() ||
@@ -114,7 +122,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
     );
     const mobileLeftLabel = mobileLeftMode === 'weather' ? '天气' : '环境';
     const mobileLeftValue = mobileLeftMode === 'weather'
-        ? (环境?.天气 || '未知')
+        ? weatherDisplay
         : environmentDisplay;
     const mobileRightLabel = mobileRightMode === 'journey' ? '历程' : '节日';
     const mobileRightValue = mobileRightMode === 'journey'
@@ -187,7 +195,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                         </button>
                     </div>
                     <div className="hidden md:flex items-center">
-                        <TopItem label="天气" value={环境.天气 || '未知'} />
+                        <TopItem label="天气" value={weatherDisplay} />
                         <Divider />
                         <TopItem label="环境" value={environmentDisplay} />
                     </div>
