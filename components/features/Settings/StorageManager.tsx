@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import * as dbService from '../../../services/dbService';
 import GameButton from '../../ui/GameButton';
+import ToggleSwitch from '../../ui/ToggleSwitch';
 import { 聊天记录结构, 提示词结构 } from '../../../types';
 import { buildHistoryTokenSource, estimatePromptPoolTokens, estimateTextTokens } from '../../../utils/tokenEstimate';
 
@@ -193,15 +194,13 @@ const StorageManager: React.FC<Props> = ({ history, prompts = [], requestConfirm
 
             {/* Actions */}
             <div className="border-t border-gray-800/50 pt-4 mt-auto shrink-0">
-                <div className="flex items-center mb-4 pl-1">
-                    <input 
-                        type="checkbox" 
-                        id="protectKey" 
-                        checked={protectApiKey} 
-                        onChange={e => setProtectApiKey(e.target.checked)}
-                        className="mr-3 w-4 h-4 accent-wuxia-gold cursor-pointer"
+                <div className="flex items-center justify-between mb-4">
+                    <label className="text-sm text-gray-300 select-none">清理时保留 API Key 设置</label>
+                    <ToggleSwitch
+                        checked={protectApiKey}
+                        onChange={setProtectApiKey}
+                        ariaLabel="切换清理时保留 API Key 设置"
                     />
-                    <label htmlFor="protectKey" className="text-sm text-gray-300 cursor-pointer select-none">清理时保留 API Key 设置</label>
                 </div>
                 <GameButton onClick={handleClearAll} variant="danger" className="w-full py-2 text-sm">
                     清空所有缓存数据 (重置游戏)

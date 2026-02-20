@@ -45,7 +45,7 @@ import { normalizeCanonicalGameTime, 提取时间月日 } from './useGame/timeUt
 import { 构建NPC上下文 } from './useGame/npcContext';
 import { 构建世界观种子提示词, 构建世界生成任务上下文提示词 } from '../prompts/runtime/worldSetup';
 import { 开场初始化任务提示词 } from '../prompts/runtime/opening';
-import { 剧情回忆检索COT提示词, 剧情回忆检索输出格式提示词, 构建剧情回忆检索用户提示词 } from '../prompts/runtime/recall';
+import { 剧情回忆检索COT提示词, 剧情回忆检索输出格式提示词 } from '../prompts/runtime/recall';
 import {
     规范化环境信息,
     构建完整地点文本,
@@ -1095,21 +1095,6 @@ export const useGame = () => {
         const extraPrompt = typeof gameConfig?.额外提示词 === 'string' && gameConfig.额外提示词.trim().length > 0
             ? gameConfig.额外提示词.trim()
             : '未配置';
-        const mainApi = 获取主剧情接口配置(apiConfig);
-
-        const 构建接口路由文本 = (title: string, config: 当前可用接口结构 | null): string => {
-            if (!接口配置是否可用(config)) {
-                return `【${title}】\n未配置可用接口（请检查接口地址 / API Key / 模型）`;
-            }
-            return [
-                `【${title}】`,
-                `配置: ${config.名称 || '未命名'}`,
-                `供应商: ${config.供应商}`,
-                `模型: ${config.model}`,
-                `Base URL: ${config.baseUrl}`
-            ].join('\n');
-        };
-
         const sections: 上下文段[] = [];
         let order = 1;
         const pushSection = (id: string, title: string, category: string, content: string) => {
@@ -1128,16 +1113,6 @@ export const useGame = () => {
         pushSection('world_prompt', '世界观提示词', '系统', builtContext.contextPieces.worldPrompt);
         pushSection('npc_away', '离场NPC档案', '系统', builtContext.contextPieces.离场NPC档案);
         pushSection('other_prompts', '叙事/规则提示词', '系统', builtContext.contextPieces.otherPrompts);
-        pushSection('api_main_route', '主剧情API路由', '接口', 构建接口路由文本('主剧情API', mainApi));
-        if (recallFeatureEnabled) {
-            const recallRouteText = [
-                构建接口路由文本('剧情回忆API', recallApi),
-                `最早触发回合: ${recallMinRound}`,
-                `下一回合: ${nextRound}`,
-                `本回合是否触发检索: ${recallRoundReady ? '是' : '否'}`
-            ].join('\n');
-            pushSection('api_recall_route', '剧情回忆API路由', '接口', recallRouteText);
-        }
         pushSection('memory_long', '长期记忆', '记忆', builtContext.contextPieces.长期记忆);
         pushSection('memory_mid', '中期记忆', '记忆', builtContext.contextPieces.中期记忆);
         pushSection('npc_present', '当前场景NPC档案', '系统', builtContext.contextPieces.在场NPC档案);
@@ -1155,10 +1130,8 @@ export const useGame = () => {
             const fullN = Math.max(1, Number(apiConfig?.功能模型占位?.剧情回忆完整原文条数N) || 20);
             const recallMemoryCorpus = 构建剧情回忆检索上下文(normalizedMem, fullN);
             const recallSystemPrompt = `${剧情回忆检索COT提示词}\n\n${剧情回忆检索输出格式提示词}`;
-            const recallUserPrompt = 构建剧情回忆检索用户提示词(latestUserInput, recallMemoryCorpus);
             pushSection('recall_system', '剧情回忆系统提示词', '回忆API', recallSystemPrompt);
             pushSection('recall_corpus', '剧情回忆检索回忆库', '回忆API', recallMemoryCorpus);
-            pushSection('recall_user', '剧情回忆用户提示词', '回忆API', recallUserPrompt);
         }
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
         pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);

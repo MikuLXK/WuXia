@@ -7,6 +7,7 @@ import {
     单接口配置结构
 } from '../../../types';
 import GameButton from '../../ui/GameButton';
+import ToggleSwitch from '../../ui/ToggleSwitch';
 import {
     创建接口配置模板,
     OpenAI兼容方案预设,
@@ -382,15 +383,14 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                                 <div className="flex items-center justify-between gap-3">
                                     <label className="text-sm text-wuxia-cyan font-bold">{row.label}</label>
                                     {row.switchKey && (
-                                        <label className="flex items-center gap-2 text-xs text-gray-300">
+                                        <div className="flex items-center gap-2 text-xs text-gray-300">
                                             <span>独立模型</span>
-                                            <input
-                                                type="checkbox"
+                                            <ToggleSwitch
                                                 checked={independentEnabled}
-                                                onChange={(e) => handleToggleFeatureIndependent(row.switchKey!, row.modelKey, e.target.checked)}
-                                                className="h-4 w-4"
+                                                onChange={(next) => handleToggleFeatureIndependent(row.switchKey!, row.modelKey, next)}
+                                                ariaLabel={`切换${row.label}`}
                                             />
-                                        </label>
+                                        </div>
                                     )}
                                 </div>
 

@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { 提示词结构, PromptCategory } from '../../../types';
 import GameButton from '../../ui/GameButton';
+import ToggleSwitch from '../../ui/ToggleSwitch';
 
 interface Props {
     prompts: 提示词结构[];
@@ -158,12 +159,10 @@ const PromptManager: React.FC<Props> = ({ prompts, onUpdate, requestConfirm }) =
                 {filteredPrompts.map(p => (
                     <div key={p.id} className={`flex justify-between items-center bg-black/30 p-3 border-l-2 transition-colors group ${p.启用 ? 'border-wuxia-gold bg-wuxia-gold/5' : 'border-gray-700 opacity-60 hover:opacity-100'}`}>
                         <div className="flex items-center gap-3">
-                            <input 
-                                type="checkbox" 
+                            <ToggleSwitch
                                 checked={p.启用} 
                                 onChange={() => handleToggleEnable(p.id)}
-                                className="w-4 h-4 accent-wuxia-gold cursor-pointer"
-                                title={p.启用 ? "禁用" : "启用"}
+                                ariaLabel={`${p.启用 ? '禁用' : '启用'}提示词 ${p.标题}`}
                             />
                             <div>
                                 <div className={`font-bold font-serif transition-colors ${p.启用 ? 'text-wuxia-gold group-hover:text-white' : 'text-gray-500'}`}>

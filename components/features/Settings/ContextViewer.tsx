@@ -32,7 +32,7 @@ const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }
     const [已保存, set已保存] = useState(false);
 
     const isRecallSection = (section: ContextSection): boolean => {
-        return section.id === 'api_recall_route' || section.id.startsWith('recall_');
+        return section.id.startsWith('recall_');
     };
 
     const hasRecallSections = useMemo(

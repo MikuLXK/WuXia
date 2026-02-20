@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 接口设置结构, 单接口配置结构, 功能模型占位配置结构 } from '../../../types';
 import GameButton from '../../ui/GameButton';
+import ToggleSwitch from '../../ui/ToggleSwitch';
 import { 规范化接口设置 } from '../../../utils/apiConfig';
 
 interface Props {
@@ -131,11 +132,10 @@ const RecallModelSettings: React.FC<Props> = ({ settings, onSave }) => {
 
                 <label className="flex items-center justify-between gap-3 text-xs text-gray-300">
                     <span>开启剧情回忆独立模型</span>
-                    <input
-                        type="checkbox"
+                    <ToggleSwitch
                         checked={独立模型开启}
-                        onChange={(e) => handleToggleIndependent(e.target.checked)}
-                        className="h-4 w-4"
+                        onChange={handleToggleIndependent}
+                        ariaLabel="切换剧情回忆独立模型"
                     />
                 </label>
 
@@ -184,11 +184,10 @@ const RecallModelSettings: React.FC<Props> = ({ settings, onSave }) => {
 
                 <label className="flex items-center justify-between gap-3 text-xs text-gray-300">
                     <span>静默操作（不弹确认，自动附加回忆）</span>
-                    <input
-                        type="checkbox"
+                    <ToggleSwitch
                         checked={Boolean(form.功能模型占位.剧情回忆静默确认)}
-                        onChange={(e) => updatePlaceholder('剧情回忆静默确认', e.target.checked)}
-                        className="h-4 w-4"
+                        onChange={(next) => updatePlaceholder('剧情回忆静默确认', next)}
+                        ariaLabel="切换剧情回忆静默操作"
                     />
                 </label>
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 游戏设置结构 } from '../../../types';
 import GameButton from '../../ui/GameButton';
+import ToggleSwitch from '../../ui/ToggleSwitch';
 
 interface Props {
     settings: 游戏设置结构;
@@ -65,16 +66,11 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         <div className="text-sm text-wuxia-cyan font-bold">行动选项功能</div>
                         <div className="text-xs text-gray-400 mt-1">开启后，将在上下文注入“行动选项规范”，并要求输出 \`action_options\`。</div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => setForm({ ...form, 启用行动选项: !(form.启用行动选项 !== false) })}
-                        className={`relative w-14 h-8 rounded-full transition-colors ${form.启用行动选项 !== false ? 'bg-wuxia-gold/80' : 'bg-gray-700'}`}
-                        aria-label="切换行动选项功能"
-                    >
-                        <span
-                            className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-white transition-transform ${form.启用行动选项 !== false ? 'translate-x-6' : 'translate-x-0'}`}
-                        />
-                    </button>
+                    <ToggleSwitch
+                        checked={form.启用行动选项 !== false}
+                        onChange={(next) => setForm({ ...form, 启用行动选项: next })}
+                        ariaLabel="切换行动选项功能"
+                    />
                 </div>
             </div>
 
