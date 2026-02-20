@@ -1,11 +1,28 @@
 
 import React, { useRef, useState } from 'react';
 
+type SendResult = {
+    cancelled?: boolean;
+    attachedRecallPreview?: string;
+    preparedRecallTag?: string;
+    needRecallConfirm?: boolean;
+};
+
+type RecallProgress = {
+    phase: 'start' | 'stream' | 'done' | 'error';
+    text?: string;
+};
+
 interface Props {
-    onSend: (content: string, isStreaming: boolean) => void;
+    onSend: (
+        content: string,
+        isStreaming: boolean,
+        options?: { onRecallProgress?: (progress: RecallProgress) => void }
+    ) => Promise<SendResult> | SendResult;
     onStop: () => void;
     onRegenerate: () => string | null;
     onQuickRestart?: () => void;
+    requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
     loading: boolean;
     canReroll?: boolean;
     canQuickRestart?: boolean;
@@ -17,6 +34,7 @@ const InputArea: React.FC<Props> = ({
     onStop,
     onRegenerate,
     onQuickRestart,
+    requestConfirm,
     loading,
     canReroll = true,
     canQuickRestart = false,
@@ -25,15 +43,72 @@ const InputArea: React.FC<Props> = ({
     const [content, setContent] = useState('');
     const [isStreaming, setIsStreaming] = useState(true);
     const [lastSentContent, setLastSentContent] = useState('');
+    const [isPreparing, setIsPreparing] = useState(false);
+    const [attachedRecallPreview, setAttachedRecallPreview] = useState('');
+    const [showAttachedRecall, setShowAttachedRecall] = useState(false);
+    const [pendingRecallTag, setPendingRecallTag] = useState('');
+    const [recallProgress, setRecallProgress] = useState<RecallProgress | null>(null);
     const quickActionsRef = useRef<HTMLDivElement | null>(null);
     const dragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
     const suppressClickUntilRef = useRef(0);
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!content.trim()) return;
-        setLastSentContent(content);
-        onSend(content, isStreaming);
-        setContent('');
+        if (loading || isPreparing) return;
+        setIsPreparing(true);
+        setRecallProgress(null);
+        try {
+            const payload = pendingRecallTag
+                ? `${content}\n<剧情回忆>\n${pendingRecallTag}\n</剧情回忆>`
+                : content;
+            const result = await onSend(payload, isStreaming, {
+                onRecallProgress: (progress) => setRecallProgress(progress)
+            });
+            if (result?.cancelled) {
+                if (result.needRecallConfirm && result.preparedRecallTag) {
+                    const confirmed = requestConfirm
+                        ? await requestConfirm({
+                            title: '确认剧情回忆',
+                            message: `以下回忆将回填到输入附件中：\n\n${result.attachedRecallPreview || '强回忆:无\n弱回忆:无'}`,
+                            confirmText: '确认回填',
+                            cancelText: '取消'
+                        })
+                        : false;
+                    if (confirmed) {
+                        setPendingRecallTag(result.preparedRecallTag);
+                        if (result.attachedRecallPreview) {
+                            setAttachedRecallPreview(result.attachedRecallPreview);
+                            setShowAttachedRecall(false);
+                        }
+                    } else if (result.attachedRecallPreview) {
+                        setAttachedRecallPreview(result.attachedRecallPreview);
+                        setShowAttachedRecall(false);
+                    }
+                    return;
+                }
+                if (result.preparedRecallTag) {
+                    setPendingRecallTag(result.preparedRecallTag);
+                }
+                if (result.attachedRecallPreview) {
+                    setAttachedRecallPreview(result.attachedRecallPreview);
+                    setShowAttachedRecall(false);
+                }
+                return;
+            }
+            setLastSentContent(content);
+            setContent('');
+            setPendingRecallTag('');
+            if (result?.attachedRecallPreview) {
+                setAttachedRecallPreview(result.attachedRecallPreview);
+                setShowAttachedRecall(false);
+            } else {
+                setAttachedRecallPreview('');
+                setShowAttachedRecall(false);
+            }
+            setRecallProgress(null);
+        } finally {
+            setIsPreparing(false);
+        }
     };
 
     const handleStop = () => {
@@ -105,6 +180,8 @@ const InputArea: React.FC<Props> = ({
         .map(normalizeOptionText)
         .filter(item => item.length > 0);
 
+    const busy = loading || isPreparing;
+
     return (
         <div className="shrink-0 relative z-20 bg-gradient-to-t from-ink-black via-ink-black/95 to-transparent pb-4 px-4 flex flex-col gap-2">
             
@@ -136,6 +213,64 @@ const InputArea: React.FC<Props> = ({
             )}
 
             <div className="h-px w-full bg-gradient-to-r from-transparent via-wuxia-gold/30 to-transparent my-1 opacity-50"></div>
+
+            {isPreparing && recallProgress && (
+                <div className="rounded-lg border border-wuxia-cyan/30 bg-wuxia-cyan/5 p-2 space-y-1">
+                    <div className="flex items-center gap-2 text-xs text-wuxia-cyan">
+                        {recallProgress.phase === 'done' ? (
+                            <span className="text-green-400">●</span>
+                        ) : recallProgress.phase === 'error' ? (
+                            <span className="text-red-400">●</span>
+                        ) : (
+                            <span className="inline-block w-3 h-3 border-2 border-wuxia-cyan/40 border-t-wuxia-cyan rounded-full animate-spin" />
+                        )}
+                        <span>
+                            {recallProgress.phase === 'start' && '剧情回忆检索中...'}
+                            {recallProgress.phase === 'stream' && '剧情回忆流式解析中...'}
+                            {recallProgress.phase === 'done' && '剧情回忆检索完成'}
+                            {recallProgress.phase === 'error' && '剧情回忆检索失败'}
+                        </span>
+                    </div>
+                    {recallProgress.text && (
+                        <pre className="text-[11px] whitespace-pre-wrap text-gray-300 leading-relaxed max-h-28 overflow-y-auto custom-scrollbar">
+                            {recallProgress.text}
+                        </pre>
+                    )}
+                </div>
+            )}
+
+            {attachedRecallPreview && (
+                <div className="rounded-lg border border-wuxia-cyan/30 bg-wuxia-cyan/5 p-2">
+                    <div className="flex items-center justify-between gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setShowAttachedRecall(prev => !prev)}
+                            className="flex-1 flex items-center justify-between text-xs text-wuxia-cyan"
+                        >
+                            <span>{pendingRecallTag ? '剧情回忆已回填（待发送）' : '剧情回忆已附加'}（点击{showAttachedRecall ? '收起' : '展开'}）</span>
+                            <span>{showAttachedRecall ? '▲' : '▼'}</span>
+                        </button>
+                        {pendingRecallTag && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPendingRecallTag('');
+                                    setAttachedRecallPreview('');
+                                    setShowAttachedRecall(false);
+                                }}
+                                className="text-[10px] px-2 py-1 border border-red-800/60 text-red-300 rounded hover:bg-red-900/20"
+                            >
+                                移除
+                            </button>
+                        )}
+                    </div>
+                    {showAttachedRecall && (
+                        <pre className="mt-2 text-[11px] whitespace-pre-wrap text-gray-300 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar">
+                            {attachedRecallPreview}
+                        </pre>
+                    )}
+                </div>
+            )}
             
             {/* Main Control Bar */}
             <div className="flex items-center gap-2">
@@ -147,7 +282,7 @@ const InputArea: React.FC<Props> = ({
                         onClick={() => setIsStreaming(!isStreaming)}
                         className={`w-10 h-full rounded-lg flex items-center justify-center transition-all ${isStreaming ? 'text-wuxia-cyan bg-wuxia-cyan/10' : 'text-gray-600 hover:text-gray-400'}`}
                         title={isStreaming ? "流式传输开启" : "流式传输关闭"}
-                        disabled={loading}
+                        disabled={busy}
                     >
                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
@@ -161,7 +296,7 @@ const InputArea: React.FC<Props> = ({
                         <>
                             <button 
                                 onClick={onQuickRestart}
-                                disabled={loading}
+                                disabled={busy}
                                 className="w-10 h-full rounded-lg flex items-center justify-center text-teal-300 hover:text-teal-100 hover:bg-teal-900/20 transition-all disabled:opacity-30"
                                 title="快速重开"
                             >
@@ -176,7 +311,7 @@ const InputArea: React.FC<Props> = ({
                     {/* Re-roll */}
                     <button 
                         onClick={handleReroll}
-                        disabled={loading || !canReroll}
+                        disabled={busy || !canReroll}
                         className="w-10 h-full rounded-lg flex items-center justify-center text-gray-400 hover:text-wuxia-gold hover:bg-white/5 transition-all disabled:opacity-30"
                         title={canReroll ? "重ROLL：回档到上一轮并回填输入" : "暂无可重ROLL回合"}
                     >
@@ -187,15 +322,15 @@ const InputArea: React.FC<Props> = ({
                 </div>
 
                 {/* Input Field */}
-                <div className={`flex-1 bg-black/40 border border-gray-700/50 rounded-xl h-12 flex items-center px-4 transition-all shadow-inner ${loading ? 'opacity-50 cursor-not-allowed' : 'focus-within:border-wuxia-gold/50 focus-within:bg-black/60'}`}>
+                <div className={`flex-1 bg-black/40 border border-gray-700/50 rounded-xl h-12 flex items-center px-4 transition-all shadow-inner ${busy ? 'opacity-50 cursor-not-allowed' : 'focus-within:border-wuxia-gold/50 focus-within:bg-black/60'}`}>
                     <input
                         type="text"
                         className="w-full bg-transparent text-paper-white font-serif placeholder-gray-600 focus:outline-none"
-                        placeholder={loading ? "等待回应中..." : "输入你的行动..."}
+                        placeholder={busy ? "等待处理中..." : "输入你的行动..."}
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && !loading && handleSend()}
-                        disabled={loading}
+                        onKeyDown={(e) => e.key === 'Enter' && !busy && handleSend()}
+                        disabled={busy}
                     />
                 </div>
 
@@ -212,8 +347,8 @@ const InputArea: React.FC<Props> = ({
                     </button>
                 ) : (
                     <button 
-                        onClick={handleSend} 
-                        disabled={!content.trim()} 
+                        onClick={() => { void handleSend(); }} 
+                        disabled={!content.trim() || busy} 
                         className="w-14 h-12 bg-wuxia-gold text-ink-black rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(230,200,110,0.3)] hover:bg-white hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 disabled:shadow-none"
                         title="发送"
                     >

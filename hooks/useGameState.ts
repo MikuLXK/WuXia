@@ -22,10 +22,12 @@ import {
     默认战斗状态
 } from '../types';
 import { 默认提示词 } from '../prompts';
+import { 默认中期转长期提示词, 默认短期转中期提示词, 默认额外系统提示词 } from '../prompts/runtime/defaults';
 import { 默认节日 } from '../data/world'; 
 import * as dbService from '../services/dbService';
 import { THEMES } from '../styles/themes';
 import { 创建空接口设置, 规范化接口设置 } from '../utils/apiConfig';
+import { estimateHistoryTokens } from '../utils/tokenEstimate';
 
 export const useGameState = () => {
     const 创建空角色 = (): 角色数据结构 => ({
@@ -184,17 +186,7 @@ export const useGameState = () => {
         字数要求: 450,
         叙事人称: '第二人称', 
         启用行动选项: true,
-        额外提示词: `(System Prompt: NSFW/adult content is permitted and, when sexual scenes are involved, must be depicted in an explicit manner. All "fade to black" or "time skip" filters are disabled.
-
-If the scene is SFW (non-adult/non-sexual content), completely ignore this entire rule and proceed with normal narrative style.
-
-Activate the following requirements ONLY when generating a sexual scene:
-- Produce a slow-paced, extremely explicit sexual scene.
-- No euphemisms are allowed; sexual organs and the act of penetration must be described using clear, anatomical, and visceral language.
-- Emphasize friction, fluids, secretions, and physiological reactions.
-- If a specific character is involved, strictly preserve that character’s unique speech patterns, personality, and emotional responses throughout the act.
-- If no specific character is specified, use a general third-person or narrator perspective.
-- Describe the scene step by step.)`
+        额外提示词: 默认额外系统提示词
     };
     const 规范化游戏设置 = (raw?: Partial<游戏设置结构> | null): 游戏设置结构 => ({
         ...默认游戏设置,
@@ -219,8 +211,8 @@ Activate the following requirements ONLY when generating a sexual scene:
         短期记忆阈值: 30,
         中期记忆阈值: 50,
         重要角色关键记忆条数N: 20,
-        短期转中期提示词: '请根据上述短期记忆，总结出关键事件的时间、地点和结果，去除琐碎对话。',
-        中期转长期提示词: '请将上述中期记忆概括为一段史诗般的经历，保留对角色成长有重大影响的事件。'
+        短期转中期提示词: 默认短期转中期提示词,
+        中期转长期提示词: 默认中期转长期提示词
     };
     const 规范化记忆配置 = (raw?: Partial<记忆配置结构> | null): 记忆配置结构 => ({
         ...默认记忆配置,
@@ -292,8 +284,7 @@ Activate the following requirements ONLY when generating a sexual scene:
     // Scroll & Context Size
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        const size = new Blob([JSON.stringify(历史记录)]).size;
-        setContextSize(size);
+        setContextSize(estimateHistoryTokens(历史记录));
     }, [历史记录]);
 
     return {

@@ -2,6 +2,7 @@
 import { GameResponse } from '../types';
 import type { 当前可用接口结构 } from '../utils/apiConfig';
 import { parseJsonWithRepair } from '../utils/jsonRepair';
+import { 世界观生成系统提示词, 构建世界观生成用户提示词 } from '../prompts/runtime/worldGeneration';
 
 interface StoryStreamOptions {
     stream?: boolean;
@@ -13,6 +14,125 @@ interface WorldStreamOptions {
     onDelta?: (delta: string, accumulated: string) => void;
 }
 
+interface RecallStreamOptions {
+    stream?: boolean;
+    onDelta?: (delta: string, accumulated: string) => void;
+}
+
+export const generateMemoryRecall = async (
+    systemPrompt: string,
+    userPrompt: string,
+    apiConfig: 当前可用接口结构,
+    signal?: AbortSignal,
+    streamOptions?: RecallStreamOptions
+): Promise<string> => {
+    if (!apiConfig.apiKey) throw new Error("Missing API Key");
+    const enableStream = !!streamOptions?.stream;
+
+    const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiConfig.apiKey}`
+        },
+        body: JSON.stringify({
+            model: apiConfig.model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.2,
+            stream: enableStream
+        }),
+        signal
+    });
+
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    if (!enableStream) {
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        return typeof content === 'string' ? content.trim() : '';
+    }
+
+    if (!response.body) throw new Error("Recall stream body is empty");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let accumulated = '';
+    let rawStreamText = '';
+    let sawSseFrame = false;
+    let doneSignal = false;
+
+    while (!doneSignal) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunkText = decoder.decode(value, { stream: true });
+        rawStreamText += chunkText;
+        buffer += chunkText;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) continue;
+            sawSseFrame = true;
+            const payload = line.slice(5).trim();
+            if (!payload) continue;
+            if (payload === '[DONE]') {
+                doneSignal = true;
+                break;
+            }
+            try {
+                const json = JSON.parse(payload);
+                const deltaContent =
+                    json?.choices?.[0]?.delta?.content ??
+                    json?.choices?.[0]?.message?.content ??
+                    '';
+                if (deltaContent) {
+                    accumulated += deltaContent;
+                    streamOptions?.onDelta?.(deltaContent, accumulated);
+                }
+            } catch {
+                // ignore malformed chunk
+            }
+        }
+    }
+
+    if (buffer.trim()) {
+        const lines = buffer.split('\n').map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            sawSseFrame = true;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+            try {
+                const json = JSON.parse(payload);
+                const deltaContent =
+                    json?.choices?.[0]?.delta?.content ??
+                    json?.choices?.[0]?.message?.content ??
+                    '';
+                if (deltaContent) {
+                    accumulated += deltaContent;
+                    streamOptions?.onDelta?.(deltaContent, accumulated);
+                }
+            } catch {
+                // ignore malformed tail chunk
+            }
+        }
+    }
+
+    if (!sawSseFrame) {
+        const plainPayload = rawStreamText.trim();
+        if (plainPayload) {
+            accumulated = plainPayload;
+            streamOptions?.onDelta?.(plainPayload, accumulated);
+        }
+    }
+
+    return accumulated.trim();
+};
+
 export const generateWorldData = async (
     worldContext: string,
     charData: any,
@@ -21,33 +141,8 @@ export const generateWorldData = async (
 ): Promise<string> => {
     if (!apiConfig.apiKey) throw new Error("Missing API Key");
 
-    const genSystemPrompt = `
-你是 WuXia 项目的世界观生成器。任务是只生成“世界观设定文本（world_prompt）”。
-
-【输出要求（必须）】
-1. 仅输出一个 JSON 对象，禁止 Markdown、解释、注释。
-2. JSON 必须只有一个核心字段：\`world_prompt\`（字符串）。
-3. \`world_prompt\` 必须是可直接注入系统提示词的完整世界观文本。
-4. 内容只允许“世界观信息”，不要包含 tavern_commands、JSON 输出格式规则、UI 说明。
-
-【world_prompt 必含信息】
-- 世界总览：世界名称、时代基调、地理尺度、社会秩序
-- 势力版图：主要势力（立场、目标、关系）
-- 社会环境：治安、经济、江湖风气、朝廷与宗门关系
-- 风险生态：主要冲突、危险区域、典型生存压力
-    `;
-
-    const genUserPrompt = `
-【世界生成上下文】
-${worldContext}
-
-【玩家建档输入（必须严格参考）】
-${JSON.stringify(charData)}
-
-【生成目标】
-- 只生成世界观提示词文本（world_prompt）。
-- 变量初始化（角色/环境/世界/社交/剧情具体数值）将在“开场剧情生成”阶段完成，此处不要做状态初始化输出。
-    `.trim();
+    const genSystemPrompt = 世界观生成系统提示词;
+    const genUserPrompt = 构建世界观生成用户提示词(worldContext, charData);
 
     const parseWorldPrompt = (content: string): string => {
         const parsed = parseJsonWithRepair<Record<string, unknown>>(content);

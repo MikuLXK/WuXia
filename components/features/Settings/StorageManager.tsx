@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import * as dbService from '../../../services/dbService';
 import GameButton from '../../ui/GameButton';
 import { 聊天记录结构, 提示词结构 } from '../../../types';
+import { buildHistoryTokenSource, estimatePromptPoolTokens, estimateTextTokens } from '../../../utils/tokenEstimate';
 
 interface Props {
     history: 聊天记录结构[];
@@ -53,23 +54,19 @@ const StorageManager: React.FC<Props> = ({ history, prompts = [], requestConfirm
 
     // Calculate Dynamic Context Tokens (History)
     const contextItems = history.map((h, idx) => {
-        let tokenSource = '';
+        const tokenSource = buildHistoryTokenSource(h);
         let preview = '';
 
         if (h.role === 'user') {
-            tokenSource = h.content || '';
             preview = h.content || '';
         } else if (h.role === 'assistant' && h.structuredResponse) {
             const logs = h.structuredResponse.logs || [];
-            tokenSource = logs.map(l => (l.text || '').trim()).filter(Boolean).join('\n');
             preview = logs.map(l => `${l.sender}: ${l.text}`).join(' | ');
         } else {
-            tokenSource = h.content || '';
             preview = h.content || '';
         }
 
-        // Rough estimation: 1 token per char (log text only)
-        const estimatedTokens = Math.ceil(tokenSource.length);
+        const estimatedTokens = estimateTextTokens(tokenSource);
 
         if (preview.length > 60) preview = preview.substring(0, 60) + '...';
 
@@ -87,7 +84,7 @@ const StorageManager: React.FC<Props> = ({ history, prompts = [], requestConfirm
     
     // Calculate Static Prompt Tokens
     const activePrompts = prompts.filter(p => p.启用);
-    const systemPromptTokens = activePrompts.reduce((acc, curr) => acc + curr.内容.length, 0); // Rough approximation
+    const systemPromptTokens = estimatePromptPoolTokens(prompts);
     const totalEstimatedTokens = historyTokens + systemPromptTokens;
 
     // Helpers for Progress Bar

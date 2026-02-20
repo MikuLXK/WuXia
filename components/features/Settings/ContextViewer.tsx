@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 记忆配置结构 } from '../../../types';
+import { estimateTextTokens } from '../../../utils/tokenEstimate';
 
 type ContextSection = {
     id: string;
@@ -7,11 +8,13 @@ type ContextSection = {
     category: string;
     order: number;
     content: string;
+    tokenEstimate?: number;
 };
 
 type ContextSnapshot = {
     sections: ContextSection[];
     fullText: string;
+    totalTokens?: number;
 };
 
 interface Props {
@@ -66,7 +69,11 @@ const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }
             <div className="flex items-center justify-between">
                 <div>
                     <h3 className="text-wuxia-gold font-serif font-bold text-lg">当前AI上下文</h3>
-                    <div className="text-[11px] text-gray-500">顺序与类目一览</div>
+                    <div className="text-[11px] text-gray-500">
+                        顺序与类目一览 · 估算总 Tokens {typeof snapshot.totalTokens === 'number'
+                            ? snapshot.totalTokens.toLocaleString()
+                            : snapshot.sections.reduce((sum, section) => sum + (section.tokenEstimate || estimateTextTokens(section.content)), 0).toLocaleString()}
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
@@ -128,7 +135,7 @@ const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }
                             </thead>
                             <tbody className="text-xs font-mono">
                                 {snapshot.sections.map((item) => {
-                                    const tokens = Math.ceil(item.content.length);
+                                    const tokens = item.tokenEstimate || estimateTextTokens(item.content);
                                     const isActive = item.id === selectedId;
                                     return (
                                         <tr

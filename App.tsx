@@ -306,6 +306,7 @@ const App: React.FC = () => {
                                 onStop={actions.handleStop}
                                 onRegenerate={actions.handleRegenerate}
                                 onQuickRestart={actions.handleQuickRestart}
+                                requestConfirm={requestConfirm}
                                 loading={state.loading} 
                                 canReroll={meta.canRerollLatest}
                                 canQuickRestart={meta.canQuickRestart}

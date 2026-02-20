@@ -262,7 +262,6 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                                 onClick={() => {
                                     setSelectedConfigId(cfg.id);
                                     setForm(prev => ({ ...prev, activeConfigId: cfg.id }));
-                                    setModels([]);
                                     setFeatureModelOptions(初始化功能模型列表());
                                     setFeatureModelLoading(初始化功能加载状态());
                                 }}
@@ -439,6 +438,30 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                             </div>
                         );
                     })}
+                </div>
+
+                <div className="border-t border-gray-800 pt-3 space-y-3">
+                    <div className="text-xs text-wuxia-cyan font-bold">剧情回忆检索设置</div>
+                    <label className="flex items-center justify-between gap-3 text-xs text-gray-300">
+                        <span>静默操作（不弹确认，自动附加回忆）</span>
+                        <input
+                            type="checkbox"
+                            checked={Boolean(form.功能模型占位.剧情回忆静默确认)}
+                            onChange={(e) => updatePlaceholder('剧情回忆静默确认', e.target.checked)}
+                            className="h-4 w-4"
+                        />
+                    </label>
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-300">完整原文回忆条数（最近N条）</label>
+                        <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={Number(form.功能模型占位.剧情回忆完整原文条数N || 20)}
+                            onChange={(e) => updatePlaceholder('剧情回忆完整原文条数N', Math.max(1, Number(e.target.value) || 20))}
+                            className="w-full bg-black/50 border border-gray-700 p-2 text-white rounded-md outline-none focus:border-wuxia-gold"
+                        />
+                    </div>
                 </div>
             </div>
 

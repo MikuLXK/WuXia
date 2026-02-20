@@ -22,11 +22,13 @@ type ContextSection = {
     category: string;
     order: number;
     content: string;
+    tokenEstimate?: number;
 };
 
 type ContextSnapshot = {
     sections: ContextSection[];
     fullText: string;
+    totalTokens?: number;
 };
 
 interface Props {
