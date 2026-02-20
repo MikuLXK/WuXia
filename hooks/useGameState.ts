@@ -89,6 +89,8 @@ export const useGameState = () => {
 
     const 创建空世界 = (): 世界数据结构 => ({
         活跃NPC列表: [],
+        地图: [],
+        建筑: [],
         进行中事件: [],
         已结算事件: [],
         江湖史册: []
@@ -164,6 +166,7 @@ export const useGameState = () => {
     const [showTeam, setShowTeam] = useState(false); 
     const [showKungfu, setShowKungfu] = useState(false);
     const [showWorld, setShowWorld] = useState(false); 
+    const [showMap, setShowMap] = useState(false);
     const [showSect, setShowSect] = useState(false);
     const [showTask, setShowTask] = useState(false);
     const [showAgreement, setShowAgreement] = useState(false);
@@ -307,6 +310,7 @@ export const useGameState = () => {
         showTeam, setShowTeam,
         showKungfu, setShowKungfu,
         showWorld, setShowWorld,
+        showMap, setShowMap,
         showSect, setShowSect,
         showTask, setShowTask,
         showAgreement, setShowAgreement,

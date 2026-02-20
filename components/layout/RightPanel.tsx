@@ -1,7 +1,6 @@
 
 import React from 'react';
 import GameButton from '../ui/GameButton';
-import { useGameState } from '../../hooks/useGameState'; // Import for type reference if needed, but props are passed
 
 interface Props {
     onOpenSettings: () => void;
@@ -11,6 +10,7 @@ interface Props {
     onOpenSocial: () => void;
     onOpenKungfu: () => void;
     onOpenWorld: () => void;
+    onOpenMap: () => void;
     onOpenSect: () => void;
     onOpenTask: () => void; 
     onOpenAgreement: () => void;
@@ -22,7 +22,7 @@ interface Props {
 
 const RightPanel: React.FC<Props> = ({ 
     onOpenSettings, onOpenInventory, onOpenEquipment, onOpenTeam, 
-    onOpenSocial, onOpenKungfu, onOpenWorld, onOpenSect, 
+    onOpenSocial, onOpenKungfu, onOpenWorld, onOpenMap, onOpenSect, 
     onOpenTask, onOpenAgreement, onOpenStory, onOpenMemory,
     onSave, onLoad 
 }) => {
@@ -36,6 +36,7 @@ const RightPanel: React.FC<Props> = ({
         { label: '社交', action: onOpenSocial, color: 'primary' },
         { label: '功法', action: onOpenKungfu, color: 'primary' },
         { label: '世界', action: onOpenWorld, color: 'primary' }, 
+        { label: '地图', action: onOpenMap, color: 'primary' },
         { label: '门派', action: onOpenSect, color: 'primary' },
         { label: '任务', action: onOpenTask, color: 'primary' },
         { label: '约定', action: onOpenAgreement, color: 'primary' },

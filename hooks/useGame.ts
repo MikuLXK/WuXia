@@ -133,6 +133,7 @@ export const useGame = () => {
         showTeam, setShowTeam,
         showKungfu, setShowKungfu,
         showWorld, setShowWorld,
+        showMap, setShowMap,
         showSect, setShowSect,
         showTask, setShowTask,
         showAgreement, setShowAgreement,
@@ -182,7 +183,7 @@ export const useGame = () => {
         设置角色(规范化角色物品容器映射(深拷贝(snapshot.回档前状态.角色)));
         设置环境(规范化环境信息(深拷贝(snapshot.回档前状态.环境)));
         设置社交(规范化社交列表(深拷贝(snapshot.回档前状态.社交)));
-        设置世界(深拷贝(snapshot.回档前状态.世界));
+        设置世界(规范化世界状态(深拷贝(snapshot.回档前状态.世界)));
         设置战斗(深拷贝(snapshot.回档前状态.战斗));
         设置玩家门派(深拷贝(snapshot.回档前状态.玩家门派));
         设置任务列表(深拷贝(snapshot.回档前状态.任务列表));
@@ -296,10 +297,24 @@ export const useGame = () => {
 
     const 创建开场空白世界 = () => ({
         活跃NPC列表: [],
+        地图: [],
+        建筑: [],
         进行中事件: [],
         已结算事件: [],
         江湖史册: []
     });
+
+    const 规范化世界状态 = (raw?: any): 世界数据结构 => {
+        const world = raw && typeof raw === 'object' ? raw : {};
+        return {
+            活跃NPC列表: Array.isArray(world?.活跃NPC列表) ? world.活跃NPC列表 : [],
+            地图: Array.isArray(world?.地图) ? world.地图 : [],
+            建筑: Array.isArray(world?.建筑) ? world.建筑 : [],
+            进行中事件: Array.isArray(world?.进行中事件) ? world.进行中事件 : [],
+            已结算事件: Array.isArray(world?.已结算事件) ? world.已结算事件 : [],
+            江湖史册: Array.isArray(world?.江湖史册) ? world.江湖史册 : []
+        };
+    };
 
     const 创建开场空白战斗 = (): 战斗状态结构 => ({
         是否战斗中: 默认战斗状态.是否战斗中,
@@ -390,6 +405,7 @@ export const useGame = () => {
         shortMemoryContext: string;
         contextPieces: {
             worldPrompt: string;
+            地图建筑状态: string;
             otherPrompts: string;
             离场NPC档案: string;
             长期记忆: string;
@@ -454,6 +470,73 @@ export const useGame = () => {
                 `姓名: ${typeof 姓名 === 'string' && 姓名.trim() ? 姓名.trim() : '未命名'}`,
                 `角色基础信息: ${JSON.stringify({ 称号, 境界, 性别, 年龄, 出生日期, 外貌, 天赋列表, 出身背景 })}`,
                 `角色其余信息: ${JSON.stringify(角色其余信息)}`
+            ].join('\n');
+        };
+        const 归一化文本 = (value: any) => (
+            typeof value === 'string'
+                ? value.trim().replace(/\s+/g, '').toLowerCase()
+                : ''
+        );
+        const 构建地图建筑状态文本 = (payload: any) => {
+            const source = payload || {};
+            const env = 规范化环境信息(source?.环境);
+            const world = 规范化世界状态(source?.世界);
+
+            const 当前具体地点 = typeof env?.具体地点 === 'string' ? env.具体地点.trim() : '';
+            const 地图列表 = Array.isArray(world.地图) ? world.地图 : [];
+            const 建筑列表 = Array.isArray(world.建筑) ? world.建筑 : [];
+
+            const 地图文本 = 地图列表.length > 0
+                ? 地图列表.map((mapItem: any) => {
+                    const name = typeof mapItem?.名称 === 'string' ? mapItem.名称.trim() : '未命名地图';
+                    const coord = typeof mapItem?.坐标 === 'string' ? mapItem.坐标.trim() : '未知坐标';
+                    const desc = typeof mapItem?.描述 === 'string' ? mapItem.描述.trim() : '无描述';
+                    const ownership = mapItem?.归属 && typeof mapItem.归属 === 'object'
+                        ? [
+                            mapItem.归属?.大地点 || '未知大地点',
+                            mapItem.归属?.中地点 || '未知中地点',
+                            mapItem.归属?.小地点 || '未知小地点'
+                        ].join(' > ')
+                        : '未知归属';
+                    const interiors = Array.isArray(mapItem?.内部建筑)
+                        ? mapItem.内部建筑.filter((n: any) => typeof n === 'string' && n.trim().length > 0).join('、')
+                        : '';
+                    return `- 名称: ${name} | 坐标: ${coord} | 归属: ${ownership}\n  描述: ${desc}\n  内部建筑: ${interiors || '无'}`;
+                }).join('\n')
+                : '- 暂无地图数据';
+
+            const 当前地点归一 = 归一化文本(当前具体地点);
+            const 命中建筑 = 建筑列表.filter((building: any) => {
+                const 名称归一 = 归一化文本(building?.名称);
+                if (!当前地点归一 || !名称归一) return false;
+                return 当前地点归一 === 名称归一
+                    || 当前地点归一.startsWith(名称归一)
+                    || 当前地点归一.includes(名称归一);
+            });
+
+            const 建筑文本 = 命中建筑.length > 0
+                ? 命中建筑.map((building: any) => {
+                    const name = typeof building?.名称 === 'string' ? building.名称.trim() : '未命名建筑';
+                    const desc = typeof building?.描述 === 'string' ? building.描述.trim() : '无描述';
+                    const ownership = building?.归属 && typeof building.归属 === 'object'
+                        ? [
+                            building.归属?.大地点 || '未知大地点',
+                            building.归属?.中地点 || '未知中地点',
+                            building.归属?.小地点 || '未知小地点'
+                        ].join(' > ')
+                        : '未知归属';
+                    return `- 名称: ${name} | 归属: ${ownership}\n  描述: ${desc}`;
+                }).join('\n')
+                : `- 当前具体地点「${当前具体地点 || '未知'}」未命中建筑变量数据（仅注入地图摘要）`;
+
+            return [
+                '【地图与建筑】',
+                `当前具体地点: ${当前具体地点 || '未知'}`,
+                '地图列表:',
+                地图文本,
+                '',
+                '当前地点建筑数据（仅在具体地点命中对应建筑时注入）:',
+                建筑文本
             ].join('\n');
         };
         const 构建剧情安排 = (payload: any) => {
@@ -559,8 +642,10 @@ export const useGame = () => {
             .join('\n\n');
 
         const npcContext = 构建NPC上下文(socialData || [], memoryConfig);
+        const contextMapAndBuilding = 构建地图建筑状态文本(statePayload);
         const promptHeader = [
             worldPrompt.trim(),
+            contextMapAndBuilding,
             npcContext.离场数据块,
             otherPrompts.trim()
         ].filter(Boolean).join('\n\n');
@@ -586,7 +671,7 @@ export const useGame = () => {
             writeReqContent || '未配置'
         ].join('\n');
         const contextStoryPlan = 构建剧情安排(statePayload);
-        const worldData = statePayload?.世界 && typeof statePayload.世界 === 'object' ? statePayload.世界 : {};
+        const worldData = 规范化世界状态(statePayload?.世界);
         const battleData = statePayload?.战斗 && typeof statePayload.战斗 === 'object' ? statePayload.战斗 : {};
         const sectData = statePayload?.玩家门派 && typeof statePayload.玩家门派 === 'object' ? statePayload.玩家门派 : {};
         const tasksData = Array.isArray(statePayload?.任务列表) ? statePayload.任务列表 : [];
@@ -630,6 +715,7 @@ export const useGame = () => {
             shortMemoryContext,
             contextPieces: {
                 worldPrompt: worldPrompt.trim(),
+                地图建筑状态: contextMapAndBuilding,
                 otherPrompts: otherPrompts.trim(),
                 离场NPC档案: npcContext.离场数据块,
                 长期记忆: longMemory,
@@ -1009,7 +1095,7 @@ export const useGame = () => {
         let charBuffer = baseState?.角色 || 角色;
         let envBuffer = 规范化环境信息(baseState?.环境 || 环境);
         let socialBuffer = baseState?.社交 || 社交;
-        let worldBuffer = baseState?.世界 || 世界;
+        let worldBuffer = 规范化世界状态(baseState?.世界 || 世界);
         let battleBuffer = 规范化战斗状态(baseState?.战斗 || 战斗);
         let storyBuffer = baseState?.剧情 || 剧情;
 
@@ -1019,7 +1105,7 @@ export const useGame = () => {
                 charBuffer = res.char;
                 envBuffer = 规范化环境信息(res.env);
                 socialBuffer = 规范化社交列表(res.social, { 合并同名: false });
-                worldBuffer = res.world;
+                worldBuffer = 规范化世界状态(res.world);
                 battleBuffer = res.battle;
                 storyBuffer = res.story;
             });
@@ -1031,7 +1117,7 @@ export const useGame = () => {
             设置角色(charBuffer);
             设置环境(规范化环境信息(envBuffer));
             设置社交(mergedSocial);
-            设置世界(worldBuffer);
+            设置世界(规范化世界状态(worldBuffer));
             设置战斗(battleBuffer);
             设置剧情(storyBuffer);
             socialBuffer = mergedSocial;
@@ -1041,7 +1127,7 @@ export const useGame = () => {
             角色: charBuffer,
             环境: 规范化环境信息(envBuffer),
             社交: 规范化社交列表(socialBuffer),
-            世界: worldBuffer,
+            世界: 规范化世界状态(worldBuffer),
             战斗: battleBuffer,
             剧情: storyBuffer
         };
@@ -1115,6 +1201,7 @@ export const useGame = () => {
         };
 
         pushSection('world_prompt', '世界观提示词', '系统', builtContext.contextPieces.worldPrompt);
+        pushSection('world_map', '地图与建筑', '系统', builtContext.contextPieces.地图建筑状态);
         pushSection('npc_away', '离场NPC档案', '系统', builtContext.contextPieces.离场NPC档案);
         pushSection('other_prompts', '叙事/规则提示词', '系统', builtContext.contextPieces.otherPrompts);
         pushSection('memory_long', '长期记忆', '记忆', builtContext.contextPieces.长期记忆);
@@ -1468,7 +1555,7 @@ export const useGame = () => {
         设置角色(规范化角色物品容器映射(save.角色数据));
         设置环境(规范化环境信息(save.环境信息 || 创建开场空白环境()));
         设置社交(规范化社交列表(save.社交 || [])); 
-        设置世界(save.世界 || 创建开场空白世界());
+        设置世界(规范化世界状态(save.世界 || 创建开场空白世界()));
         设置战斗(规范化战斗状态(save.战斗 || 创建开场空白战斗()));
         设置玩家门派(save.玩家门派 || 创建空门派状态());
         设置任务列表(save.任务列表 || []);
@@ -1495,7 +1582,7 @@ export const useGame = () => {
             canQuickRestart: Boolean(最近开局配置)
         },
         setters: {
-            setShowSettings, setShowInventory, setShowEquipment, setShowSocial, setShowTeam, setShowKungfu, setShowWorld, setShowSect, setShowTask, setShowAgreement, setShowStory, setShowMemory, setShowSaveLoad,
+            setShowSettings, setShowInventory, setShowEquipment, setShowSocial, setShowTeam, setShowKungfu, setShowWorld, setShowMap, setShowSect, setShowTask, setShowAgreement, setShowStory, setShowMemory, setShowSaveLoad,
             setActiveTab, setCurrentTheme,
             setApiConfig, setVisualConfig, setPrompts
         },

@@ -39,7 +39,7 @@ const WorldModal: React.FC<Props> = ({ world, onClose }) => {
                     <div className="w-[25%] bg-black/20 border-r border-gray-800/50 flex flex-col py-4 gap-1">
                         {[
                             { id: 'events', label: '风云变幻' },
-                            { id: 'npcs', label: '绝世强者' },
+                            { id: 'npcs', label: '活跃NPC' },
                             { id: 'overview', label: '史册归档' },
                         ].map(tab => (
                             <button
@@ -143,8 +143,18 @@ const WorldModal: React.FC<Props> = ({ world, onClose }) => {
                                                      <span className="w-1.5 h-1.5 rounded-full bg-wuxia-gold animate-pulse"></span>
                                                      {npc.当前行动描述}
                                                  </div>
-                                                 <div className="text-[9px] text-gray-600 mt-1 text-right">
+                                             <div className="text-[9px] text-gray-600 mt-1 text-right">
+                                                     开始: {npc.行动开始时间}
+                                                 </div>
+                                                 <div className="text-[9px] text-gray-600 mt-0.5 text-right">
                                                      预计结束: {npc.行动预计结束时间}
+                                                 </div>
+                                                 <div className="mt-1.5 flex flex-wrap gap-1 justify-end">
+                                                    {(Array.isArray(npc.持有重宝) ? npc.持有重宝 : []).slice(0, 4).map((item, idx) => (
+                                                        <span key={`${npc.ID}-treasure-${idx}`} className="text-[9px] px-1.5 py-0.5 rounded bg-wuxia-gold/10 text-wuxia-gold/90 border border-wuxia-gold/30">
+                                                            {item}
+                                                        </span>
+                                                    ))}
                                                  </div>
                                              </div>
                                         </div>
@@ -158,19 +168,40 @@ const WorldModal: React.FC<Props> = ({ world, onClose }) => {
 
                             {/* --- CHRONICLE TAB --- */}
                             {activeTab === 'overview' && (
-                                <div className="relative border-l border-gray-800 ml-3 pl-6 py-4 space-y-6">
-                                    {world.江湖史册.length > 0 ? world.江湖史册.map((evt, i) => (
-                                        <div key={i} className="relative">
-                                            <div className="absolute -left-[29px] top-1.5 w-2 h-2 rounded-full bg-gray-700 border border-black"></div>
-                                            <div className="text-[10px] text-gray-500 font-mono mb-0.5">{evt.开始时间.split(':')[0]}年</div>
-                                            <h4 className="text-gray-300 font-bold text-sm mb-1">{evt.标题}</h4>
-                                            <p className="text-gray-500 text-xs leading-relaxed">{evt.事件结果 || evt.内容}</p>
+                                <div className="space-y-5">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="border border-gray-800 rounded-lg p-3 bg-black/30">
+                                            <div className="text-[10px] text-gray-500">活跃NPC</div>
+                                            <div className="text-lg text-gray-100 font-bold">{world.活跃NPC列表.length}</div>
                                         </div>
-                                    )) : (
-                                         <div className="text-gray-600 italic text-sm">
-                                            暂无史册记载。
+                                        <div className="border border-gray-800 rounded-lg p-3 bg-black/30">
+                                            <div className="text-[10px] text-gray-500">地图数量</div>
+                                            <div className="text-lg text-gray-100 font-bold">{Array.isArray((world as any).地图) ? (world as any).地图.length : 0}</div>
                                         </div>
-                                    )}
+                                        <div className="border border-gray-800 rounded-lg p-3 bg-black/30">
+                                            <div className="text-[10px] text-gray-500">建筑数量</div>
+                                            <div className="text-lg text-gray-100 font-bold">{Array.isArray((world as any).建筑) ? (world as any).建筑.length : 0}</div>
+                                        </div>
+                                        <div className="border border-gray-800 rounded-lg p-3 bg-black/30">
+                                            <div className="text-[10px] text-gray-500">进行中事件</div>
+                                            <div className="text-lg text-gray-100 font-bold">{world.进行中事件.length}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="relative border-l border-gray-800 ml-3 pl-6 py-4 space-y-6">
+                                        {world.江湖史册.length > 0 ? world.江湖史册.map((evt, i) => (
+                                            <div key={i} className="relative">
+                                                <div className="absolute -left-[29px] top-1.5 w-2 h-2 rounded-full bg-gray-700 border border-black"></div>
+                                                <div className="text-[10px] text-gray-500 font-mono mb-0.5">{evt.开始时间.split(':')[0]}年</div>
+                                                <h4 className="text-gray-300 font-bold text-sm mb-1">{evt.标题}</h4>
+                                                <p className="text-gray-500 text-xs leading-relaxed">{evt.事件结果 || evt.内容}</p>
+                                            </div>
+                                        )) : (
+                                             <div className="text-gray-600 italic text-sm">
+                                                暂无史册记载。
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 

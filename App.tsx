@@ -20,6 +20,7 @@ import MobileSocial from './components/features/Social/MobileSocial';
 import TeamModal from './components/features/Team/TeamModal';
 import KungfuModal from './components/features/Kungfu/KungfuModal';
 import WorldModal from './components/features/World/WorldModal';
+import MapModal from './components/features/Map/MapModal';
 import SectModal from './components/features/Sect/SectModal';
 import MobileSect from './components/features/Sect/MobileSect';
 import TaskModal from './components/features/Task/TaskModal'; 
@@ -146,6 +147,7 @@ const App: React.FC = () => {
         state.showSocial ? '社交' :
         state.showKungfu ? '功法' :
         state.showWorld ? '世界' :
+        state.showMap ? '地图' :
         state.showTeam ? '队伍' :
         state.showSect ? '门派' :
         state.showTask ? '任务' :
@@ -164,6 +166,7 @@ const App: React.FC = () => {
         setters.setShowSocial(false);
         setters.setShowKungfu(false);
         setters.setShowWorld(false);
+        setters.setShowMap(false);
         setters.setShowSect(false);
         setters.setShowTask(false);
         setters.setShowAgreement(false);
@@ -196,6 +199,9 @@ const App: React.FC = () => {
                 break;
             case '世界':
                 setters.setShowWorld(true);
+                break;
+            case '地图':
+                setters.setShowMap(true);
                 break;
             case '队伍':
                 setters.setShowTeam(true);
@@ -324,6 +330,7 @@ const App: React.FC = () => {
                                 onOpenSocial={() => setters.setShowSocial(true)}
                                 onOpenKungfu={() => setters.setShowKungfu(true)}
                                 onOpenWorld={() => setters.setShowWorld(true)}
+                                onOpenMap={() => setters.setShowMap(true)}
                                 onOpenSect={() => setters.setShowSect(true)}
                                 onOpenTask={() => setters.setShowTask(true)} 
                                 onOpenAgreement={() => setters.setShowAgreement(true)} 
@@ -589,6 +596,14 @@ const App: React.FC = () => {
                         <WorldModal
                             world={state.世界}
                             onClose={() => setters.setShowWorld(false)}
+                        />
+                    )}
+
+                    {state.showMap && (
+                        <MapModal
+                            world={state.世界}
+                            env={state.环境}
+                            onClose={() => setters.setShowMap(false)}
                         />
                     )}
 

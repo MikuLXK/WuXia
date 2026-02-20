@@ -12,6 +12,7 @@ type IconName =
     | 'social'
     | 'kungfu'
     | 'world'
+    | 'map'
     | 'more'
     | 'team'
     | 'sect'
@@ -33,6 +34,7 @@ const MENU_ICON_MAP: Record<string, IconName> = {
     社交: 'social',
     功法: 'kungfu',
     世界: 'world',
+    地图: 'map',
     队伍: 'team',
     门派: 'sect',
     任务: 'task',
@@ -46,6 +48,7 @@ const MENU_ICON_MAP: Record<string, IconName> = {
 
 const MOBILE_ALL_MENUS = [
     ...PRIMARY_MENUS,
+    '地图',
     '功法',
     '队伍',
     '门派',
@@ -198,6 +201,8 @@ const IconGlyph = ({ name, className }: { name: IconName; className?: string }) 
             return <svg viewBox="0 0 24 24" className={svgClass} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4.5 6.5h6.5v11H4.5zM13 6.5h6.5v11H13z" /><path d="M11 7.5c.7-.6 1.4-.9 2-.9" /></svg>;
         case 'world':
             return <svg viewBox="0 0 24 24" className={svgClass} fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4.6 12h14.8M12 4.2c2.5 2.3 2.5 13.3 0 15.6M12 4.2c-2.5 2.3-2.5 13.3 0 15.6" /></svg>;
+        case 'map':
+            return <svg viewBox="0 0 24 24" className={svgClass} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 6.5 8.5 4l7 2.5 5-2v13l-5 2-7-2.5-5 2z" /><path d="M8.5 4v12.5M15.5 6.5V19" /></svg>;
         case 'more':
             return <svg viewBox="0 0 24 24" className={svgClass} fill="currentColor"><circle cx="6" cy="6" r="1.6" /><circle cx="12" cy="6" r="1.6" /><circle cx="18" cy="6" r="1.6" /><circle cx="6" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18" cy="12" r="1.6" /><circle cx="6" cy="18" r="1.6" /><circle cx="12" cy="18" r="1.6" /><circle cx="18" cy="18" r="1.6" /></svg>;
         case 'team':
