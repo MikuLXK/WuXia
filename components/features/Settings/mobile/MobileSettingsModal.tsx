@@ -9,6 +9,7 @@ import GameSettings from '../GameSettings';
 import MemorySettings from '../MemorySettings';
 import HistoryViewer from '../HistoryViewer';
 import ContextViewer from '../ContextViewer';
+import RecallModelSettings from '../RecallModelSettings';
 import {
     接口设置结构, 提示词结构, ThemePreset, 视觉设置结构, 节日结构, 聊天记录结构,
     游戏设置结构, 记忆配置结构, 记忆系统结构
@@ -30,8 +31,8 @@ type ContextSnapshot = {
 };
 
 interface Props {
-    activeTab: 'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context';
-    onTabChange: (tab: 'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context') => void;
+    activeTab: 'api' | 'recall' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context';
+    onTabChange: (tab: 'api' | 'recall' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context') => void;
     onClose: () => void;
     apiConfig: 接口设置结构;
     visualConfig: 视觉设置结构;
@@ -69,6 +70,7 @@ const MobileSettingsModal: React.FC<Props> = ({
         { id: 'history', label: '历史' },
         { id: 'context', label: '上下文' },
         { id: 'api', label: '接口' },
+        { id: 'recall', label: '回忆' },
         { id: 'prompt', label: '提示词' },
         { id: 'theme', label: '风格' },
         { id: 'storage', label: '存储' }
@@ -124,6 +126,7 @@ const MobileSettingsModal: React.FC<Props> = ({
 
                 <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 bg-ink-wash/5">
                     {activeTab === 'api' && <ApiSettings settings={apiConfig} onSave={onSaveApi} />}
+                    {activeTab === 'recall' && <RecallModelSettings settings={apiConfig} onSave={onSaveApi} />}
                     {activeTab === 'prompt' && <PromptManager prompts={prompts} onUpdate={onUpdatePrompts} requestConfirm={requestConfirm} />}
                     {activeTab === 'world' && <WorldSettings festivals={festivals || []} onUpdate={onUpdateFestivals} requestConfirm={requestConfirm} />}
                     {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}

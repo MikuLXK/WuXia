@@ -8,27 +8,45 @@ interface Props {
     loading: boolean;
     scrollRef: React.RefObject<HTMLDivElement>;
     onUpdateHistory?: (index: number, newJson: string) => void;
-    renderCount?: number; // New Prop
+    renderCount?: number;
 }
 
 const ChatList: React.FC<Props> = ({ history, loading, scrollRef, onUpdateHistory, renderCount = 30 }) => {
-    // Helper to calculate turn number based on previous assistant messages
-    const getTurnNumber = (currentIndex: number) => {
-        let count = 0;
-        for (let i = 0; i < currentIndex; i++) {
-            if (history[i].role === 'assistant' && history[i].structuredResponse) {
-                count++;
-            }
-        }
-        return count;
-    };
+    const normalizedRenderCount = Number.isFinite(renderCount) ? Math.max(1, Math.floor(renderCount)) : 30;
 
-    // Rendering Logic:
-    // Determine the start index based on renderCount (number of TURNS, approx 2 messages per turn)
-    // 30 turns ~= 60 messages.
-    const sliceIndex = Math.max(0, history.length - (renderCount * 2));
+    // Build stable turn anchors from assistant structured responses.
+    const turnAnchors = React.useMemo(() => {
+        const anchors: Array<{ index: number; turn: number }> = [];
+        let turn = 0;
+        history.forEach((msg, index) => {
+            if (msg.role === 'assistant' && msg.structuredResponse) {
+                anchors.push({ index, turn });
+                turn += 1;
+            }
+        });
+        return anchors;
+    }, [history]);
+
+    const turnNumberByIndex = React.useMemo(() => {
+        const map = new Map<number, number>();
+        turnAnchors.forEach(anchor => map.set(anchor.index, anchor.turn));
+        return map;
+    }, [turnAnchors]);
+
+    // Slice by real turns (assistant structured responses), not by message count.
+    const sliceIndex = React.useMemo(() => {
+        if (turnAnchors.length <= normalizedRenderCount) return 0;
+        const firstVisibleAnchorPos = turnAnchors.length - normalizedRenderCount;
+        if (firstVisibleAnchorPos <= 0) return 0;
+
+        // Include the user input/system notes between previous turn and current visible turn.
+        const previousAnchor = turnAnchors[firstVisibleAnchorPos - 1];
+        return Math.min(history.length, previousAnchor.index + 1);
+    }, [history.length, normalizedRenderCount, turnAnchors]);
+
     const visibleHistory = history.slice(sliceIndex);
     const hiddenCount = sliceIndex;
+    const hiddenTurns = Math.max(0, turnAnchors.length - normalizedRenderCount);
 
     return (
         <div 
@@ -45,7 +63,7 @@ const ChatList: React.FC<Props> = ({ history, loading, scrollRef, onUpdateHistor
             {hiddenCount > 0 && (
                 <div className="w-full text-center py-4">
                     <div className="inline-block px-4 py-1 rounded-full bg-white/5 border border-gray-700 text-xs text-gray-500 font-serif italic">
-                        已隐藏早期 {hiddenCount} 条记录 (请在设置-互动历史中查看)
+                        已隐藏早期 {hiddenTurns} 回合 / {hiddenCount} 条记录 (请在设置-互动历史中查看)
                     </div>
                 </div>
             )}
@@ -55,7 +73,7 @@ const ChatList: React.FC<Props> = ({ history, loading, scrollRef, onUpdateHistor
                 
                 // 1. If it's a Structured Game Response (The new format)
                 if (msg.role === 'assistant' && msg.structuredResponse) {
-                    const turnNum = getTurnNumber(absoluteIdx);
+                    const turnNum = turnNumberByIndex.get(absoluteIdx) ?? 0;
                     return (
                         <TurnItem 
                             key={absoluteIdx} 

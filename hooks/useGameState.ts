@@ -177,7 +177,7 @@ export const useGameState = () => {
     // Save/Load Modal
     const [showSaveLoad, setShowSaveLoad] = useState<{ show: boolean, mode: 'save' | 'load' }>({ show: false, mode: 'save' });
 
-    const [activeTab, setActiveTab] = useState<'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context'>('api');
+    const [activeTab, setActiveTab] = useState<'api' | 'recall' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context'>('api');
     
     // Config State
     const [apiConfig, setApiConfig] = useState<接口设置结构>(() => 创建空接口设置());

@@ -19,8 +19,8 @@ interface Props {
     onSave: (settings: 接口设置结构) => void;
 }
 
-type 功能模型字段 = '主剧情使用模型' | '剧情回忆使用模型' | '世界演变使用模型' | '变量计算使用模型' | '文章优化使用模型';
-type 功能模型开关字段 = '剧情回忆独立模型开关' | '世界演变独立模型开关' | '变量计算独立模型开关' | '文章优化独立模型开关';
+type 功能模型字段 = '主剧情使用模型' | '世界演变使用模型' | '变量计算使用模型' | '文章优化使用模型';
+type 功能模型开关字段 = '世界演变独立模型开关' | '变量计算独立模型开关' | '文章优化独立模型开关';
 
 type 功能模型行 = {
     id: string;
@@ -34,7 +34,6 @@ const providerOptions: 接口供应商类型[] = ['gemini', 'claude', 'openai', 
 
 const 功能模型行配置: 功能模型行[] = [
     { id: 'main', modelKey: '主剧情使用模型', label: '主剧情使用模型（必选）', hint: '请先获取列表后选择主剧情模型' },
-    { id: 'memory', modelKey: '剧情回忆使用模型', switchKey: '剧情回忆独立模型开关', label: '剧情回忆使用模型（占位）', hint: '例如：gpt-4o-mini' },
     { id: 'world', modelKey: '世界演变使用模型', switchKey: '世界演变独立模型开关', label: '世界演变使用模型（占位）', hint: '例如：gemini-2.0-flash' },
     { id: 'vars', modelKey: '变量计算使用模型', switchKey: '变量计算独立模型开关', label: '变量计算使用模型（占位）', hint: '例如：deepseek-chat' },
     { id: 'polish', modelKey: '文章优化使用模型', switchKey: '文章优化独立模型开关', label: '文章优化使用模型（占位）', hint: '例如：claude-3-5-sonnet-latest' }
@@ -42,7 +41,6 @@ const 功能模型行配置: 功能模型行[] = [
 
 const 初始化功能模型列表 = (): Record<功能模型字段, string[]> => ({
     主剧情使用模型: [],
-    剧情回忆使用模型: [],
     世界演变使用模型: [],
     变量计算使用模型: [],
     文章优化使用模型: []
@@ -50,7 +48,6 @@ const 初始化功能模型列表 = (): Record<功能模型字段, string[]> => 
 
 const 初始化功能加载状态 = (): Record<功能模型字段, boolean> => ({
     主剧情使用模型: false,
-    剧情回忆使用模型: false,
     世界演变使用模型: false,
     变量计算使用模型: false,
     文章优化使用模型: false
@@ -440,29 +437,6 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                     })}
                 </div>
 
-                <div className="border-t border-gray-800 pt-3 space-y-3">
-                    <div className="text-xs text-wuxia-cyan font-bold">剧情回忆检索设置</div>
-                    <label className="flex items-center justify-between gap-3 text-xs text-gray-300">
-                        <span>静默操作（不弹确认，自动附加回忆）</span>
-                        <input
-                            type="checkbox"
-                            checked={Boolean(form.功能模型占位.剧情回忆静默确认)}
-                            onChange={(e) => updatePlaceholder('剧情回忆静默确认', e.target.checked)}
-                            className="h-4 w-4"
-                        />
-                    </label>
-                    <div className="space-y-1">
-                        <label className="text-xs text-gray-300">完整原文回忆条数（最近N条）</label>
-                        <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={Number(form.功能模型占位.剧情回忆完整原文条数N || 20)}
-                            onChange={(e) => updatePlaceholder('剧情回忆完整原文条数N', Math.max(1, Number(e.target.value) || 20))}
-                            className="w-full bg-black/50 border border-gray-700 p-2 text-white rounded-md outline-none focus:border-wuxia-gold"
-                        />
-                    </div>
-                </div>
             </div>
 
             {message && <p className="text-xs text-wuxia-cyan animate-pulse">{message}</p>}

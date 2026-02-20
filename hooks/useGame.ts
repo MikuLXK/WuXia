@@ -26,7 +26,7 @@ import { applyStateCommand } from '../utils/stateHelpers';
 import { parseJsonWithRepair } from '../utils/jsonRepair';
 import { estimateTextTokens } from '../utils/tokenEstimate';
 import { useGameState } from './useGameState';
-import { 规范化接口设置, 获取主剧情接口配置, 接口配置是否可用 } from '../utils/apiConfig';
+import { 规范化接口设置, 获取主剧情接口配置, 获取剧情回忆接口配置, 接口配置是否可用 } from '../utils/apiConfig';
 import type { 当前可用接口结构 } from '../utils/apiConfig';
 import {
     规范化记忆系统,
@@ -45,6 +45,7 @@ import { normalizeCanonicalGameTime, 提取时间月日 } from './useGame/timeUt
 import { 构建NPC上下文 } from './useGame/npcContext';
 import { 构建世界观种子提示词, 构建世界生成任务上下文提示词 } from '../prompts/runtime/worldSetup';
 import { 开场初始化任务提示词 } from '../prompts/runtime/opening';
+import { 剧情回忆检索COT提示词, 剧情回忆检索输出格式提示词, 构建剧情回忆检索用户提示词 } from '../prompts/runtime/recall';
 import {
     规范化环境信息,
     构建完整地点文本,
@@ -1068,13 +1069,20 @@ export const useGame = () => {
 
     const buildContextSnapshot = (): 上下文快照 => {
         const normalizedMem = 规范化记忆系统(记忆系统);
-        const recallFeatureEnabled = Boolean(apiConfig?.功能模型占位?.剧情回忆独立模型开关);
+        const recallConfig = apiConfig?.功能模型占位 || ({} as any);
+        const recallFeatureEnabled = Boolean(recallConfig.剧情回忆独立模型开关);
+        const recallMinRound = Math.max(1, Number(recallConfig.剧情回忆最早触发回合) || 10);
+        const nextRound = (Array.isArray(normalizedMem.回忆档案) ? normalizedMem.回忆档案.length : 0) + 1;
+        const recallRoundReady = nextRound >= recallMinRound;
+        const recallApi = 获取剧情回忆接口配置(apiConfig);
+        const recallApiUsable = recallFeatureEnabled && 接口配置是否可用(recallApi);
+        const recallContextMode = recallFeatureEnabled && recallRoundReady && recallApiUsable;
         const builtContext = 构建系统提示词(
             prompts,
             normalizedMem,
             社交,
             { 角色, 环境: 规范化环境信息(环境), 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 规范化环境信息(环境)?.具体地点 || '', 剧情 },
-            recallFeatureEnabled
+            recallContextMode
                 ? { 禁用中期长期记忆: true, 禁用短期记忆: true }
                 : undefined
         );
@@ -1087,6 +1095,20 @@ export const useGame = () => {
         const extraPrompt = typeof gameConfig?.额外提示词 === 'string' && gameConfig.额外提示词.trim().length > 0
             ? gameConfig.额外提示词.trim()
             : '未配置';
+        const mainApi = 获取主剧情接口配置(apiConfig);
+
+        const 构建接口路由文本 = (title: string, config: 当前可用接口结构 | null): string => {
+            if (!接口配置是否可用(config)) {
+                return `【${title}】\n未配置可用接口（请检查接口地址 / API Key / 模型）`;
+            }
+            return [
+                `【${title}】`,
+                `配置: ${config.名称 || '未命名'}`,
+                `供应商: ${config.供应商}`,
+                `模型: ${config.model}`,
+                `Base URL: ${config.baseUrl}`
+            ].join('\n');
+        };
 
         const sections: 上下文段[] = [];
         let order = 1;
@@ -1106,6 +1128,16 @@ export const useGame = () => {
         pushSection('world_prompt', '世界观提示词', '系统', builtContext.contextPieces.worldPrompt);
         pushSection('npc_away', '离场NPC档案', '系统', builtContext.contextPieces.离场NPC档案);
         pushSection('other_prompts', '叙事/规则提示词', '系统', builtContext.contextPieces.otherPrompts);
+        pushSection('api_main_route', '主剧情API路由', '接口', 构建接口路由文本('主剧情API', mainApi));
+        if (recallFeatureEnabled) {
+            const recallRouteText = [
+                构建接口路由文本('剧情回忆API', recallApi),
+                `最早触发回合: ${recallMinRound}`,
+                `下一回合: ${nextRound}`,
+                `本回合是否触发检索: ${recallRoundReady ? '是' : '否'}`
+            ].join('\n');
+            pushSection('api_recall_route', '剧情回忆API路由', '接口', recallRouteText);
+        }
         pushSection('memory_long', '长期记忆', '记忆', builtContext.contextPieces.长期记忆);
         pushSection('memory_mid', '中期记忆', '记忆', builtContext.contextPieces.中期记忆);
         pushSection('npc_present', '当前场景NPC档案', '系统', builtContext.contextPieces.在场NPC档案);
@@ -1122,18 +1154,11 @@ export const useGame = () => {
         if (recallFeatureEnabled) {
             const fullN = Math.max(1, Number(apiConfig?.功能模型占位?.剧情回忆完整原文条数N) || 20);
             const recallMemoryCorpus = 构建剧情回忆检索上下文(normalizedMem, fullN);
-            pushSection(
-                'recall_strategy',
-                '剧情回忆策略',
-                '回忆模型',
-                [
-                    '【剧情回忆策略】',
-                    `独立模型开关: 开启`,
-                    `静默确认: ${Boolean(apiConfig?.功能模型占位?.剧情回忆静默确认) ? '开启' : '关闭'}`,
-                    `完整原文条数N: ${fullN}`
-                ].join('\n')
-            );
-            pushSection('recall_corpus', '剧情回忆检索上下文', '回忆模型', recallMemoryCorpus);
+            const recallSystemPrompt = `${剧情回忆检索COT提示词}\n\n${剧情回忆检索输出格式提示词}`;
+            const recallUserPrompt = 构建剧情回忆检索用户提示词(latestUserInput, recallMemoryCorpus);
+            pushSection('recall_system', '剧情回忆系统提示词', '回忆API', recallSystemPrompt);
+            pushSection('recall_corpus', '剧情回忆检索回忆库', '回忆API', recallMemoryCorpus);
+            pushSection('recall_user', '剧情回忆用户提示词', '回忆API', recallUserPrompt);
         }
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
         pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);
@@ -1162,18 +1187,23 @@ export const useGame = () => {
         }
 
         // 1. Parse input and optional hidden recall tag
-        const recallFeatureEnabled = Boolean(apiConfig?.功能模型占位?.剧情回忆独立模型开关);
+        const recallConfig = apiConfig?.功能模型占位 || ({} as any);
+        const recallFeatureEnabled = Boolean(recallConfig.剧情回忆独立模型开关);
+        const recallMinRound = Math.max(1, Number(recallConfig.剧情回忆最早触发回合) || 10);
+        const normalizedMemBeforeSend = 规范化记忆系统(记忆系统);
+        const nextRound = (Array.isArray(normalizedMemBeforeSend.回忆档案) ? normalizedMemBeforeSend.回忆档案.length : 0) + 1;
+        const recallRoundReady = nextRound >= recallMinRound;
         const extracted = 提取剧情回忆标签(content);
         let sendInput = extracted.cleanInput || content.trim();
         let recallTag = extracted.recallTag;
         let attachedRecallPreview = '';
 
-        if (recallFeatureEnabled && !recallTag) {
+        if (recallFeatureEnabled && recallRoundReady && !recallTag) {
             try {
                 options?.onRecallProgress?.({ phase: 'start', text: '正在检索剧情回忆...' });
                 const recalled = await 执行剧情回忆检索(
                     sendInput,
-                    规范化记忆系统(记忆系统),
+                    normalizedMemBeforeSend,
                     apiConfig,
                     {
                         onDelta: (_delta, accumulated) => {
@@ -1214,7 +1244,7 @@ export const useGame = () => {
         const canonicalTime = normalizeCanonicalGameTime(环境.时间);
         const currentGameTime = canonicalTime || 环境.时间 || `第${环境.游戏天数 || 1}日`;
         const historyBeforeSend = [...历史记录];
-        const memBeforeSend = 规范化记忆系统(记忆系统);
+        const memBeforeSend = normalizedMemBeforeSend;
         推入重Roll快照({
             玩家输入: sendInput,
             游戏时间: currentGameTime,
@@ -1233,10 +1263,10 @@ export const useGame = () => {
             回档前历史: 深拷贝(historyBeforeSend)
         });
 
-        // 3. Trim history window (keep recent context only)
-        let currentHistory = [...historyBeforeSend];
-        if (currentHistory.length >= 20) {
-            currentHistory = currentHistory.slice(-18);
+        // 3. Trim history window for AI context only (UI history must remain complete)
+        let contextHistory = [...historyBeforeSend];
+        if (contextHistory.length >= 20) {
+            contextHistory = contextHistory.slice(-18);
         }
         const updatedMemSys = 规范化记忆系统(memBeforeSend);
 
@@ -1247,8 +1277,9 @@ export const useGame = () => {
             timestamp: Date.now(),
             gameTime: currentGameTime 
         };
-        const updatedHistory = [...currentHistory, newUserMsg];
-        设置历史记录(updatedHistory);
+        const updatedContextHistory = [...contextHistory, newUserMsg];
+        const updatedDisplayHistory = [...historyBeforeSend, newUserMsg];
+        设置历史记录(updatedDisplayHistory);
         setLoading(true);
 
         const controller = new AbortController();
@@ -1256,18 +1287,19 @@ export const useGame = () => {
 
         try {
             // 5. Construct System Prompt
+            const recallContextActiveForMain = recallFeatureEnabled && Boolean(recallTag);
             const builtContext = 构建系统提示词(
                 prompts,
                 updatedMemSys,
                 社交,
                 { 角色, 环境: 规范化环境信息(环境), 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 规范化环境信息(环境)?.具体地点 || '', 剧情 },
-                recallFeatureEnabled
+                recallContextActiveForMain
                     ? { 禁用中期长期记忆: true, 禁用短期记忆: true }
                     : undefined
             );
             const contextImmediate = [
                 builtContext.shortMemoryContext,
-                `【即时剧情回顾 (Script)】\n${formatHistoryToScript(updatedHistory) || '暂无'}`,
+                `【即时剧情回顾 (Script)】\n${formatHistoryToScript(updatedContextHistory) || '暂无'}`,
                 recallTag ? `【剧情回忆】\n${recallTag}` : ''
             ].filter(Boolean).join('\n\n');
 
@@ -1275,7 +1307,7 @@ export const useGame = () => {
             if (isStreaming) {
                 streamMarker = Date.now();
                 设置历史记录([
-                    ...updatedHistory,
+                    ...updatedDisplayHistory,
                     {
                         role: 'assistant',
                         content: '',
@@ -1339,7 +1371,7 @@ export const useGame = () => {
                     return item;
                 }));
             } else {
-                设置历史记录([...updatedHistory, newAiMsg]);
+                设置历史记录([...updatedDisplayHistory, newAiMsg]);
             }
             
             // 8. Auto Save Trigger
@@ -1360,7 +1392,7 @@ export const useGame = () => {
             } else {
                 弹出重Roll快照();
                 const errorMsg: 聊天记录结构 = { role: 'system', content: `[系统错误]: ${error.message}`, timestamp: Date.now() };
-                设置历史记录([...updatedHistory, errorMsg]);
+                设置历史记录([...updatedDisplayHistory, errorMsg]);
                 return { cancelled: true };
             }
         } finally {

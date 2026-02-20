@@ -29,6 +29,7 @@ const 拆分即时与短期 = (entry: string): { 即时内容: string; 短期摘
 };
 
 const 格式化回忆名称 = (round: number): string => `【回忆${String(Math.max(1, round)).padStart(3, '0')}】`;
+const 格式化回合显示 = (round: number): string => (round === 1 ? '开场剧情' : `回合：${round}`);
 
 const HistoryViewer: React.FC<Props> = ({ history = [], memorySystem }) => {
     const [query, setQuery] = useState('');
@@ -134,7 +135,7 @@ const HistoryViewer: React.FC<Props> = ({ history = [], memorySystem }) => {
 
                             {isExpanded && (
                                 <div className="border-t border-gray-800 px-3 py-3 space-y-3">
-                                    <div className="text-[11px] text-gray-500">回合：{item.回合}</div>
+                                    <div className="text-[11px] text-gray-500">{格式化回合显示(item.回合)}</div>
 
                                     <div>
                                         <div className="text-xs text-wuxia-cyan mb-1">概括</div>

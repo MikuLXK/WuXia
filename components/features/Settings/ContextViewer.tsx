@@ -24,28 +24,61 @@ interface Props {
 }
 
 const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }) => {
+    const [contextPage, setContextPage] = useState<'main' | 'recall'>('main');
     const [mode, setMode] = useState<'all' | 'single'>('all');
-    const [selectedId, setSelectedId] = useState(snapshot.sections[0]?.id || '');
+    const [selectedId, setSelectedId] = useState('');
     const [重要角色记忆N, set重要角色记忆N] = useState(memoryConfig?.重要角色关键记忆条数N || 20);
     const [保存中, set保存中] = useState(false);
     const [已保存, set已保存] = useState(false);
 
-    useEffect(() => {
-        if (!snapshot.sections.find(s => s.id === selectedId)) {
-            setSelectedId(snapshot.sections[0]?.id || '');
+    const isRecallSection = (section: ContextSection): boolean => {
+        return section.id === 'api_recall_route' || section.id.startsWith('recall_');
+    };
+
+    const hasRecallSections = useMemo(
+        () => snapshot.sections.some(isRecallSection),
+        [snapshot.sections]
+    );
+
+    const pageSections = useMemo(() => {
+        if (contextPage === 'recall') {
+            return snapshot.sections.filter(isRecallSection);
         }
-    }, [snapshot.sections, selectedId]);
+        return snapshot.sections.filter(section => !isRecallSection(section));
+    }, [snapshot.sections, contextPage]);
+
+    useEffect(() => {
+        if (contextPage === 'recall' && !hasRecallSections) {
+            setContextPage('main');
+        }
+    }, [contextPage, hasRecallSections]);
+
+    useEffect(() => {
+        if (!pageSections.find(s => s.id === selectedId)) {
+            setSelectedId(pageSections[0]?.id || '');
+        }
+    }, [pageSections, selectedId]);
+
     useEffect(() => {
         set重要角色记忆N(memoryConfig?.重要角色关键记忆条数N || 20);
     }, [memoryConfig?.重要角色关键记忆条数N]);
 
     const selectedSection = useMemo(
-        () => snapshot.sections.find(s => s.id === selectedId) || snapshot.sections[0],
-        [snapshot.sections, selectedId]
+        () => pageSections.find(s => s.id === selectedId) || pageSections[0],
+        [pageSections, selectedId]
+    );
+
+    const pageFullText = useMemo(
+        () => pageSections.map(section => section.content).join('\n\n'),
+        [pageSections]
+    );
+    const pageTokens = useMemo(
+        () => pageSections.reduce((sum, section) => sum + (section.tokenEstimate || estimateTextTokens(section.content)), 0),
+        [pageSections]
     );
 
     const displayContent = mode === 'all'
-        ? snapshot.fullText
+        ? pageFullText
         : (selectedSection?.content || '');
     const 可保存上下文配置 = Boolean(memoryConfig && onSaveMemory);
 
@@ -68,14 +101,40 @@ const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }
         <div className="h-full flex flex-col space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-wuxia-gold font-serif font-bold text-lg">当前AI上下文</h3>
+                    <h3 className="text-wuxia-gold font-serif font-bold text-lg">
+                        {contextPage === 'main' ? '主剧情当前AI上下文' : '回忆API当前AI上下文'}
+                    </h3>
                     <div className="text-[11px] text-gray-500">
-                        顺序与类目一览 · 估算总 Tokens {typeof snapshot.totalTokens === 'number'
-                            ? snapshot.totalTokens.toLocaleString()
-                            : snapshot.sections.reduce((sum, section) => sum + (section.tokenEstimate || estimateTextTokens(section.content)), 0).toLocaleString()}
+                        顺序与类目一览 · 当前页估算总 Tokens {pageTokens.toLocaleString()}
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <button
+                        onClick={() => {
+                            setContextPage('main');
+                            setMode('all');
+                        }}
+                        className={`px-3 py-1 text-xs rounded border transition-colors ${
+                            contextPage === 'main' ? 'border-wuxia-gold bg-wuxia-gold/10 text-wuxia-gold' : 'border-gray-700 text-gray-400'
+                        }`}
+                    >
+                        主剧情
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (!hasRecallSections) return;
+                            setContextPage('recall');
+                            setMode('all');
+                        }}
+                        disabled={!hasRecallSections}
+                        className={`px-3 py-1 text-xs rounded border transition-colors ${
+                            contextPage === 'recall'
+                                ? 'border-wuxia-cyan bg-wuxia-cyan/10 text-wuxia-cyan'
+                                : 'border-gray-700 text-gray-400'
+                        } ${!hasRecallSections ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        回忆API
+                    </button>
                     <button
                         onClick={() => setMode('all')}
                         className={`px-3 py-1 text-xs rounded border transition-colors ${
@@ -121,7 +180,7 @@ const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }
                 <div className="bg-black/30 border border-gray-800 rounded-lg overflow-hidden flex flex-col min-h-0">
                     <div className="px-4 py-2 border-b border-gray-800 text-[11px] text-gray-500 flex items-center justify-between">
                         <span>上下文顺序</span>
-                        <span>{snapshot.sections.length} 项</span>
+                        <span>{pageSections.length} 项</span>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
                         <table className="w-full text-left border-collapse">
@@ -134,7 +193,7 @@ const ContextViewer: React.FC<Props> = ({ snapshot, memoryConfig, onSaveMemory }
                                 </tr>
                             </thead>
                             <tbody className="text-xs font-mono">
-                                {snapshot.sections.map((item) => {
+                                {pageSections.map((item) => {
                                     const tokens = item.tokenEstimate || estimateTextTokens(item.content);
                                     const isActive = item.id === selectedId;
                                     return (

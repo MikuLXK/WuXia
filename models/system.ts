@@ -31,6 +31,7 @@ export interface 功能模型占位配置结构 {
     剧情回忆独立模型开关: boolean;
     剧情回忆静默确认: boolean;
     剧情回忆完整原文条数N: number;
+    剧情回忆最早触发回合: number;
     世界演变独立模型开关: boolean;
     变量计算独立模型开关: boolean;
     文章优化独立模型开关: boolean;
