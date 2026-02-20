@@ -27,6 +27,7 @@ import { applyStateCommand } from '../utils/stateHelpers';
 import { parseJsonWithRepair } from '../utils/jsonRepair';
 import { useGameState } from './useGameState';
 import { 规范化接口设置, 获取主剧情接口配置, 接口配置是否可用 } from '../utils/apiConfig';
+import type { 当前可用接口结构 } from '../utils/apiConfig';
 
 type 回合快照结构 = {
     玩家输入: string;
@@ -1879,7 +1880,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 alert("世界观提示词已写入。请在聊天框输入指令开始初始化。");
             } else {
                 // We pass genData explicitly because state updates might be async/batched
-                await generateOpeningStory(openingBase, finalPrompts, openingStreaming);
+                await generateOpeningStory(openingBase, finalPrompts, openingStreaming, currentApi);
                 setLoading(false);
             }
 
@@ -1897,7 +1898,8 @@ ${enabledDifficultyPrompts || '未提供'}
     const generateOpeningStory = async (
         contextData: any,
         promptSnapshot: 提示词结构[],
-        useStreaming: boolean
+        useStreaming: boolean,
+        apiForOpening: 当前可用接口结构
     ) => {
         const openingPrompt = `
 【第0回合开场初始化任务】
@@ -2042,7 +2044,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 openingContext.systemPrompt,
                 openingScriptContext,
                 openingPrompt,
-                currentApi,
+                apiForOpening,
                 controller.signal,
                 useStreaming
                     ? {
@@ -2115,9 +2117,10 @@ ${enabledDifficultyPrompts || '未提供'}
             if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
             if (e?.name === 'AbortError') {
                 设置历史记录(initialHistory);
-                return;
+                throw e;
             }
             console.error("Story Gen Failed", e);
+            throw e;
         } finally {
             if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
             abortControllerRef.current = null;

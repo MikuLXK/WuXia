@@ -134,6 +134,22 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
         const uniqueSegments = segments.filter((part, idx) => segments.indexOf(part) === idx);
         return uniqueSegments.length > 0 ? uniqueSegments.join(' - ') : '未知地点';
     }, [环境?.大地点, 环境?.中地点, 环境?.小地点, 环境?.具体地点]);
+    const mobileLocationBadge = useMemo(() => {
+        const rawSmall = typeof 环境?.小地点 === 'string' ? 环境.小地点.trim() : '';
+        const rawSpecific = typeof 环境?.具体地点 === 'string' ? 环境.具体地点.trim() : '';
+        let normalizedSpecific = rawSpecific;
+        if (rawSmall && rawSpecific.startsWith(rawSmall)) {
+            const stripped = rawSpecific.slice(rawSmall.length).replace(/^[\s\-—>·/|，,、。:：]+/, '').trim();
+            if (stripped) normalizedSpecific = stripped;
+        }
+
+        // Mobile only keeps the last 3 location levels: 中地点 / 小地点 / 具体地点
+        const segments = [环境?.中地点, rawSmall, normalizedSpecific]
+            .map((part) => (typeof part === 'string' ? part.trim() : ''))
+            .filter(Boolean);
+        const uniqueSegments = segments.filter((part, idx) => segments.indexOf(part) === idx);
+        return uniqueSegments.length > 0 ? uniqueSegments.join(' - ') : '未知地点';
+    }, [环境?.中地点, 环境?.小地点, 环境?.具体地点]);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
@@ -208,7 +224,8 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                          
                          {/* Location Badge (Hanging from Plaque) */}
                          <div className="absolute -bottom-2.5 md:-bottom-3 bg-wuxia-red text-white text-[8px] md:text-[10px] px-2 md:px-3 py-[1px] md:py-[2px] rounded border border-wuxia-gold/30 shadow-md flex items-center gap-1 z-30 font-bold tracking-widest max-w-[220px] md:max-w-[460px]">
-                            <span className="opacity-90 truncate" title={locationBadge}>{locationBadge}</span>
+                            <span className="md:hidden opacity-90 truncate" title={mobileLocationBadge}>{mobileLocationBadge}</span>
+                            <span className="hidden md:inline opacity-90 truncate" title={locationBadge}>{locationBadge}</span>
                          </div>
                      </div>
                 </div>

@@ -32,6 +32,7 @@ const 格式化回忆名称 = (round: number): string => `【回忆${String(Math
 
 const HistoryViewer: React.FC<Props> = ({ history = [], memorySystem }) => {
     const [query, setQuery] = useState('');
+    const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
     const allMemories = useMemo<回忆展示结构[]>(() => {
         if (Array.isArray(memorySystem?.回忆档案) && memorySystem!.回忆档案.length > 0) {
@@ -98,14 +99,6 @@ const HistoryViewer: React.FC<Props> = ({ history = [], memorySystem }) => {
         });
     }, [allMemories, query]);
 
-    const [selectedName, setSelectedName] = useState<string>('');
-
-    const selectedMemory = useMemo(() => {
-        if (!filteredMemories.length) return null;
-        const picked = filteredMemories.find(item => item.名称 === selectedName);
-        return picked || filteredMemories[0];
-    }, [filteredMemories, selectedName]);
-
     return (
         <div className="h-full flex flex-col animate-fadeIn">
             <h3 className="text-wuxia-gold font-serif font-bold text-lg mb-4 shrink-0">互动历史存档</h3>
@@ -120,52 +113,47 @@ const HistoryViewer: React.FC<Props> = ({ history = [], memorySystem }) => {
                 />
             </div>
 
-            <div className="flex-1 min-h-0 grid gap-3 md:grid-cols-[1fr_1.2fr]">
-                <div className="min-h-0 overflow-y-auto custom-scrollbar bg-black/20 border border-gray-800 rounded-lg">
-                    <div className="sticky top-0 z-10 grid grid-cols-[130px_1fr] bg-black/60 border-b border-gray-800 px-3 py-2 text-[11px] text-gray-400">
-                        <span>名称</span>
-                        <span>概括</span>
-                    </div>
-                    <div>
-                        {filteredMemories.map((item) => (
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar bg-black/20 border border-gray-800 rounded-lg p-3 space-y-2">
+                {filteredMemories.map((item) => {
+                    const key = `${item.名称}-${item.回合}`;
+                    const isExpanded = expandedKey === key;
+                    return (
+                        <div key={key} className="border border-gray-800/70 rounded-lg bg-black/35 overflow-hidden">
                             <button
-                                key={`${item.名称}-${item.回合}`}
-                                onClick={() => setSelectedName(item.名称)}
-                                className={`w-full text-left grid grid-cols-[130px_1fr] gap-2 px-3 py-2 border-b border-gray-800/60 text-sm transition-colors ${
-                                    selectedMemory?.名称 === item.名称 ? 'bg-wuxia-gold/10 text-wuxia-gold' : 'text-gray-300 hover:bg-white/5'
-                                }`}
+                                onClick={() => setExpandedKey(prev => prev === key ? null : key)}
+                                className={`w-full text-left px-3 py-2.5 transition-colors ${isExpanded ? 'bg-wuxia-gold/10' : 'hover:bg-white/5'}`}
                             >
-                                <span className="font-mono text-xs truncate">{item.名称}</span>
-                                <span className="truncate">{item.概括 || '（无概括）'}</span>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className={`font-mono text-xs truncate ${isExpanded ? 'text-wuxia-gold' : 'text-gray-200'}`}>{item.名称}</div>
+                                    <div className={`text-[10px] ${isExpanded ? 'text-wuxia-gold' : 'text-gray-500'}`}>{isExpanded ? '收起' : '展开'}</div>
+                                </div>
+                                <div className={`mt-1 text-[11px] truncate ${isExpanded ? 'text-gray-200' : 'text-gray-500'}`}>
+                                    {item.概括 || '（无概括）'}
+                                </div>
                             </button>
-                        ))}
-                    </div>
 
-                    {filteredMemories.length === 0 && (
-                        <div className="text-center text-gray-600 py-10">暂无匹配记录</div>
-                    )}
-                </div>
+                            {isExpanded && (
+                                <div className="border-t border-gray-800 px-3 py-3 space-y-3">
+                                    <div className="text-[11px] text-gray-500">回合：{item.回合}</div>
 
-                <div className="min-h-0 overflow-y-auto custom-scrollbar bg-black/20 border border-gray-800 rounded-lg p-4 space-y-3">
-                    {selectedMemory ? (
-                        <>
-                            <div className="text-wuxia-gold font-bold">{selectedMemory.名称}</div>
-                            <div className="text-[11px] text-gray-500">回合：{selectedMemory.回合} | 时间：{selectedMemory.记录时间 || '未知时间'}</div>
+                                    <div>
+                                        <div className="text-xs text-wuxia-cyan mb-1">概括</div>
+                                        <div className="text-sm text-gray-300 whitespace-pre-wrap">{item.概括 || '（无概括）'}</div>
+                                    </div>
 
-                            <div className="border-t border-gray-800 pt-3">
-                                <div className="text-xs text-wuxia-cyan mb-1">概括</div>
-                                <div className="text-sm text-gray-300 whitespace-pre-wrap">{selectedMemory.概括 || '（无概括）'}</div>
-                            </div>
+                                    <div className="border-t border-gray-800 pt-3">
+                                        <div className="text-xs text-wuxia-cyan mb-1">原文</div>
+                                        <div className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed">{item.原文 || '（无原文）'}</div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
 
-                            <div className="border-t border-gray-800 pt-3">
-                                <div className="text-xs text-wuxia-cyan mb-1">原文</div>
-                                <div className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed">{selectedMemory.原文 || '（无原文）'}</div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-center text-gray-600 py-10">请选择一条记录查看完整数据</div>
-                    )}
-                </div>
+                {filteredMemories.length === 0 && (
+                    <div className="text-center text-gray-600 py-10">暂无匹配记录</div>
+                )}
             </div>
         </div>
     );
