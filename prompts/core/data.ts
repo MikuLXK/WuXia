@@ -312,7 +312,17 @@ export const 核心_数据格式: 提示词结构 = {
 }
 - \`下一章预告\`: { \`标题\`: String, \`大纲\`: String }
 - \`历史卷宗\`: Array<{ \`标题\`: String, \`结语\`: String }>
+- \`近期剧情规划\`: String
+- \`中期剧情规划\`: String
+- \`长期剧情规划\`: String
+- \`待触发事件\`: Array<{
+  \`名称\`: String,
+  \`描述\`: String,
+  \`触发条件/时间\`: String,
+  \`失效时间\`: String(YYYY:MM:DD:HH:MM)
+}>
 - \`剧情变量\`: Record<string, boolean | number | string>
+- 维护约束：\`待触发事件\` 目标保持 3 条；已过 \`失效时间\` 的事件必须即时移除。
 
 ## 7. 上下文只读域（结构完整，默认不由 tavern_commands 直接改）
 ### 6.1 玩家门派（gameState.玩家门派）

@@ -188,7 +188,10 @@ export const useGame = () => {
         设置玩家门派(深拷贝(snapshot.回档前状态.玩家门派));
         设置任务列表(深拷贝(snapshot.回档前状态.任务列表));
         设置约定列表(深拷贝(snapshot.回档前状态.约定列表));
-        设置剧情(深拷贝(snapshot.回档前状态.剧情));
+        设置剧情(规范化剧情状态(
+            深拷贝(snapshot.回档前状态.剧情),
+            深拷贝(snapshot.回档前状态.环境)
+        ));
         设置记忆系统(深拷贝(snapshot.回档前状态.记忆系统));
         设置历史记录(深拷贝(snapshot.回档前历史));
     };
@@ -328,6 +331,98 @@ export const useGame = () => {
         return base as 战斗状态结构;
     };
 
+    const 解析剧情时间排序值 = (raw?: any): number | null => {
+        if (typeof raw !== 'string') return null;
+        const normalized = normalizeCanonicalGameTime(raw.trim());
+        if (!normalized) return null;
+        const m = normalized.match(/^(\d{1,6}):(\d{2}):(\d{2}):(\d{2}):(\d{2})$/);
+        if (!m) return null;
+        const year = Number(m[1]);
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        const hour = Number(m[4]);
+        const minute = Number(m[5]);
+        return (((year * 12 + month) * 31 + day) * 24 + hour) * 60 + minute;
+    };
+
+    const 规范化剧情状态 = (raw?: any, envLike?: any): 剧情系统结构 => {
+        const story = raw && typeof raw === 'object' ? raw : {};
+        const chapter = story?.当前章节 && typeof story.当前章节 === 'object' ? story.当前章节 : {};
+        const preview = story?.下一章预告 && typeof story.下一章预告 === 'object' ? story.下一章预告 : {};
+        const archives = Array.isArray(story?.历史卷宗) ? story.历史卷宗 : [];
+        const storyVarsRaw = (story?.剧情变量 && typeof story.剧情变量 === 'object' && !Array.isArray(story.剧情变量))
+            ? story.剧情变量
+            : {};
+
+        const 纯文本 = (value: any): string => (typeof value === 'string' ? value : '');
+        const 当前时间排序值 = 解析剧情时间排序值(envLike?.时间);
+        const 待触发事件原始列表 = Array.isArray(story?.待触发事件) ? story.待触发事件 : [];
+        const 待触发事件 = 待触发事件原始列表
+            .map((event: any) => {
+                const 触发条件或时间 = 纯文本(event?.['触发条件/时间']) || 纯文本(event?.触发条件或时间);
+                const 失效时间原始 = 纯文本(event?.失效时间);
+                const 失效时间标准化 = 失效时间原始 ? (normalizeCanonicalGameTime(失效时间原始) || 失效时间原始) : '';
+                return {
+                    名称: 纯文本(event?.名称),
+                    描述: 纯文本(event?.描述),
+                    '触发条件/时间': 触发条件或时间,
+                    失效时间: 失效时间标准化
+                };
+            })
+            .filter((event) => event.名称 || event.描述 || event['触发条件/时间'] || event.失效时间)
+            .filter((event) => {
+                if (当前时间排序值 === null) return true;
+                const 失效排序值 = 解析剧情时间排序值(event.失效时间);
+                if (失效排序值 === null) return true;
+                return 失效排序值 > 当前时间排序值;
+            })
+            .slice(0, 3);
+
+        return {
+            当前章节: {
+                ID: 纯文本(chapter?.ID),
+                序号: typeof chapter?.序号 === 'number' && Number.isFinite(chapter.序号)
+                    ? chapter.序号
+                    : 1,
+                标题: 纯文本(chapter?.标题),
+                背景故事: 纯文本(chapter?.背景故事),
+                主要矛盾: 纯文本(chapter?.主要矛盾),
+                结束条件: Array.isArray(chapter?.结束条件)
+                    ? chapter.结束条件.map((cond: any) => ({
+                        类型: cond?.类型 === '时间' || cond?.类型 === '事件' || cond?.类型 === '变量' ? cond.类型 : '事件',
+                        描述: 纯文本(cond?.描述),
+                        ...(typeof cond?.判定值 === 'string' || typeof cond?.判定值 === 'number' || typeof cond?.判定值 === 'boolean'
+                            ? { 判定值: cond.判定值 }
+                            : {}),
+                        ...(纯文本(cond?.对应变量键名) ? { 对应变量键名: 纯文本(cond?.对应变量键名) } : {})
+                    }))
+                    : [],
+                伏笔列表: Array.isArray(chapter?.伏笔列表)
+                    ? chapter.伏笔列表
+                        .map((item: any) => 纯文本(item))
+                        .filter((item: string) => item.length > 0)
+                    : []
+            },
+            下一章预告: {
+                标题: 纯文本(preview?.标题),
+                大纲: 纯文本(preview?.大纲)
+            },
+            历史卷宗: archives.map((arc: any) => ({
+                标题: 纯文本(arc?.标题),
+                结语: 纯文本(arc?.结语)
+            })),
+            近期剧情规划: 纯文本(story?.近期剧情规划),
+            中期剧情规划: 纯文本(story?.中期剧情规划),
+            长期剧情规划: 纯文本(story?.长期剧情规划),
+            待触发事件,
+            剧情变量: Object.fromEntries(
+                Object.entries(storyVarsRaw).filter(([, value]) => (
+                    typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string'
+                ))
+            ) as Record<string, boolean | number | string>
+        };
+    };
+
     const 战斗结束自动清空 = (battleLike: any, storyLike?: any): 战斗状态结构 => {
         const battle = 规范化战斗状态(battleLike);
         const 敌方 = battle.敌方;
@@ -368,6 +463,10 @@ export const useGame = () => {
             大纲: ''
         },
         历史卷宗: [],
+        近期剧情规划: '',
+        中期剧情规划: '',
+        长期剧情规划: '',
+        待触发事件: [],
         剧情变量: {}
     });
 
@@ -540,53 +639,7 @@ export const useGame = () => {
             ].join('\n');
         };
         const 构建剧情安排 = (payload: any) => {
-            const story = payload?.剧情 || {};
-            const chapter = story?.当前章节 || {};
-            const preview = story?.下一章预告 || {};
-            const archives = Array.isArray(story?.历史卷宗) ? story.历史卷宗 : [];
-            const storyVarsRaw = (story?.剧情变量 && typeof story.剧情变量 === 'object' && !Array.isArray(story.剧情变量))
-                ? story.剧情变量
-                : {};
-
-            const 纯文本 = (value: any, fallback: string = '') => (
-                typeof value === 'string' ? value : fallback
-            );
-
-            const normalizedStory: 剧情系统结构 = {
-                当前章节: {
-                    ID: 纯文本(chapter?.ID),
-                    序号: typeof chapter?.序号 === 'number' ? chapter.序号 : 1,
-                    标题: 纯文本(chapter?.标题),
-                    背景故事: 纯文本(chapter?.背景故事),
-                    主要矛盾: 纯文本(chapter?.主要矛盾),
-                    结束条件: Array.isArray(chapter?.结束条件)
-                        ? chapter.结束条件.map((cond: any) => ({
-                            类型: cond?.类型 === '时间' || cond?.类型 === '事件' || cond?.类型 === '变量' ? cond.类型 : '事件',
-                            描述: 纯文本(cond?.描述),
-                            判定值: Object.prototype.hasOwnProperty.call(cond || {}, '判定值')
-                                ? cond.判定值
-                                : null,
-                            对应变量键名: 纯文本(cond?.对应变量键名)
-                        }))
-                        : [],
-                    伏笔列表: Array.isArray(chapter?.伏笔列表)
-                        ? chapter.伏笔列表.map((item: any) => 纯文本(item)).filter((item: string) => item.length > 0)
-                        : []
-                },
-                下一章预告: {
-                    标题: 纯文本(preview?.标题),
-                    大纲: 纯文本(preview?.大纲)
-                },
-                历史卷宗: archives.map((arc: any) => ({
-                    标题: 纯文本(arc?.标题),
-                    结语: 纯文本(arc?.结语)
-                })),
-                剧情变量: Object.fromEntries(
-                    Object.entries(storyVarsRaw).filter(([, value]) => (
-                        typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string'
-                    ))
-                ) as Record<string, boolean | number | string>
-            };
+            const normalizedStory = 规范化剧情状态(payload?.剧情, payload?.环境);
 
             return `【剧情安排】\n${JSON.stringify(normalizedStory)}`;
         };
@@ -884,7 +937,7 @@ export const useGame = () => {
             设置玩家门派(openingBase.玩家门派);
             设置任务列表(openingBase.任务列表 || []);
             设置约定列表(openingBase.约定列表 || []);
-            设置剧情(openingBase.剧情);
+            设置剧情(规范化剧情状态(openingBase.剧情, openingBase.环境));
 
             // Reset other states
             设置记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
@@ -947,7 +1000,7 @@ export const useGame = () => {
                 任务列表: contextData.任务列表 || 任务列表,
                 约定列表: contextData.约定列表 || 约定列表,
                 当前地点: openingCurrentLocation,
-                剧情: contextData.剧情 || 剧情
+                剧情: 规范化剧情状态(contextData.剧情 || 剧情, openingEnv)
             };
             const openingContext = 构建系统提示词(
                 promptSnapshot,
@@ -1024,7 +1077,7 @@ export const useGame = () => {
                 社交: contextData.社交 || 社交,
                 世界: contextData.世界 || 世界,
                 战斗: contextData.战斗 || 战斗,
-                剧情: contextData.剧情 || 剧情
+                剧情: 规范化剧情状态(contextData.剧情 || 剧情, contextData.环境 || 环境)
             });
 
             const openingCanonicalTime = normalizeCanonicalGameTime(openingStateAfterCommands?.环境?.时间);
@@ -1097,7 +1150,7 @@ export const useGame = () => {
         let socialBuffer = baseState?.社交 || 社交;
         let worldBuffer = 规范化世界状态(baseState?.世界 || 世界);
         let battleBuffer = 规范化战斗状态(baseState?.战斗 || 战斗);
-        let storyBuffer = baseState?.剧情 || 剧情;
+        let storyBuffer = 规范化剧情状态(baseState?.剧情 || 剧情, envBuffer);
 
         if (Array.isArray(response.tavern_commands)) {
             response.tavern_commands.forEach(cmd => {
@@ -1113,14 +1166,16 @@ export const useGame = () => {
             battleBuffer = 战斗结束自动清空(battleBuffer, storyBuffer);
             charBuffer = 规范化角色物品容器映射(charBuffer);
             const mergedSocial = 规范化社交列表(socialBuffer);
+            const normalizedStory = 规范化剧情状态(storyBuffer, envBuffer);
 
             设置角色(charBuffer);
             设置环境(规范化环境信息(envBuffer));
             设置社交(mergedSocial);
             设置世界(规范化世界状态(worldBuffer));
             设置战斗(battleBuffer);
-            设置剧情(storyBuffer);
+            设置剧情(normalizedStory);
             socialBuffer = mergedSocial;
+            storyBuffer = normalizedStory;
         }
 
         return {
@@ -1129,7 +1184,7 @@ export const useGame = () => {
             社交: 规范化社交列表(socialBuffer),
             世界: 规范化世界状态(worldBuffer),
             战斗: battleBuffer,
-            剧情: storyBuffer
+            剧情: 规范化剧情状态(storyBuffer, envBuffer)
         };
     };
 
@@ -1171,7 +1226,17 @@ export const useGame = () => {
             prompts,
             normalizedMem,
             社交,
-            { 角色, 环境: 规范化环境信息(环境), 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 规范化环境信息(环境)?.具体地点 || '', 剧情 },
+            {
+                角色,
+                环境: 规范化环境信息(环境),
+                世界,
+                战斗,
+                玩家门派,
+                任务列表,
+                约定列表,
+                当前地点: 规范化环境信息(环境)?.具体地点 || '',
+                剧情: 规范化剧情状态(剧情, 环境)
+            },
             recallContextMode
                 ? { 禁用中期长期记忆: true, 禁用短期记忆: true }
                 : undefined
@@ -1356,7 +1421,17 @@ export const useGame = () => {
                 prompts,
                 updatedMemSys,
                 社交,
-                { 角色, 环境: 规范化环境信息(环境), 世界, 战斗, 玩家门派, 任务列表, 约定列表, 当前地点: 规范化环境信息(环境)?.具体地点 || '', 剧情 },
+                {
+                    角色,
+                    环境: 规范化环境信息(环境),
+                    世界,
+                    战斗,
+                    玩家门派,
+                    任务列表,
+                    约定列表,
+                    当前地点: 规范化环境信息(环境)?.具体地点 || '',
+                    剧情: 规范化剧情状态(剧情, 环境)
+                },
                 recallContextActiveForMain
                     ? { 禁用中期长期记忆: true, 禁用短期记忆: true }
                     : undefined
@@ -1530,7 +1605,7 @@ export const useGame = () => {
             玩家门派: 玩家门派,
             任务列表: 任务列表,
             约定列表: 约定列表,
-            剧情: 剧情,
+            剧情: 规范化剧情状态(剧情, 环境),
             记忆系统: 记忆系统,
             游戏设置: gameConfig,
             记忆配置: memoryConfig,
@@ -1560,7 +1635,10 @@ export const useGame = () => {
         设置玩家门派(save.玩家门派 || 创建空门派状态());
         设置任务列表(save.任务列表 || []);
         设置约定列表(save.约定列表 || []);
-        设置剧情(save.剧情 || 创建开场空白剧情());
+        设置剧情(规范化剧情状态(
+            save.剧情 || 创建开场空白剧情(),
+            save.环境信息 || 创建开场空白环境()
+        ));
         设置历史记录(save.历史记录);
         设置记忆系统(规范化记忆系统(save.记忆系统));
         
