@@ -20,12 +20,13 @@ import {
     剧情系统结构,
     装备槽位
 } from '../types';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as dbService from '../services/dbService';
 import * as aiService from '../services/aiService';
 import { applyStateCommand } from '../utils/stateHelpers';
 import { parseJsonWithRepair } from '../utils/jsonRepair';
 import { useGameState } from './useGameState';
+import { 规范化接口设置, 获取主剧情接口配置, 接口配置是否可用 } from '../utils/apiConfig';
 
 type 回合快照结构 = {
     玩家输入: string;
@@ -126,6 +127,16 @@ export const useGame = () => {
         腰部: '无',
         坐骑: '无'
     };
+    const 默认金钱模板 = {
+        金元宝: 0,
+        银子: 0,
+        铜钱: 0
+    };
+    const 规范化货币数值 = (value: unknown): number => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, Math.floor(n));
+    };
     const 取地点片段 = (raw: unknown): string => (typeof raw === 'string' ? raw.trim() : '');
     const 去除具体地点冗余 = (specificRaw: string, smallRaw: string): string => {
         const specific = 取地点片段(specificRaw);
@@ -149,18 +160,38 @@ export const useGame = () => {
         const 小地点 = 取地点片段(source?.小地点) || 拼接遗留地点(source?.村);
         const 原始具体地点 = 取地点片段(source?.具体地点);
         const 具体地点 = 去除具体地点冗余(原始具体地点, 小地点);
+        const rawFestival = source?.节日 && typeof source.节日 === 'object' ? source.节日 : null;
+        const rawFestivalLegacy = source?.节日信息 && typeof source.节日信息 === 'object' ? source.节日信息 : null;
+        const rawFestivalName = typeof source?.节日 === 'string' ? source.节日.trim() : '';
+        const festivalSource = rawFestival || rawFestivalLegacy;
+        const 节日 = festivalSource
+            ? {
+                名称: typeof festivalSource?.名称 === 'string'
+                    ? festivalSource.名称.trim()
+                    : rawFestivalName,
+                简介: typeof festivalSource?.简介 === 'string'
+                    ? festivalSource.简介.trim()
+                    : typeof festivalSource?.描述 === 'string'
+                        ? festivalSource.描述.trim()
+                        : '',
+                效果: typeof festivalSource?.效果 === 'string' ? festivalSource.效果.trim() : ''
+            }
+            : (rawFestivalName ? { 名称: rawFestivalName, 简介: '', 效果: '' } : null);
+        const 原始游戏天数 = typeof source?.游戏天数 === 'number' && Number.isFinite(source.游戏天数)
+            ? source.游戏天数
+            : typeof source?.日期 === 'number' && Number.isFinite(source.日期)
+                ? source.日期
+                : 1;
         return {
             时间: typeof source?.时间 === 'string' ? source.时间 : '',
             大地点,
             中地点,
             小地点,
             具体地点,
-            节日: typeof source?.节日 === 'string' ? source.节日 : '',
+            节日,
             天气: typeof source?.天气 === 'string' ? source.天气 : '',
             环境描述: typeof source?.环境描述 === 'string' ? source.环境描述 : '',
-            日期: typeof source?.日期 === 'number' && Number.isFinite(source.日期)
-                ? Math.max(1, Math.floor(source.日期))
-                : 1
+            游戏天数: Math.max(1, Math.floor(原始游戏天数))
         };
     };
     const 构建完整地点文本 = (env: any): string => {
@@ -205,6 +236,17 @@ export const useGame = () => {
         if (typeof (role as any).外貌 !== 'string' || !(role as any).外貌.trim()) {
             (role as any).外貌 = '相貌平常，衣着朴素。';
         }
+        const rawMoney = (role as any).金钱 && typeof (role as any).金钱 === 'object' ? (role as any).金钱 : {};
+        const legacyMoney = {
+            金元宝: (role as any).金元宝,
+            银子: (role as any).银子,
+            铜钱: (role as any).铜钱
+        };
+        (role as any).金钱 = {
+            金元宝: 规范化货币数值(rawMoney?.金元宝 ?? legacyMoney.金元宝 ?? 默认金钱模板.金元宝),
+            银子: 规范化货币数值(rawMoney?.银子 ?? legacyMoney.银子 ?? 默认金钱模板.银子),
+            铜钱: 规范化货币数值(rawMoney?.铜钱 ?? legacyMoney.铜钱 ?? 默认金钱模板.铜钱)
+        };
 
         const rawEquip = role?.装备 && typeof role.装备 === 'object' ? role.装备 : ({} as any);
         role.装备 = { ...默认装备模板, ...(rawEquip as any) };
@@ -805,10 +847,107 @@ export const useGame = () => {
         }
         return `${year}:${month.toString().padStart(2, '0')}:${day.toString().padStart(2, '0')}:${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
     };
+    const 提取时间月日 = (input?: string): { month: number; day: number } | null => {
+        const canonical = normalizeCanonicalGameTime(input);
+        if (!canonical) return null;
+        const m = canonical.match(/^\d{1,6}:(\d{2}):(\d{2}):/);
+        if (!m) return null;
+        const month = Number(m[1]);
+        const day = Number(m[2]);
+        if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
+        return { month, day };
+    };
+
+    // Frontend联动：当游戏时间命中节日设定时，自动同步“名称/简介/效果”到环境
+    useEffect(() => {
+        const md = 提取时间月日(环境?.时间);
+        const matched = md ? festivals.find(f => f.月 === md.month && f.日 === md.day) : undefined;
+        const nextFestival = matched
+            ? {
+                名称: matched.名称?.trim() || '',
+                简介: matched.描述?.trim() || '',
+                效果: matched.效果?.trim() || ''
+            }
+            : null;
+
+        const currentFestival = 环境?.节日 || null;
+        const sameFestival = !!(
+            (!currentFestival && !nextFestival) ||
+            (
+                currentFestival &&
+                nextFestival &&
+                (currentFestival.名称 || '') === (nextFestival.名称 || '') &&
+                (currentFestival.简介 || '') === (nextFestival.简介 || '') &&
+                (currentFestival.效果 || '') === (nextFestival.效果 || '')
+            )
+        );
+
+        if (sameFestival) return;
+        设置环境(prev => ({
+            ...prev,
+            节日: nextFestival
+        }));
+    }, [环境?.时间, 环境?.节日, festivals, 设置环境]);
+
+    const 即时短期分隔标记 = '\n<<SHORT_TERM_SYNC>>\n';
+
+    const 拆分即时与短期 = (entry: string): { 即时内容: string; 短期摘要: string } => {
+        const raw = (entry || '').trim();
+        if (!raw) return { 即时内容: '', 短期摘要: '' };
+        const splitAt = raw.lastIndexOf(即时短期分隔标记);
+        if (splitAt < 0) return { 即时内容: raw, 短期摘要: '' };
+        return {
+            即时内容: raw.slice(0, splitAt).trim(),
+            短期摘要: raw.slice(splitAt + 即时短期分隔标记.length).trim()
+        };
+    };
+
+    const 格式化回忆名称 = (round: number): string => `【回忆${String(Math.max(1, round)).padStart(3, '0')}】`;
+
+    const 从即时记忆推导回忆档案 = (即时记忆: string[]) => {
+        return 即时记忆
+            .map((item, index) => {
+                const { 即时内容, 短期摘要 } = 拆分即时与短期(item);
+                const hasContent = 即时内容.trim().length > 0 || 短期摘要.trim().length > 0;
+                if (!hasContent) return null;
+                const round = index + 1;
+                return {
+                    名称: 格式化回忆名称(round),
+                    概括: 短期摘要.trim(),
+                    原文: 即时内容.trim(),
+                    回合: round,
+                    记录时间: '未知时间',
+                    时间戳: 0
+                };
+            })
+            .filter(Boolean) as 记忆系统结构['回忆档案'];
+    };
 
     const 规范化记忆系统 = (raw?: Partial<记忆系统结构> | null): 记忆系统结构 => {
+        const 即时记忆 = Array.isArray(raw?.即时记忆) ? [...raw!.即时记忆] : [];
+        const 回忆档案 = Array.isArray((raw as any)?.回忆档案)
+            ? (raw as any).回忆档案
+                .map((item: any, idx: number) => {
+                    if (!item || typeof item !== 'object') return null;
+                    const round = Number(item.回合);
+                    const normalizedRound = Number.isFinite(round) && round > 0 ? Math.floor(round) : idx + 1;
+                    return {
+                        名称: typeof item.名称 === 'string' && item.名称.trim()
+                            ? item.名称.trim()
+                            : 格式化回忆名称(normalizedRound),
+                        概括: typeof item.概括 === 'string' ? item.概括 : '',
+                        原文: typeof item.原文 === 'string' ? item.原文 : '',
+                        回合: normalizedRound,
+                        记录时间: typeof item.记录时间 === 'string' ? item.记录时间 : '未知时间',
+                        时间戳: typeof item.时间戳 === 'number' && Number.isFinite(item.时间戳) ? item.时间戳 : 0
+                    };
+                })
+                .filter(Boolean)
+            : 从即时记忆推导回忆档案(即时记忆);
+
         return {
-            即时记忆: Array.isArray(raw?.即时记忆) ? [...raw!.即时记忆] : [],
+            回忆档案,
+            即时记忆,
             短期记忆: Array.isArray(raw?.短期记忆) ? [...raw!.短期记忆] : [],
             中期记忆: Array.isArray(raw?.中期记忆) ? [...raw!.中期记忆] : [],
             长期记忆: Array.isArray(raw?.长期记忆) ? [...raw!.长期记忆] : []
@@ -895,24 +1034,11 @@ export const useGame = () => {
         return `${timeLabel} ${playerInput} -> ${summary}`;
     };
 
-    const 即时短期分隔标记 = '\n<<SHORT_TERM_SYNC>>\n';
-
     const 合并即时与短期 = (immediateEntry: string, shortEntry: string): string => {
         const full = immediateEntry.trim();
         const summary = shortEntry.trim();
         if (!summary) return full;
         return `${full}${即时短期分隔标记}${summary}`;
-    };
-
-    const 拆分即时与短期 = (entry: string): { 即时内容: string; 短期摘要: string } => {
-        const raw = (entry || '').trim();
-        if (!raw) return { 即时内容: '', 短期摘要: '' };
-        const splitAt = raw.lastIndexOf(即时短期分隔标记);
-        if (splitAt < 0) return { 即时内容: raw, 短期摘要: '' };
-        return {
-            即时内容: raw.slice(0, splitAt).trim(),
-            短期摘要: raw.slice(splitAt + 即时短期分隔标记.length).trim()
-        };
     };
 
     const 写入四段记忆 = (memoryBase: 记忆系统结构, immediateEntry: string, shortEntry: string): 记忆系统结构 => {
@@ -924,6 +1050,18 @@ export const useGame = () => {
 
         if (full) next.即时记忆.push(合并即时与短期(full, summary));
         else if (summary) next.短期记忆.push(summary);
+
+        if (full || summary) {
+            const round = (next.回忆档案?.length || 0) + 1;
+            next.回忆档案.push({
+                名称: 格式化回忆名称(round),
+                概括: summary,
+                原文: full,
+                回合: round,
+                记录时间: 环境?.时间 || '未知时间',
+                时间戳: Date.now()
+            });
+        }
 
         while (next.即时记忆.length > immediateLimit) {
             const shifted = next.即时记忆.shift();
@@ -1228,10 +1366,10 @@ ${anchor}
         中地点: '',
         小地点: '',
         具体地点: '',
-        节日: '',
+        节日: null,
         天气: '',
         环境描述: '',
-        日期: 1
+        游戏天数: 1
     });
 
     const 创建开场空白世界 = () => ({
@@ -1350,11 +1488,19 @@ ${anchor}
             const source = payload || {};
             const env = 规范化环境信息(source?.环境);
             const fullLocation = 构建完整地点文本(env);
+            const rawTime = typeof env?.时间 === 'string' ? env.时间.trim() : '';
+            const canonicalTime = rawTime ? (normalizeCanonicalGameTime(rawTime) || rawTime) : '';
+            const dateMatch = canonicalTime.match(/^(\d{1,6}):(\d{2}):(\d{2})/);
+            const 当前日期 = dateMatch ? `${dateMatch[1]}:${dateMatch[2]}:${dateMatch[3]}` : '未知日期';
+            const 当前节日 = env?.节日?.名称?.trim() || '平常日';
             return [
                 '【当前环境】',
-                `当前时间: ${typeof env?.时间 === 'string' && env.时间.trim() ? env.时间.trim() : '未知时间'}`,
+                `当前日期: ${当前日期}`,
                 `当前地点: ${fullLocation}`,
-                `环境数据: ${JSON.stringify(env)}`
+                `当前天气: ${env?.天气?.trim() || '未知天气'}`,
+                `当前环境: ${env?.环境描述?.trim() || '未知环境'}`,
+                `当前节日: ${当前节日}`,
+                `游戏天数: ${typeof env?.游戏天数 === 'number' && Number.isFinite(env.游戏天数) ? env.游戏天数 : 1}`
             ].join('\n');
         };
 
@@ -1570,8 +1716,9 @@ ${anchor}
         mode: 'all' | 'step',
         openingStreaming: boolean = true
     ) => {
-        if (!apiConfig.apiKey) {
-            alert("请先在设置中配置 API Key");
+        const currentApi = 获取主剧情接口配置(apiConfig);
+        if (!接口配置是否可用(currentApi)) {
+            alert("请先在设置中填写 API 地址/API Key，并选择主剧情使用模型");
             setShowSettings(true);
             return;
         }
@@ -1676,7 +1823,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const generatedWorldPrompt = await aiService.generateWorldData(
                 worldGenerationContext,
                 charData,
-                apiConfig,
+                currentApi,
                 openingStreaming
                     ? {
                         stream: openingStreaming,
@@ -1722,7 +1869,7 @@ ${enabledDifficultyPrompts || '未提供'}
             设置剧情(openingBase.剧情);
 
             // Reset other states
-            设置记忆系统({ 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
+            设置记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
 
             // Mode Handling
             if (mode === 'step') {
@@ -1760,7 +1907,7 @@ ${enabledDifficultyPrompts || '未提供'}
 3. **全量初始化硬约束**：本回合必须完成“当前引擎可写域”的完整初始化，且通过 \`tavern_commands\` 落地，禁止只叙事不改变量。
    - 特别说明：系统在开场前已清空大部分变量内容；除角色建档信息与 world_prompt 外，禁止依赖“现成默认值”。
 4. 可写域初始化标准（全部必须命中）：
-   - \`gameState.角色\`：按当前角色建档数据完整初始化（基础身份、六维、生存值、部位血量与状态、装备、物品列表、功法列表、经验与BUFF）。
+   - \`gameState.角色\`：按当前角色建档数据完整初始化（基础身份、六维、生存值、部位血量与状态、装备、物品列表、功法列表、经验、金钱与BUFF）。
      - \`物品列表\` 必须使用“最新容器结构”初始化：
        - 物品基础字段按当前项目定义写全：\`ID/名称/描述/类型/品质/重量(单位:斤)/占用空间/价值/当前耐久/最大耐久/词条列表/当前容器ID?/当前装备部位?\`。
        - 容器字段仅允许：\`容器属性={最大容量, 当前已用空间, 最大单物大小, 减重比例}\`；禁止写旧字段 \`容器属性.内容物\`。
@@ -1770,7 +1917,7 @@ ${enabledDifficultyPrompts || '未提供'}
        - 每个容器的 \`当前已用空间\` 必须与“指向该容器的物品占用空间总和”一致，禁止留空或与实际收纳不一致。
        - 若容器为软质袋类，需按当前已用空间同步其自身 \`占用空间\`（默认口径：空载=1，非空=\`max(1, ceil(当前已用空间*0.35))\`）。
      - \`称号\` 必须生成且非空：若建档已给定称号则沿用；若建档留空，需根据“出身背景 + 当前境界 + 开局处境”生成一个武侠风称号后写入。
-   - \`gameState.环境\`：完整初始化 时间(YYYY:MM:DD:HH:MM)、天气、节日、大地点/中地点/小地点/具体地点、日期(第几日)。
+   - \`gameState.环境\`：完整初始化 时间(YYYY:MM:DD:HH:MM)、天气、节日、大地点/中地点/小地点/具体地点、游戏天数(第几日)。
      - \`具体地点\` 仅写小地点内部的微观位置（如“茶棚内侧角桌”），禁止重复拼接小地点名称。
    - \`gameState.当前地点\`：必须显式初始化，并与 \`gameState.环境.具体地点\` 保持一致。
    - \`gameState.社交\`：按开场剧情实际出场角色初始化；不强制固定人数。未出场角色可不建档。
@@ -1835,7 +1982,7 @@ ${enabledDifficultyPrompts || '未提供'}
             const controller = new AbortController();
             abortControllerRef.current = controller;
 
-            const openingMem: 记忆系统结构 = { 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] };
+            const openingMem: 记忆系统结构 = { 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] };
             const openingEnv = 规范化环境信息(contextData?.环境 || 环境);
             const openingCurrentLocation = Object.prototype.hasOwnProperty.call(contextData || {}, '当前地点')
                 ? contextData.当前地点
@@ -1895,7 +2042,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 openingContext.systemPrompt,
                 openingScriptContext,
                 openingPrompt,
-                apiConfig,
+                currentApi,
                 controller.signal,
                 useStreaming
                     ? {
@@ -2137,15 +2284,16 @@ ${enabledDifficultyPrompts || '未提供'}
     // --- Core Send Logic ---
     const handleSend = async (content: string, isStreaming: boolean = true) => {
         if (!content.trim() || loading) return;
-        if (!apiConfig.apiKey) {
-            alert("请先在设置中配置 API Key");
+        const activeApi = 获取主剧情接口配置(apiConfig);
+        if (!接口配置是否可用(activeApi)) {
+            alert("请先在设置中填写 API 地址/API Key，并选择主剧情使用模型");
             setShowSettings(true);
             return;
         }
 
         // 1. Calculate Game Time String
         const canonicalTime = normalizeCanonicalGameTime(环境.时间);
-        const currentGameTime = canonicalTime || 环境.时间 || `第${环境.日期 || 1}日`;
+        const currentGameTime = canonicalTime || 环境.时间 || `第${环境.游戏天数 || 1}日`;
         const sendInput = content.trim();
         const historyBeforeSend = [...历史记录];
         const memBeforeSend = 规范化记忆系统(记忆系统);
@@ -2220,7 +2368,7 @@ ${enabledDifficultyPrompts || '未提供'}
                 builtContext.systemPrompt,
                 contextImmediate,
                 sendInput,
-                apiConfig,
+                activeApi,
                 controller.signal,
                 isStreaming
                     ? {
@@ -2318,8 +2466,9 @@ ${enabledDifficultyPrompts || '未提供'}
     // --- Persistence ---
 
     const saveSettings = async (newConfig: 接口设置结构) => {
-        setApiConfig(newConfig);
-        await dbService.保存设置('api_settings', newConfig);
+        const normalized = 规范化接口设置(newConfig);
+        setApiConfig(normalized);
+        await dbService.保存设置('api_settings', normalized);
     };
     const saveVisualSettings = async (newConfig: 视觉设置结构) => {
         setVisualConfig(newConfig);

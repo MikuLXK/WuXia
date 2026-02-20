@@ -134,7 +134,7 @@ export const applyStateCommand = (
         }
         
         if (key.endsWith('.记忆') && typeof value === 'object' && !value.时间) {
-             value.时间 = `${newEnv.日期}日 ${newEnv.时间}`; 
+             value.时间 = `${newEnv.游戏天数}日 ${newEnv.时间}`; 
         }
         
         arrayToPush.push(value);

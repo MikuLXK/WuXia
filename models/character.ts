@@ -22,6 +22,12 @@ export interface 角色装备 {
     坐骑: string;
 }
 
+export interface 角色金钱 {
+    金元宝: number;
+    银子: number;
+    铜钱: number;
+}
+
 export interface 角色数据结构 {
     姓名: string;
     性别: '男' | '女'; // New
@@ -40,6 +46,7 @@ export interface 角色数据结构 {
     所属门派ID: string; // "none" 为江湖散人
     门派职位: string;
     门派贡献: number;
+    金钱: 角色金钱;
 
     // 生存状态
     当前精力: number;

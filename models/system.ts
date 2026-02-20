@@ -10,10 +10,38 @@ import { 任务结构, 约定结构 } from './task';
 import { 剧情系统结构 } from './story';
 import { 战斗状态结构 } from './battle';
 
-export interface 接口设置结构 {
+export type 接口供应商类型 = 'gemini' | 'claude' | 'openai' | 'deepseek' | 'openai_compatible';
+
+export type OpenAI兼容方案类型 = 'custom' | 'openrouter' | 'siliconflow' | 'together' | 'groq';
+
+export interface 单接口配置结构 {
+    id: string;
+    名称: string;
+    供应商: 接口供应商类型;
+    兼容方案?: OpenAI兼容方案类型;
     baseUrl: string;
     apiKey: string;
     model: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface 功能模型占位配置结构 {
+    主剧情使用模型: string;
+    剧情回忆独立模型开关: boolean;
+    世界演变独立模型开关: boolean;
+    变量计算独立模型开关: boolean;
+    文章优化独立模型开关: boolean;
+    剧情回忆使用模型: string;
+    世界演变使用模型: string;
+    变量计算使用模型: string;
+    文章优化使用模型: string;
+}
+
+export interface 接口设置结构 {
+    activeConfigId: string | null;
+    configs: 单接口配置结构[];
+    功能模型占位: 功能模型占位配置结构;
 }
 
 export interface 视觉设置结构 {
@@ -38,10 +66,20 @@ export interface 记忆配置结构 {
 }
 
 export interface 记忆系统结构 {
+    回忆档案: 回忆条目结构[]; // 结构化回忆索引（用于互动历史存档）
     即时记忆: string[]; // 近期回合逐条记忆（第0回合开场也写入）
     短期记忆: string[]; // ["1024年3月1日 巳时: 初入稻香村", ...]
     中期记忆: string[];
     长期记忆: string[];
+}
+
+export interface 回忆条目结构 {
+    名称: string; // 例如：【回忆001】
+    概括: string; // 对应短期记忆
+    原文: string; // 对应即时记忆
+    回合: number; // 顺序号
+    记录时间: string;
+    时间戳: number;
 }
 
 export type ThemePreset = 'ink' | 'azure';

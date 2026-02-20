@@ -13,7 +13,7 @@ import ContextViewer from './ContextViewer';
 import { OrnateBorder } from '../../ui/decorations/OrnateBorder';
 import { 
     接口设置结构, 提示词结构, ThemePreset, 视觉设置结构, 节日结构, 聊天记录结构,
-    游戏设置结构, 记忆配置结构
+    游戏设置结构, 记忆配置结构, 记忆系统结构
 } from '../../../types';
 
 type ContextSection = {
@@ -45,6 +45,7 @@ interface Props {
     
     // Data Props
     history: 聊天记录结构[]; 
+    memorySystem?: 记忆系统结构;
     contextSnapshot?: ContextSnapshot;
 
     // Actions
@@ -64,7 +65,7 @@ interface Props {
 
 const SettingsModal: React.FC<Props> = ({ 
     activeTab, onTabChange, onClose,
-    apiConfig, visualConfig, gameConfig, memoryConfig, prompts, festivals, currentTheme, history, contextSnapshot,
+    apiConfig, visualConfig, gameConfig, memoryConfig, prompts, festivals, currentTheme, history, memorySystem, contextSnapshot,
     onSaveApi, onSaveVisual, onSaveGame, onSaveMemory, onUpdatePrompts, onUpdateFestivals, onThemeChange,
     onReturnToHome, isHome, requestConfirm
 }) => {
@@ -176,7 +177,7 @@ const SettingsModal: React.FC<Props> = ({
                             {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}
                             {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
                             {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} requestConfirm={requestConfirm} />} 
-                            {activeTab === 'history' && <HistoryViewer history={history} />} 
+                            {activeTab === 'history' && <HistoryViewer history={history} memorySystem={memorySystem} />} 
                             {activeTab === 'context' && contextSnapshot && (
                                 <ContextViewer
                                     snapshot={contextSnapshot}
@@ -202,7 +203,7 @@ const SettingsModal: React.FC<Props> = ({
                         {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}
                         {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
                         {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} requestConfirm={requestConfirm} />} 
-                        {activeTab === 'history' && <HistoryViewer history={history} />} 
+                        {activeTab === 'history' && <HistoryViewer history={history} memorySystem={memorySystem} />} 
                         {activeTab === 'context' && contextSnapshot && (
                             <ContextViewer
                                 snapshot={contextSnapshot}

@@ -33,7 +33,7 @@ export const 核心_输出格式: 提示词结构 = {
 ## 1. 必须生成指令的场景（按本项目变量）
 □ 时间推进/日期变化：
 - \`set gameState.环境.时间\`（格式必须 \`YYYY:MM:DD:HH:MM\`）
-- \`set gameState.环境.日期\`（仅“第几日”数字）
+- \`set gameState.环境.游戏天数\`（仅“第几日”数字）
 
 □ 位置变化：
 - \`set gameState.当前地点\`（快捷路径，映射环境.具体地点）
@@ -62,6 +62,10 @@ export const 核心_输出格式: 提示词结构 = {
 
 □ 角色属性变化（仅在叙事明确发生时）：
 - \`add gameState.角色.力量 X\`（或 敏捷/体质/根骨/悟性/福源）
+
+□ 金钱变化（交易/赏金/赔偿）：
+- 统一写 \`gameState.角色.金钱.金元宝|银子|铜钱\`
+- 示例：\`{"action":"add","key":"gameState.角色.金钱.铜钱","value":-240}\`
 
 □ 社交变化：
 - \`add gameState.社交[i].好感度 X\`
@@ -112,7 +116,7 @@ export const 核心_输出格式: 提示词结构 = {
 - 时间推进：
 \`{"action":"set","key":"gameState.环境.时间","value":"1024:03:02:07:30"}\`
 - 日期推进（第几日）：
-\`{"action":"set","key":"gameState.环境.日期","value":2}\`
+\`{"action":"set","key":"gameState.环境.游戏天数","value":2}\`
 - 地点变化：
 \`{"action":"set","key":"gameState.当前地点","value":"青牛县西市"}\`
 

@@ -1,5 +1,6 @@
 
-import { 接口设置结构, GameResponse } from '../types';
+import { GameResponse } from '../types';
+import type { 当前可用接口结构 } from '../utils/apiConfig';
 import { parseJsonWithRepair } from '../utils/jsonRepair';
 
 interface StoryStreamOptions {
@@ -15,7 +16,7 @@ interface WorldStreamOptions {
 export const generateWorldData = async (
     worldContext: string,
     charData: any,
-    apiConfig: 接口设置结构,
+    apiConfig: 当前可用接口结构,
     streamOptions?: WorldStreamOptions
 ): Promise<string> => {
     if (!apiConfig.apiKey) throw new Error("Missing API Key");
@@ -172,7 +173,7 @@ export const generateStoryResponse = async (
     systemPrompt: string, 
     userContext: string, 
     playerInput: string,
-    apiConfig: 接口设置结构,
+    apiConfig: 当前可用接口结构,
     signal?: AbortSignal,
     streamOptions?: StoryStreamOptions,
     extraPrompt?: string

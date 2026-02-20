@@ -58,6 +58,7 @@ const MiniBodyPart: React.FC<{ name: string; current: number; max: number; statu
 }
 
 const LeftPanel: React.FC<Props> = ({ 角色 }) => {
+    const 金钱 = 角色.金钱 || { 金元宝: 0, 银子: 0, 铜钱: 0 };
     
     // Helper to map attributes for display
     const attributes = [
@@ -151,6 +152,10 @@ const LeftPanel: React.FC<Props> = ({ 角色 }) => {
                 <FlatBar label="精力" current={角色.当前精力} max={角色.最大精力} type="stamina" />
                 <FlatBar label="饱腹" current={角色.当前饱腹} max={角色.最大饱腹} type="food" />
                 <FlatBar label="水分" current={角色.当前口渴} max={角色.最大口渴} type="water" />
+            </div>
+            <div className="mb-3 shrink-0 border border-gray-800/60 bg-black/30 px-2 py-1.5 text-[9px] flex items-center justify-between font-mono text-gray-300">
+                <span className="text-gray-500">钱财</span>
+                <span>元宝 {金钱.金元宝} / 银 {金钱.银子} / 铜 {金钱.铜钱}</span>
             </div>
 
             {/* Body Status Section - Fully Expanded (No Scroll) */}

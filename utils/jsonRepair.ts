@@ -104,6 +104,40 @@ const trimIllegalTailPunctuation = (input: string): string => {
     return input.replace(/([}\]])[，。；;]+/g, '$1');
 };
 
+const endsInsideString = (input: string): boolean => {
+    let inString = false;
+    let escaped = false;
+
+    for (const ch of input) {
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch === '\\') {
+                escaped = true;
+            } else if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = true;
+        }
+    }
+
+    return inString;
+};
+
+const closeDanglingString = (input: string): string => {
+    if (!endsInsideString(input)) return input;
+    const tailMatch = input.match(/(\s*[}\]]+\s*)$/);
+    if (tailMatch && typeof tailMatch.index === 'number') {
+        const insertAt = tailMatch.index;
+        return `${input.slice(0, insertAt)}"${input.slice(insertAt)}`;
+    }
+    return `${input}"`;
+};
+
 const findPrevNonWhitespaceIndex = (text: string, from: number): number => {
     for (let i = Math.min(from, text.length - 1); i >= 0; i--) {
         if (!/\s/.test(text[i])) return i;
@@ -143,11 +177,20 @@ const repairMissingCommaByParseError = (input: string, errorMessage?: string): s
     return input;
 };
 
+const repairUnterminatedStringByParseError = (input: string, errorMessage?: string): string => {
+    if (!errorMessage) return input;
+    if (!/Unterminated string in JSON/i.test(errorMessage)) return input;
+    return closeDanglingString(input);
+};
+
 const errorGuidedRepair = (input: string, firstError?: string): string => {
     let text = input;
     let lastError = firstError;
     for (let i = 0; i < 3; i++) {
-        const next = repairMissingCommaByParseError(text, lastError);
+        let next = repairMissingCommaByParseError(text, lastError);
+        if (next === text) {
+            next = repairUnterminatedStringByParseError(text, lastError);
+        }
         if (next === text) break;
         text = next;
         const parsed = tryParse(text);
@@ -201,6 +244,11 @@ const normalizeBracketBalance = (input: string): string => {
             continue;
         }
         result += ch;
+    }
+
+    // If stream output ends inside a string literal, close the quote first.
+    if (inString) {
+        result += '"';
     }
 
     if (stack.length > 0) {
@@ -271,6 +319,7 @@ const repairJsonText = (input: string): string => {
     text = insertMissingCommasBetweenPairs(text);
     text = removeTrailingCommas(text);
     text = trimIllegalTailPunctuation(text);
+    text = closeDanglingString(text);
     text = normalizeBracketBalance(text);
     text = escapeRawLineBreaksInStrings(text);
     return text.trim();

@@ -293,6 +293,7 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, request
             // Defaults
             称号: "初出茅庐", 境界: "凡人",
             所属门派ID: "none", 门派职位: "无", 门派贡献: 0,
+            金钱: { 金元宝: 0, 银子: 0, 铜钱: 0 },
             当前精力: 100, 最大精力: 100,
             当前饱腹: 80, 最大饱腹: 100,
             当前口渴: 80, 最大口渴: 100,

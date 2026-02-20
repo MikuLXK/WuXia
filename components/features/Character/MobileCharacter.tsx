@@ -35,6 +35,7 @@ const BodyRow: React.FC<{ name: string; current: number; max: number }> = ({ nam
 };
 
 const MobileCharacter: React.FC<Props> = ({ character, onClose }) => {
+    const 金钱 = character.金钱 || { 金元宝: 0, 银子: 0, 铜钱: 0 };
     const attributes = [
         { key: '力', val: character.力量 },
         { key: '敏', val: character.敏捷 },
@@ -107,6 +108,9 @@ const MobileCharacter: React.FC<Props> = ({ character, onClose }) => {
                             <span className="px-2 py-1 bg-black/40 border border-gray-800 rounded text-gray-300">性别 {character.性别}</span>
                             <span className="px-2 py-1 bg-black/40 border border-gray-800 rounded text-gray-300">年龄 {character.年龄}</span>
                             <span className="px-2 py-1 bg-black/40 border border-gray-800 rounded text-gray-300 font-mono">负重 {character.当前负重}/{character.最大负重}</span>
+                            <span className="px-2 py-1 bg-black/40 border border-gray-800 rounded text-gray-300 font-mono">元宝 {金钱.金元宝}</span>
+                            <span className="px-2 py-1 bg-black/40 border border-gray-800 rounded text-gray-300 font-mono">银子 {金钱.银子}</span>
+                            <span className="px-2 py-1 bg-black/40 border border-gray-800 rounded text-gray-300 font-mono">铜钱 {金钱.铜钱}</span>
                         </div>
                     </div>
 

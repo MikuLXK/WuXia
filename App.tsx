@@ -451,6 +451,7 @@ const App: React.FC = () => {
                         festivals={state.festivals}
                         currentTheme={state.currentTheme}
                         history={state.历史记录}
+                        memorySystem={state.记忆系统}
                         contextSnapshot={contextSnapshot}
                         onSaveApi={actions.saveSettings}
                         onSaveVisual={actions.saveVisualSettings}
@@ -486,6 +487,7 @@ const App: React.FC = () => {
                         festivals={state.festivals}
                         currentTheme={state.currentTheme}
                         history={state.历史记录}
+                        memorySystem={state.记忆系统}
                         contextSnapshot={contextSnapshot}
                         onSaveApi={actions.saveSettings}
                         onSaveVisual={actions.saveVisualSettings}

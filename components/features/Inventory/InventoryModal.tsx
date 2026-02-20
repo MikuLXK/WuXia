@@ -1,30 +1,19 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { 角色数据结构 } from '../../../types';
-import { 游戏物品, 容器物品, 防具, 装备槽位 } from '../../../models/item';
+import { 游戏物品, 容器物品, 防具 } from '../../../models/item';
 
 interface Props {
     character: 角色数据结构;
     onClose: () => void;
 }
 
-const 装备槽位顺序: { key: 装备槽位; label: string }[] = [
-    { key: '头部', label: '头部' },
-    { key: '胸部', label: '身体' },
-    { key: '背部', label: '背负' },
-    { key: '腰部', label: '腰间' },
-    { key: '腿部', label: '下装' },
-    { key: '足部', label: '鞋履' },
-    { key: '手部', label: '护手' },
-    { key: '主武器', label: '主手' },
-    { key: '副武器', label: '副手' },
-    { key: '暗器', label: '暗器' },
-    { key: '坐骑', label: '坐骑' }
-];
-
 const InventoryModal: React.FC<Props> = ({ character, onClose }) => {
     const 未收纳视图ID = '__unstored__';
-    const 装备槽位集合 = useMemo(() => new Set(装备槽位顺序.map(s => s.key)), []);
+    const 装备槽位集合 = useMemo(() => new Set([
+        '头部', '胸部', '腿部', '手部', '足部',
+        '主武器', '副武器', '暗器', '背部', '腰部', '坐骑'
+    ]), []);
 
     // 1. Identify all containers available
     const containers = useMemo(() => {
@@ -40,7 +29,7 @@ const InventoryModal: React.FC<Props> = ({ character, onClose }) => {
         const out = new Map<string, string | null>();
         character.物品列表.forEach((item) => {
             const explicit = typeof item.当前容器ID === 'string' ? item.当前容器ID.trim() : '';
-            if (explicit && (containerIds.has(explicit) || 装备槽位集合.has(explicit as 装备槽位))) {
+            if (explicit && (containerIds.has(explicit) || 装备槽位集合.has(explicit))) {
                 out.set(item.ID, explicit);
                 return;
             }
@@ -49,36 +38,22 @@ const InventoryModal: React.FC<Props> = ({ character, onClose }) => {
         return out;
     }, [character.物品列表, containerIds, 装备槽位集合]);
 
-    const equippedContainers = useMemo(() => {
-        return 装备槽位顺序
-            .map(slot => {
-                const count = character.物品列表.filter(i => (itemContainerMap.get(i.ID) || null) === slot.key).length;
-                const rawEquip = character.装备?.[slot.key];
-                const hasEquipRef = typeof rawEquip === 'string' && rawEquip.trim().length > 0 && rawEquip !== '无';
-                if (!count && !hasEquipRef) return null;
-                return { ...slot, count };
-            })
-            .filter((slot): slot is { key: 装备槽位; label: string; count: number } => Boolean(slot));
-    }, [character.物品列表, character.装备, itemContainerMap]);
-
     const [selectedContainerId, setSelectedContainerId] = useState<string | null>(
-        equippedContainers[0]?.key || containers[0]?.ID || 未收纳视图ID
+        未收纳视图ID
     );
 
     useEffect(() => {
         const available = new Set([
             未收纳视图ID,
-            ...equippedContainers.map(c => c.key),
             ...containers.map(c => c.ID)
         ]);
         if (!selectedContainerId || !available.has(selectedContainerId)) {
-            setSelectedContainerId(equippedContainers[0]?.key || containers[0]?.ID || 未收纳视图ID);
+            setSelectedContainerId(未收纳视图ID);
         }
-    }, [containers, equippedContainers, selectedContainerId]);
+    }, [containers, selectedContainerId]);
 
     // 2. Get items in the selected container & Group them
     const currentContainer = character.物品列表.find(i => i.ID === selectedContainerId);
-    const currentEquipContainer = equippedContainers.find(s => s.key === selectedContainerId) || null;
     
     // Calculate display logic
     const { containerItems, containerCapacity, containerUsed, containerUsedDerived } = useMemo(() => {
@@ -168,30 +143,6 @@ const InventoryModal: React.FC<Props> = ({ character, onClose }) => {
                     {/* Left Column: Container Selection */}
                     <div className="w-[25%] border-r border-gray-800/50 flex flex-col bg-black/20">
                         <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2 mt-2">
-                            {equippedContainers.map(slot => {
-                                const isSelected = slot.key === selectedContainerId;
-                                return (
-                                    <button
-                                        key={slot.key}
-                                        onClick={() => setSelectedContainerId(slot.key)}
-                                        className={`w-full text-left p-4 border rounded-xl transition-all relative group overflow-hidden ${
-                                            isSelected
-                                            ? 'border-wuxia-gold/60 bg-wuxia-gold/5 shadow-inner'
-                                            : 'border-gray-800 bg-white/[0.02] hover:bg-white/[0.05] hover:border-gray-600'
-                                        }`}
-                                    >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className={`font-serif font-bold text-sm ${isSelected ? 'text-wuxia-gold' : 'text-gray-300'}`}>
-                                                装备位·{slot.label}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between text-[10px] text-gray-500 mt-2">
-                                            <span>当前装备槽位</span>
-                                            <span className="font-mono">{slot.count} 件</span>
-                                        </div>
-                                    </button>
-                                );
-                            })}
                             <button
                                 onClick={() => setSelectedContainerId(未收纳视图ID)}
                                 className={`w-full text-left p-4 border rounded-xl transition-all relative group overflow-hidden ${
@@ -243,9 +194,7 @@ const InventoryModal: React.FC<Props> = ({ character, onClose }) => {
                                 )
                             })}
                             {containers.length === 0 && (
-                                equippedContainers.length === 0 && (
-                                    <div className="text-center text-gray-600 text-xs py-10">无可用容器</div>
-                                )
+                                <div className="text-center text-gray-600 text-xs py-10">无可用容器</div>
                             )}
                         </div>
                     </div>
@@ -286,23 +235,11 @@ const InventoryModal: React.FC<Props> = ({ character, onClose }) => {
                             </div>
                         )}
 
-                        {currentEquipContainer && !currentContainer && selectedContainerId !== 未收纳视图ID && (
-                            <div className="h-16 border-b border-gray-800/50 flex items-center px-6 justify-between bg-black/20 shrink-0">
-                                <div className="flex flex-col">
-                                    <span className="text-wuxia-gold font-bold text-lg">装备位 · {currentEquipContainer.label}</span>
-                                    <span className="text-xs text-gray-400 mt-0.5">该部位上当前装备的物品</span>
-                                </div>
-                                <div className="text-xs text-gray-500 font-mono">
-                                    数量: {containerItems.reduce((sum, it) => sum + it.count, 0)}
-                                </div>
-                            </div>
-                        )}
-
                         {selectedContainerId === 未收纳视图ID && (
                             <div className="h-16 border-b border-gray-800/50 flex items-center px-6 justify-between bg-black/20 shrink-0">
                                 <div className="flex flex-col">
                                     <span className="text-wuxia-gold font-bold text-lg">未收纳物品</span>
-                                    <span className="text-xs text-gray-400 mt-0.5">这些物品没有有效的当前容器ID或当前装备部位</span>
+                                    <span className="text-xs text-gray-400 mt-0.5">这些物品当前未放入有效容器</span>
                                 </div>
                                 <div className="text-xs text-gray-500 font-mono">
                                     数量: {containerItems.reduce((sum, it) => sum + it.count, 0)}

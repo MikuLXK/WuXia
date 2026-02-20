@@ -102,8 +102,8 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
         return festivals.find(f => f.月 === month && f.日 === day);
     }, [festivals, month, day]);
 
-    const festivalDisplay = 环境?.节日 && 环境.节日 !== '无'
-        ? 环境.节日
+    const festivalDisplay = 环境?.节日?.名称?.trim()
+        ? 环境.节日.名称.trim()
         : (currentFestival ? currentFestival.名称 : '平常日');
     const environmentDisplay = (
         环境?.具体地点?.trim() ||
@@ -118,7 +118,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
         : environmentDisplay;
     const mobileRightLabel = mobileRightMode === 'journey' ? '历程' : '节日';
     const mobileRightValue = mobileRightMode === 'journey'
-        ? `第 ${环境?.日期 || 1} 天`
+        ? `第 ${环境?.游戏天数 || 1} 天`
         : festivalDisplay;
     const locationBadge = useMemo(() => {
         const rawSmall = typeof 环境?.小地点 === 'string' ? 环境.小地点.trim() : '';
@@ -236,7 +236,7 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
                             highlight={!!currentFestival}
                         />
                         <Divider />
-                        <TopItem label="历程" value={`第 ${环境.日期 || 1} 天`} />
+                        <TopItem label="历程" value={`第 ${环境.游戏天数 || 1} 天`} />
                     </div>
                 </div>
 

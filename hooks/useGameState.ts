@@ -25,6 +25,7 @@ import { 默认提示词 } from '../prompts';
 import { 默认节日 } from '../data/world'; 
 import * as dbService from '../services/dbService';
 import { THEMES } from '../styles/themes';
+import { 创建空接口设置, 规范化接口设置 } from '../utils/apiConfig';
 
 export const useGameState = () => {
     const 创建空角色 = (): 角色数据结构 => ({
@@ -40,6 +41,7 @@ export const useGameState = () => {
         所属门派ID: 'none',
         门派职位: '无',
         门派贡献: 0,
+        金钱: { 金元宝: 0, 银子: 0, 铜钱: 0 },
         当前精力: 0,
         最大精力: 0,
         当前饱腹: 0,
@@ -77,10 +79,10 @@ export const useGameState = () => {
         中地点: '',
         小地点: '',
         具体地点: '',
-        节日: '',
+        节日: null,
         天气: '',
         环境描述: '',
-        日期: 1
+        游戏天数: 1
     });
 
     const 创建空世界 = (): 世界数据结构 => ({
@@ -144,6 +146,7 @@ export const useGameState = () => {
 
     // New Game State for Memory
     const [记忆系统, 设置记忆系统] = useState<记忆系统结构>({
+        回忆档案: [],
         即时记忆: [],
         短期记忆: [],
         中期记忆: [],
@@ -175,7 +178,7 @@ export const useGameState = () => {
     const [activeTab, setActiveTab] = useState<'api' | 'prompt' | 'storage' | 'theme' | 'visual' | 'world' | 'game' | 'memory' | 'history' | 'context'>('api');
     
     // Config State
-    const [apiConfig, setApiConfig] = useState<接口设置结构>({ baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' });
+    const [apiConfig, setApiConfig] = useState<接口设置结构>(() => 创建空接口设置());
     const [visualConfig, setVisualConfig] = useState<视觉设置结构>({ 时间显示格式: '传统', 渲染层数: 30 });
     const 默认游戏设置: 游戏设置结构 = {
         字数要求: 450,
@@ -255,7 +258,11 @@ Activate the following requirements ONLY when generating a sexual scene:
                 const savedTheme = await dbService.读取设置('app_theme');
                 if (savedTheme && THEMES[savedTheme as ThemePreset]) setCurrentTheme(savedTheme as ThemePreset);
                 const savedApi = await dbService.读取设置('api_settings');
-                if (savedApi) setApiConfig(savedApi as 接口设置结构);
+                if (savedApi) {
+                    setApiConfig(规范化接口设置(savedApi));
+                } else {
+                    setApiConfig(创建空接口设置());
+                }
                 const savedPrompts = await dbService.读取设置('prompts');
                 if (savedPrompts) setPrompts(savedPrompts as 提示词结构[]);
                 const savedFestivals = await dbService.读取设置('festivals');
