@@ -15,8 +15,3 @@ export interface 战斗状态结构 {
     是否战斗中: boolean;
     敌方: 战斗敌方信息 | null;
 }
-
-export const 默认战斗状态: 战斗状态结构 = {
-    是否战斗中: false,
-    敌方: null
-};

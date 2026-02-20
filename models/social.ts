@@ -3,7 +3,7 @@ export type NPC性别 = '男' | '女';
 
 export interface NPC记忆 {
     内容: string;
-    时间: string; // 如 "1024年3月1日 巳时"
+    时间: string; // 结构化时间戳字符串
 }
 
 // 新增：子宫内射/使用记录

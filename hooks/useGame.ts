@@ -15,7 +15,6 @@ import {
     WorldGenConfig,
     世界数据结构,
     战斗状态结构,
-    默认战斗状态,
     详细门派结构,
     剧情系统结构
 } from '../types';
@@ -320,8 +319,8 @@ export const useGame = () => {
     };
 
     const 创建开场空白战斗 = (): 战斗状态结构 => ({
-        是否战斗中: 默认战斗状态.是否战斗中,
-        敌方: 默认战斗状态.敌方
+        是否战斗中: false,
+        敌方: null
     });
 
     const 规范化战斗状态 = (raw?: any): 战斗状态结构 => {
@@ -485,7 +484,6 @@ export const useGame = () => {
             玩家门派: sectState,
             任务列表: initialTasks,
             约定列表: initialAgreements,
-            当前地点: '',
             剧情: 创建开场空白剧情()
         };
     };
@@ -988,9 +986,6 @@ export const useGame = () => {
 
             const openingMem: 记忆系统结构 = { 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] };
             const openingEnv = 规范化环境信息(contextData?.环境 || 环境);
-            const openingCurrentLocation = Object.prototype.hasOwnProperty.call(contextData || {}, '当前地点')
-                ? contextData.当前地点
-                : (openingEnv?.具体地点 ?? '');
             const openingStatePayload = {
                 角色: contextData.角色 || 角色,
                 环境: openingEnv,
@@ -999,7 +994,6 @@ export const useGame = () => {
                 玩家门派: contextData.玩家门派 || 玩家门派,
                 任务列表: contextData.任务列表 || 任务列表,
                 约定列表: contextData.约定列表 || 约定列表,
-                当前地点: openingCurrentLocation,
                 剧情: 规范化剧情状态(contextData.剧情 || 剧情, openingEnv)
             };
             const openingContext = 构建系统提示词(
@@ -1234,7 +1228,6 @@ export const useGame = () => {
                 玩家门派,
                 任务列表,
                 约定列表,
-                当前地点: 规范化环境信息(环境)?.具体地点 || '',
                 剧情: 规范化剧情状态(剧情, 环境)
             },
             recallContextMode
@@ -1429,7 +1422,6 @@ export const useGame = () => {
                     玩家门派,
                     任务列表,
                     约定列表,
-                    当前地点: 规范化环境信息(环境)?.具体地点 || '',
                     剧情: 规范化剧情状态(剧情, 环境)
                 },
                 recallContextActiveForMain

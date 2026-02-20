@@ -8,6 +8,7 @@ import { 核心_数据格式 } from './core/data';
 import { 核心_记忆法则 } from './core/memory'; 
 import { 核心_世界观 } from './core/world'; // New
 import { 核心_思维链 } from './core/cot';   // New
+import { 核心_古代现实基本逻辑 } from './core/ancientRealism';
 import { 核心_剧情推动 } from './core/story';
 import { 核心_行动选项规范 } from './core/actionOptions';
 import { 核心_时间推进法则 } from './core/timeProgress';
@@ -40,6 +41,7 @@ import { 写作_风格 } from './writing/style';
 export const 默认提示词: 提示词结构[] = [
     // Core
     核心_世界观, // Added
+    核心_古代现实基本逻辑,
     核心_输出格式,
     核心_核心规则,
     核心_剧情推动,

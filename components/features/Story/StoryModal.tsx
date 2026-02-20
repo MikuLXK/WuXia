@@ -10,6 +10,12 @@ interface Props {
 const StoryModal: React.FC<Props> = ({ story, onClose }) => {
     const [revealNext, setRevealNext] = React.useState(false);
     const pressTimerRef = React.useRef<number | null>(null);
+    const 剧情规划列表 = [
+        { 标签: '近期剧情规划', 内容: story.近期剧情规划 },
+        { 标签: '中期剧情规划', 内容: story.中期剧情规划 },
+        { 标签: '长期剧情规划', 内容: story.长期剧情规划 }
+    ];
+    const 待触发事件列表 = Array.isArray(story.待触发事件) ? story.待触发事件 : [];
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] hidden md:flex items-center justify-center p-4 animate-fadeIn">
@@ -197,6 +203,53 @@ const StoryModal: React.FC<Props> = ({ story, onClose }) => {
                             </div>
 
                             {/* Section 4: Teaser */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="bg-gradient-to-br from-black/40 to-black/60 border border-gray-800 p-5 rounded-xl">
+                                    <h4 className="text-wuxia-gold font-bold text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                                        <span className="w-6 h-px bg-wuxia-gold"></span>
+                                        剧情规划
+                                    </h4>
+                                    <div className="space-y-3">
+                                        {剧情规划列表.map((plan) => (
+                                            <div key={plan.标签} className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                                                <div className="text-[10px] text-gray-500 tracking-[0.2em] mb-1">{plan.标签}</div>
+                                                <div className="text-xs text-gray-300 leading-6">
+                                                    {plan.内容?.trim() ? plan.内容 : '暂无规划'}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-black/40 to-black/60 border border-gray-800 p-5 rounded-xl">
+                                    <h4 className="text-wuxia-cyan font-bold text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                                        <span className="w-6 h-px bg-wuxia-cyan"></span>
+                                        待触发事件
+                                    </h4>
+                                    {待触发事件列表.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {待触发事件列表.map((event, idx) => (
+                                                <div key={`${event.名称}-${idx}`} className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                                                    <div className="text-sm font-serif font-bold text-gray-200">{event.名称 || `待触发事件 ${idx + 1}`}</div>
+                                                    <div className="text-xs text-gray-400 leading-6 mt-1">{event.描述 || '暂无描述'}</div>
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        <span className="text-[10px] bg-black/50 border border-gray-700 rounded px-2 py-0.5 text-gray-400">
+                                                            触发: {event['触发条件/时间'] || '未设定'}
+                                                        </span>
+                                                        <span className="text-[10px] bg-black/50 border border-gray-700 rounded px-2 py-0.5 text-gray-500">
+                                                            失效: {event.失效时间 || '未设定'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs text-gray-600 italic">暂无待触发事件。</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Section 5: Teaser */}
                             <div className="pt-8 border-t border-gray-800/30">
                                 <h4 className="text-gray-600 font-bold text-[10px] uppercase tracking-widest mb-3 text-center">下一章预告</h4>
                                 <div

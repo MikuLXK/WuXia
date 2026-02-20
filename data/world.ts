@@ -1,7 +1,7 @@
 
 import { 节日结构 } from '../models/system';
 
-export const 默认节日: 节日结构[] = [
+export const 节日列表: 节日结构[] = [
     {
         id: 'new_year',
         名称: '春节',

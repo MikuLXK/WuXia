@@ -19,11 +19,10 @@ import {
     记忆配置结构,
     记忆系统结构,
     战斗状态结构,
-    默认战斗状态
 } from '../types';
 import { 默认提示词 } from '../prompts';
 import { 默认中期转长期提示词, 默认短期转中期提示词, 默认额外系统提示词 } from '../prompts/runtime/defaults';
-import { 默认节日 } from '../data/world'; 
+import { 节日列表 } from '../data/world'; 
 import * as dbService from '../services/dbService';
 import { THEMES } from '../styles/themes';
 import { 创建空接口设置, 规范化接口设置 } from '../utils/apiConfig';
@@ -142,7 +141,10 @@ export const useGameState = () => {
     const [环境, 设置环境] = useState<环境信息结构>(() => 创建空环境());
     const [社交, 设置社交] = useState<NPC结构[]>([]);
     const [世界, 设置世界] = useState<世界数据结构>(() => 创建空世界()); 
-    const [战斗, 设置战斗] = useState<战斗状态结构>(() => ({ ...默认战斗状态 }));
+    const [战斗, 设置战斗] = useState<战斗状态结构>(() => ({
+        是否战斗中: false,
+        敌方: null
+    }));
     const [玩家门派, 设置玩家门派] = useState<详细门派结构>(() => 创建空门派());
     const [任务列表, 设置任务列表] = useState<任务结构[]>([]);
     const [约定列表, 设置约定列表] = useState<约定结构[]>([]);
@@ -228,7 +230,7 @@ export const useGameState = () => {
     const [memoryConfig, setMemoryConfig] = useState<记忆配置结构>(默认记忆配置);
 
     const [prompts, setPrompts] = useState<提示词结构[]>(默认提示词);
-    const [festivals, setFestivals] = useState<节日结构[]>(默认节日);
+    const [festivals, setFestivals] = useState<节日结构[]>(节日列表);
     const [currentTheme, setCurrentTheme] = useState<ThemePreset>('ink');
     const [contextSize, setContextSize] = useState(0);
 

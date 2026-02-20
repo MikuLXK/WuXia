@@ -9,6 +9,7 @@ export const 核心_核心规则: 提示词结构 = {
 [数据同步协议](铁律)
 text写什么, tavern_commands就必须更新什么。
 **严禁使用 update 指令。严禁使用 ambiguous commands。**
+**示例引用硬约束：本协议内全部示例仅用于结构演示，严禁照搬示例中的名称、地点、势力、年份、数值。**
 **仅允许以下 4 种原子操作：**
 
 1. **add (数值增减)**
@@ -19,7 +20,7 @@ text写什么, tavern_commands就必须更新什么。
 2. **set (设置/覆盖)**
    - 用途: 修改字符串、布尔值，或覆盖整个对象/数组元素。
    - 格式: \`{"action":"set", "key":"路径", "value": 任意值}\`
-   - 示例: \`set gameState.当前地点 "青牛县西市"\`
+   - 示例: \`set gameState.环境.具体地点 "<具体地点名>"\`
 
 3. **push (数组追加)**
    - 用途: 向数组末尾添加新元素（必须是完整对象）。
@@ -37,11 +38,10 @@ text写什么, tavern_commands就必须更新什么。
   - \`gameState.世界\`
   - \`gameState.战斗\`
   - \`gameState.剧情\`
-  - \`gameState.当前地点\`
 - NPC字段修改必须使用数组索引：\`gameState.社交[i].字段\`。
 - 玩家物品仅允许：\`gameState.角色.物品列表[i]\`。
 - 禁止不存在路径：\`gameState.背包\`、\`gameState.社交.姓名.字段\` 等。
-- 时间相关字段（如 \`gameState.环境.时间\` / \`gameState.环境.游戏天数\` / \`gameState.当前地点\`）必须使用 \`set\`。
+- 时间相关字段（如 \`gameState.环境.时间\` / \`gameState.环境.游戏天数\` / \`gameState.环境.具体地点\`）必须使用 \`set\`。
 - 环境地点层级使用：\`大地点/中地点/小地点/具体地点\`；其中 \`具体地点\` 仅写小地点内部位置，不得重复小地点名称。
 占位符规则(CRITICAL): 下文中的 {i} 是索引占位符，输出key必须替换为真实数字索引(0,1,2...)。
 
@@ -148,24 +148,24 @@ text写什么, tavern_commands就必须更新什么。
 示例输出格式:
 \`\`\`json
 {
-  "thinking_pre": "<thinking>候选命令预演：1) set gameState.环境.时间 前值1024:03:01:10:10->后值1024:03:01:10:40，合法；2) set gameState.当前地点 前值青牛县西市->后值青牛县西市茶摊，合法；3) add gameState.角色.当前精力 前值86->后值78，合法；4) add gameState.社交[0].好感度 前值12->后值15，合法；5) push gameState.社交[0].记忆 前值长度5->后值长度6，合法；6) set gameState.剧情.剧情变量.第一卷_获知血刀客行踪 前值false->后值true，合法。</thinking>",
+  "thinking_pre": "<thinking>候选命令预演：1) set gameState.环境.时间 前值YYYY:MM:DD:HH:MM->后值YYYY:MM:DD:HH:MM，合法；2) set gameState.环境.具体地点 前值<地点甲>->后值<地点乙>，合法；3) add gameState.角色.当前精力 前值86->后值78，合法；4) add gameState.社交[0].好感度 前值12->后值15，合法；5) push gameState.社交[0].记忆 前值长度5->后值长度6，合法；6) set gameState.剧情.剧情变量.线索已获取 前值false->后值true，合法。</thinking>",
   "logs": [
-    { "sender": "旁白", "text": "青牛县西市人潮涌动，茶摊下风声夹着马蹄尘。你压低斗笠坐到王大锤对面，把一枚旧铜钱推到桌沿。" },
-    { "sender": "王大锤", "text": "昨夜戌时，北门外三里坡见过血刀客的人影，带着两个黑衣随从。" },
-    { "sender": "【判定】", "text": "打探血刀客行踪｜成功｜触发对象 玩家:顾长风｜判定值 73/难度 55｜基础 +42 (悟性与江湖阅历)｜环境 +8 (西市消息密集)｜状态 +5 (精力充沛)｜幸运 +18" },
-    { "sender": "王大锤", "text": "他今夜多半会走盐道，你若要追，现在动身还来得及。" },
-    { "sender": "旁白", "text": "你记下方位与时辰，茶面微凉，摊外巡卒的铜铃声正一阵阵逼近。" }
+    { "sender": "旁白", "text": "集市喧闹未歇，你在临街摊位前停步，向线人递出问路银钱。" },
+    { "sender": "线人甲", "text": "昨夜有人在北侧驿道见到目标队伍，人数不多，行迹隐蔽。" },
+    { "sender": "【判定】", "text": "打探目标行踪｜成功｜触发对象 玩家:玩家名称｜判定值 73/难度 55｜基础 +42 (属性与经验)｜环境 +8 (信息密集场景)｜状态 +5 (精力充沛)｜幸运 +18" },
+    { "sender": "线人甲", "text": "若你现在动身，仍有机会在入夜前截住他们。" },
+    { "sender": "旁白", "text": "你记下方位与时段，准备下一步追查行动。" }
   ],
   "thinking_post": "<thinking>复核 logs：已发生打探情报与互动，允许扣除精力、提升好感、写入NPC记忆并推进剧情变量。无拾取/交易完成叙事，不写入物品列表。最终命令路径均存在且类型匹配，无越界操作。</thinking>",
   "tavern_commands": [
-    { "action": "set", "key": "gameState.环境.时间", "value": "1024:03:01:10:40" },
-    { "action": "set", "key": "gameState.当前地点", "value": "青牛县西市茶摊" },
+    { "action": "set", "key": "gameState.环境.时间", "value": "YYYY:MM:DD:HH:MM" },
+    { "action": "set", "key": "gameState.环境.具体地点", "value": "<地点乙>" },
     { "action": "add", "key": "gameState.角色.当前精力", "value": -8 },
     { "action": "add", "key": "gameState.社交[0].好感度", "value": 3 },
-    { "action": "push", "key": "gameState.社交[0].记忆", "value": { "内容": "王大锤在西市茶摊告知血刀客昨夜现身北门外三里坡。", "时间": "1024:03:01:10:40" } },
-    { "action": "set", "key": "gameState.剧情.剧情变量.第一卷_获知血刀客行踪", "value": true }
+    { "action": "push", "key": "gameState.社交[0].记忆", "value": { "内容": "线人提供了目标队伍的最新路径情报。", "时间": "YYYY:MM:DD:HH:MM" } },
+    { "action": "set", "key": "gameState.剧情.剧情变量.线索已获取", "value": true }
   ],
-  "shortTerm": "顾长风在青牛县西市茶摊与王大锤接头，成功打探到血刀客昨夜出现在北门外三里坡的情报。王大锤提醒血刀客今夜可能走盐道，顾长风据此锁定追踪方向。"
+  "shortTerm": "玩家在据点与线人接头，成功获取目标队伍最新行踪，并据此确定下一步追查方向。"
 }
 \`\`\`
 </数据同步协议>

@@ -9,6 +9,12 @@ interface Props {
 const MobileStory: React.FC<Props> = ({ story, onClose }) => {
     const [revealNext, setRevealNext] = React.useState(false);
     const pressTimerRef = React.useRef<number | null>(null);
+    const 剧情规划列表 = [
+        { 标签: '近期剧情规划', 内容: story.近期剧情规划 },
+        { 标签: '中期剧情规划', 内容: story.中期剧情规划 },
+        { 标签: '长期剧情规划', 内容: story.长期剧情规划 }
+    ];
+    const 待触发事件列表 = Array.isArray(story.待触发事件) ? story.待触发事件 : [];
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-3 md:hidden animate-fadeIn">
@@ -101,6 +107,42 @@ const MobileStory: React.FC<Props> = ({ story, onClose }) => {
                                 <div className="text-[11px] text-gray-600 italic">尚无过往之事。</div>
                             )}
                         </div>
+                    </div>
+
+                    <div className="bg-black/40 border border-gray-800 rounded-xl p-4">
+                        <div className="text-[10px] text-wuxia-gold/70 tracking-[0.3em] mb-2">剧情规划</div>
+                        <div className="space-y-2">
+                            {剧情规划列表.map((plan) => (
+                                <div key={plan.标签} className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                                    <div className="text-[10px] text-gray-500 mb-1">{plan.标签}</div>
+                                    <div className="text-[11px] text-gray-300 leading-5">
+                                        {plan.内容?.trim() ? plan.内容 : '暂无规划'}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-black/40 border border-gray-800 rounded-xl p-4">
+                        <div className="text-[10px] text-wuxia-cyan/80 tracking-[0.3em] mb-2">待触发事件</div>
+                        {待触发事件列表.length > 0 ? (
+                            <div className="space-y-2">
+                                {待触发事件列表.map((event, idx) => (
+                                    <div key={`${event.名称}-${idx}`} className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                                        <div className="text-[12px] text-gray-200 font-serif font-bold">
+                                            {event.名称 || `待触发事件 ${idx + 1}`}
+                                        </div>
+                                        <div className="text-[11px] text-gray-400 mt-1">{event.描述 || '暂无描述'}</div>
+                                        <div className="mt-2 space-y-1">
+                                            <div className="text-[10px] text-gray-500">触发: {event['触发条件/时间'] || '未设定'}</div>
+                                            <div className="text-[10px] text-gray-600">失效: {event.失效时间 || '未设定'}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-[11px] text-gray-600 italic">暂无待触发事件。</div>
+                        )}
                     </div>
 
                     <div className="bg-black/40 border border-gray-800 rounded-xl p-4 text-center">

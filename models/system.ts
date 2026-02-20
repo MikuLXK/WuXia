@@ -71,7 +71,7 @@ export interface 记忆配置结构 {
 export interface 记忆系统结构 {
     回忆档案: 回忆条目结构[]; // 结构化回忆索引（用于互动历史存档）
     即时记忆: string[]; // 近期回合逐条记忆（第0回合开场也写入）
-    短期记忆: string[]; // ["1024年3月1日 巳时: 初入稻香村", ...]
+    短期记忆: string[]; // 短期摘要记忆条目
     中期记忆: string[];
     长期记忆: string[];
 }
@@ -91,7 +91,7 @@ export interface 聊天记录结构 {
     role: 'user' | 'assistant' | 'system';
     content: string;
     timestamp: number;
-    gameTime?: string; // e.g. "1024年3月1日 巳时"
+    gameTime?: string; // 结构化时间戳字符串
     [key: string]: any; // Allow extensibility for structuredResponse etc.
 }
 

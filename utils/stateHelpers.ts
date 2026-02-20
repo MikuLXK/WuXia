@@ -23,10 +23,7 @@ export const applyStateCommand = (
     let targetObj: any = null;
     let path = "";
 
-    if (key === "gameState.当前地点") {
-        targetObj = newEnv;
-        path = "具体地点";
-    } else if (key.startsWith("gameState.角色")) {
+    if (key.startsWith("gameState.角色")) {
         targetObj = newChar;
         path = key.replace(/^gameState\.角色\.?/, "");
         if (!path && action === 'set') {

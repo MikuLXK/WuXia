@@ -113,13 +113,16 @@ const TopBar: React.FC<Props> = ({ 环境, timeFormat, festivals = [] }) => {
         }
         return '未知';
     }, [环境]);
-    const environmentDisplay = (
-        环境?.具体地点?.trim() ||
-        环境?.小地点?.trim() ||
-        环境?.中地点?.trim() ||
-        环境?.大地点?.trim() ||
-        '风起云涌'
-    );
+    const environmentDisplay = useMemo(() => {
+        const envVar = 环境?.环境变量;
+        if (envVar && typeof envVar === 'object') {
+            const 名称 = typeof envVar?.名称 === 'string' ? envVar.名称.trim() : '';
+            const 描述 = typeof envVar?.描述 === 'string' ? envVar.描述.trim() : '';
+            const 效果 = typeof envVar?.效果 === 'string' ? envVar.效果.trim() : '';
+            return 名称 || 描述 || 效果 || '无';
+        }
+        return '无';
+    }, [环境?.环境变量]);
     const mobileLeftLabel = mobileLeftMode === 'weather' ? '天气' : '环境';
     const mobileLeftValue = mobileLeftMode === 'weather'
         ? weatherDisplay

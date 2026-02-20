@@ -1,6 +1,6 @@
 // --- 基础定义 ---
 
-// 严格时间格式: YYYY:MM:DD:HH:MM (例如 1024:03:01:14:00)
+// 严格时间格式: YYYY:MM:DD:HH:MM (例如 YYYY:MM:DD:HH:MM)
 export type 游戏时间格式 = string;
 
 // --- 活跃NPC (后台模拟) ---
