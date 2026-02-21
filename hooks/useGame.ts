@@ -932,23 +932,23 @@ export const useGame = () => {
             setPrompts(finalPrompts);
             await dbService.保存设置('prompts', finalPrompts);
 
-            // Initialize opening base state (full runtime initialization happens in opening story)
+            // Build local opening base state.
+            // 注意：all 模式下不提前写入前端状态，全部交由开场 tavern_commands 落地。
             const openingBase = 创建开场基础状态(charData, worldConfig);
-            设置角色(规范化角色物品容器映射(openingBase.角色));
-            设置环境(规范化环境信息(openingBase.环境));
-            设置社交(规范化社交列表(openingBase.社交));
-            设置世界(openingBase.世界);
-            设置战斗(openingBase.战斗);
-            设置玩家门派(openingBase.玩家门派);
-            设置任务列表(openingBase.任务列表 || []);
-            设置约定列表(openingBase.约定列表 || []);
-            设置剧情(规范化剧情状态(openingBase.剧情, openingBase.环境));
-
-            // Reset other states
-            设置记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
 
             // Mode Handling
             if (mode === 'step') {
+                // step 模式用于手动初始化，仍需先把空白基态写入前端。
+                设置角色(规范化角色物品容器映射(openingBase.角色));
+                设置环境(规范化环境信息(openingBase.环境));
+                设置社交(规范化社交列表(openingBase.社交));
+                设置世界(openingBase.世界);
+                设置战斗(openingBase.战斗);
+                设置玩家门派(openingBase.玩家门派);
+                设置任务列表(openingBase.任务列表 || []);
+                设置约定列表(openingBase.约定列表 || []);
+                设置剧情(规范化剧情状态(openingBase.剧情, openingBase.环境));
+                设置记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
                 设置历史记录([]);
                 setView('game');
                 setLoading(false);
@@ -1113,7 +1113,14 @@ export const useGame = () => {
                 || "未知时间";
             const openingImmediateEntry = 构建即时记忆条目(openingTime, '', aiData, { 省略玩家输入: true });
             const openingShortEntry = 构建短期记忆条目(openingTime, '开局生成', aiData);
-            设置记忆系统(prev => 写入四段记忆(规范化记忆系统(prev), openingImmediateEntry, openingShortEntry));
+            const openingFreshMemory: 记忆系统结构 = {
+                回忆档案: [],
+                即时记忆: [],
+                短期记忆: [],
+                中期记忆: [],
+                长期记忆: []
+            };
+            设置记忆系统(写入四段记忆(规范化记忆系统(openingFreshMemory), openingImmediateEntry, openingShortEntry));
 
             const newAiMsg: 聊天记录结构 = { 
                 role: 'assistant', 
