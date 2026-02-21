@@ -74,6 +74,20 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                 </div>
             </div>
 
+            <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <div className="text-sm text-wuxia-cyan font-bold">COT伪装历史消息注入</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后，在发送本轮玩家输入前会追加一条伪装历史消息，用于强化思考段输出习惯。</div>
+                    </div>
+                    <ToggleSwitch
+                        checked={form.启用COT伪装注入 !== false}
+                        onChange={(next) => setForm({ ...form, 启用COT伪装注入: next })}
+                        ariaLabel="切换COT伪装历史消息注入"
+                    />
+                </div>
+            </div>
+
             <div className="space-y-2">
                 <label className="text-sm text-wuxia-cyan font-bold">额外要求提示词 (Custom Prompt)</label>
                 <textarea 

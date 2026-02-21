@@ -14,11 +14,14 @@ export type 接口供应商类型 = 'gemini' | 'claude' | 'openai' | 'deepseek' 
 
 export type OpenAI兼容方案类型 = 'custom' | 'openrouter' | 'siliconflow' | 'together' | 'groq';
 
+export type 请求协议覆盖类型 = 'auto' | 'openai' | 'gemini' | 'claude' | 'deepseek';
+
 export interface 单接口配置结构 {
     id: string;
     名称: string;
     供应商: 接口供应商类型;
     兼容方案?: OpenAI兼容方案类型;
+    协议覆盖?: 请求协议覆盖类型;
     baseUrl: string;
     apiKey: string;
     model: string;
@@ -57,6 +60,7 @@ export interface 游戏设置结构 {
     字数要求: number; // Minimum logs body length
     叙事人称: '第一人称' | '第二人称' | '第三人称';
     启用行动选项: boolean; // Whether to require action_options output
+    启用COT伪装注入: boolean; // Inject pseudo historical COT message before latest user input
     额外提示词: string; // Custom prompt injected at the end
 }
 

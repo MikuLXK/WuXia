@@ -3,6 +3,7 @@ import {
     接口设置结构,
     接口供应商类型,
     OpenAI兼容方案类型,
+    请求协议覆盖类型,
     功能模型占位配置结构,
     单接口配置结构
 } from '../../../types';
@@ -11,6 +12,7 @@ import ToggleSwitch from '../../ui/ToggleSwitch';
 import {
     创建接口配置模板,
     OpenAI兼容方案预设,
+    请求协议覆盖标签,
     供应商标签,
     规范化接口设置
 } from '../../../utils/apiConfig';
@@ -32,6 +34,7 @@ type 功能模型行 = {
 };
 
 const providerOptions: 接口供应商类型[] = ['gemini', 'claude', 'openai', 'deepseek', 'openai_compatible'];
+const 协议覆盖选项: 请求协议覆盖类型[] = ['auto', 'openai', 'gemini', 'claude', 'deepseek'];
 
 const 功能模型行配置: 功能模型行[] = [
     { id: 'main', modelKey: '主剧情使用模型', label: '主剧情使用模型（必选）', hint: '请先获取列表后选择主剧情模型' },
@@ -296,6 +299,22 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                                         disabled
                                         className="w-full bg-black/40 border border-gray-700 p-3 text-gray-400 rounded-md"
                                     />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm text-wuxia-cyan font-bold">请求协议覆盖</label>
+                                <select
+                                    value={activeConfig.协议覆盖 || 'auto'}
+                                    onChange={(e) => updateActiveConfig({ 协议覆盖: e.target.value as 请求协议覆盖类型 })}
+                                    className="w-full bg-black/60 border border-gray-700 p-2.5 text-white outline-none rounded-md"
+                                >
+                                    {协议覆盖选项.map(mode => (
+                                        <option key={mode} value={mode}>{请求协议覆盖标签[mode]}</option>
+                                    ))}
+                                </select>
+                                <div className="text-[11px] text-gray-400">
+                                    默认“自动识别”。如果第三方接口模型名与协议不匹配，可在此强制切换。
                                 </div>
                             </div>
 

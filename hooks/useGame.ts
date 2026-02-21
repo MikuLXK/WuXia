@@ -45,6 +45,7 @@ import { 构建NPC上下文 } from './useGame/npcContext';
 import { 构建世界观种子提示词, 构建世界生成任务上下文提示词 } from '../prompts/runtime/worldSetup';
 import { 开场初始化任务提示词 } from '../prompts/runtime/opening';
 import { 剧情回忆检索COT提示词, 剧情回忆检索输出格式提示词 } from '../prompts/runtime/recall';
+import { 默认COT伪装历史消息提示词, 默认额外系统提示词 } from '../prompts/runtime/defaults';
 import {
     规范化环境信息,
     构建完整地点文本,
@@ -243,7 +244,12 @@ export const useGame = () => {
             ? raw.叙事人称
             : (gameConfig?.叙事人称 || '第二人称'),
         启用行动选项: raw?.启用行动选项 !== false,
-        额外提示词: typeof raw?.额外提示词 === 'string' ? raw.额外提示词 : (gameConfig?.额外提示词 || '')
+        启用COT伪装注入: raw?.启用COT伪装注入 === false
+            ? false
+            : (typeof gameConfig?.启用COT伪装注入 === 'boolean' ? gameConfig.启用COT伪装注入 : true),
+        额外提示词: typeof raw?.额外提示词 === 'string'
+            ? raw.额外提示词
+            : (typeof gameConfig?.额外提示词 === 'string' ? gameConfig.额外提示词 : 默认额外系统提示词)
     });
 
     const handleStartNewGameWizard = () => {
@@ -714,6 +720,7 @@ export const useGame = () => {
             `字数要求: ${normalizedGameConfig.字数要求}字`,
             `叙事人称: ${normalizedGameConfig.叙事人称}`,
             `行动选项功能: ${normalizedGameConfig.启用行动选项 ? '开启' : '关闭'}`,
+            `COT伪装注入: ${normalizedGameConfig.启用COT伪装注入 ? '开启' : '关闭'}`,
             '',
             '【对应叙事人称提示词】',
             activePerspectiveContent || '未配置',
@@ -1060,7 +1067,10 @@ export const useGame = () => {
                         }
                     }
                     : undefined,
-                gameConfig.额外提示词
+                gameConfig.额外提示词,
+                {
+                    enableCotInjection: gameConfig.启用COT伪装注入 !== false
+                }
             );
             if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
 
@@ -1243,6 +1253,8 @@ export const useGame = () => {
         const extraPrompt = typeof gameConfig?.额外提示词 === 'string' && gameConfig.额外提示词.trim().length > 0
             ? gameConfig.额外提示词.trim()
             : '未配置';
+        const cotEnabled = gameConfig?.启用COT伪装注入 !== false;
+        const cotPseudoPrompt = cotEnabled ? 默认COT伪装历史消息提示词.trim() : '';
         const sections: 上下文段[] = [];
         let order = 1;
         const pushSection = (id: string, title: string, category: string, content: string) => {
@@ -1283,8 +1295,9 @@ export const useGame = () => {
             pushSection('recall_corpus', '剧情回忆检索回忆库', '回忆API', recallMemoryCorpus);
         }
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
+        pushSection('cot_fake_history', 'COT伪装历史消息', '系统', cotPseudoPrompt ? `【COT伪装历史消息】\n${cotPseudoPrompt}` : '');
         pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);
-        pushSection('extra_prompt', '额外要求提示词', '用户', `【额外要求提示词】\n${extraPrompt}`);
+        pushSection('extra_prompt', '额外要求提示词', '系统', `【额外要求提示词】\n${extraPrompt}`);
 
         const fullText = sections.map(section => section.content).join('\n\n');
         return {
@@ -1472,7 +1485,10 @@ export const useGame = () => {
                         }
                     }
                     : undefined,
-                gameConfig.额外提示词
+                gameConfig.额外提示词,
+                {
+                    enableCotInjection: gameConfig.启用COT伪装注入 !== false
+                }
             );
 
             // 7. Process Result

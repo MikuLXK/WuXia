@@ -191,6 +191,7 @@ export const useGameState = () => {
         字数要求: 450,
         叙事人称: '第二人称', 
         启用行动选项: true,
+        启用COT伪装注入: true,
         额外提示词: 默认额外系统提示词
     };
     const 规范化游戏设置 = (raw?: Partial<游戏设置结构> | null): 游戏设置结构 => ({
@@ -208,7 +209,9 @@ export const useGameState = () => {
         叙事人称: raw?.叙事人称 === '第一人称' || raw?.叙事人称 === '第二人称' || raw?.叙事人称 === '第三人称'
             ? raw.叙事人称
             : 默认游戏设置.叙事人称,
-        启用行动选项: raw?.启用行动选项 !== false
+        启用行动选项: raw?.启用行动选项 !== false,
+        启用COT伪装注入: raw?.启用COT伪装注入 !== false,
+        额外提示词: typeof raw?.额外提示词 === 'string' ? raw.额外提示词 : 默认额外系统提示词
     });
     const [gameConfig, setGameConfig] = useState<游戏设置结构>(默认游戏设置);
 
