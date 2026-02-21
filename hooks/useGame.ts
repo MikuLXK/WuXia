@@ -77,6 +77,8 @@ type 最近开局配置结构 = {
     openingStreaming: boolean;
 };
 
+type 快速重开模式 = 'world_only' | 'opening_only' | 'all';
+
 type 上下文段 = {
     id: string;
     title: string;
@@ -1586,14 +1588,51 @@ export const useGame = () => {
         return snapshot.玩家输入;
     };
 
-    const handleQuickRestart = async () => {
+    const handleQuickRestart = async (mode: 快速重开模式 = 'all') => {
         if (loading || !最近开局配置) return;
         清空重Roll快照();
+        const worldConfig = 深拷贝(最近开局配置.worldConfig);
+        const charData = 深拷贝(最近开局配置.charData);
+        const openingStreaming = 最近开局配置.openingStreaming;
+
+        if (mode === 'world_only') {
+            await handleGenerateWorld(
+                worldConfig,
+                charData,
+                'step',
+                openingStreaming
+            );
+            return;
+        }
+
+        if (mode === 'opening_only') {
+            const currentApi = 获取主剧情接口配置(apiConfig);
+            if (!接口配置是否可用(currentApi)) {
+                alert("请先在设置中填写 API 地址/API Key，并选择主剧情使用模型");
+                setShowSettings(true);
+                return;
+            }
+            const openingBase = 创建开场基础状态(charData, worldConfig);
+            if (view !== 'game') {
+                setView('game');
+            }
+            setLoading(true);
+            try {
+                await generateOpeningStory(openingBase, prompts, openingStreaming, currentApi);
+            } catch (error: any) {
+                console.error('开局剧情重生成失败', error);
+                alert(`开局剧情重生成失败: ${error?.message || '未知错误'}`);
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
         await handleGenerateWorld(
-            深拷贝(最近开局配置.worldConfig),
-            深拷贝(最近开局配置.charData),
+            worldConfig,
+            charData,
             'all',
-            最近开局配置.openingStreaming
+            openingStreaming
         );
     };
 

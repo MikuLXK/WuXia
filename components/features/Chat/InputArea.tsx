@@ -1,6 +1,8 @@
 
 import React, { useRef, useState } from 'react';
 
+type QuickRestartMode = 'world_only' | 'opening_only' | 'all';
+
 type SendResult = {
     cancelled?: boolean;
     attachedRecallPreview?: string;
@@ -21,7 +23,7 @@ interface Props {
     ) => Promise<SendResult> | SendResult;
     onStop: () => void;
     onRegenerate: () => string | null;
-    onQuickRestart?: () => void;
+    onQuickRestart?: (mode: QuickRestartMode) => void | Promise<void>;
     requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
     loading: boolean;
     canReroll?: boolean;
@@ -48,6 +50,7 @@ const InputArea: React.FC<Props> = ({
     const [showAttachedRecall, setShowAttachedRecall] = useState(false);
     const [pendingRecallTag, setPendingRecallTag] = useState('');
     const [recallProgress, setRecallProgress] = useState<RecallProgress | null>(null);
+    const [showQuickRestartMenu, setShowQuickRestartMenu] = useState(false);
     const quickActionsRef = useRef<HTMLDivElement | null>(null);
     const dragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
     const suppressClickUntilRef = useRef(0);
@@ -126,6 +129,37 @@ const InputArea: React.FC<Props> = ({
         if (!restoredInput) return;
         setContent(restoredInput);
         setLastSentContent(restoredInput);
+    };
+
+    const handleQuickRestartSelect = async (mode: QuickRestartMode) => {
+        if (!onQuickRestart) return;
+        const optionsMap: Record<QuickRestartMode, { title: string; message: string }> = {
+            world_only: {
+                title: '重新生成世界观',
+                message: '将仅重新生成世界观提示词，不自动生成开局剧情。是否继续？'
+            },
+            opening_only: {
+                title: '重新生成开局剧情',
+                message: '将使用当前世界观重新生成开局剧情（含变量命令）。是否继续？'
+            },
+            all: {
+                title: '重生成世界观+开局剧情',
+                message: '将完整重跑世界观与开局剧情。是否继续？'
+            }
+        };
+        const option = optionsMap[mode];
+        const confirmed = requestConfirm
+            ? await requestConfirm({
+                title: option.title,
+                message: option.message,
+                confirmText: '立即执行',
+                cancelText: '取消',
+                danger: true
+            })
+            : true;
+        if (!confirmed) return;
+        await Promise.resolve(onQuickRestart(mode));
+        setShowQuickRestartMenu(false);
     };
 
     const handleQuickActionsPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -271,6 +305,47 @@ const InputArea: React.FC<Props> = ({
                     )}
                 </div>
             )}
+
+            {showQuickRestartMenu && canQuickRestart && (
+                <div className="rounded-lg border border-teal-400/30 bg-black/70 p-2 space-y-2">
+                    <div className="text-xs text-teal-300 font-bold tracking-wider">快速重开选项</div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => { void handleQuickRestartSelect('world_only'); }}
+                            disabled={busy}
+                            className="text-xs px-3 py-2 rounded border border-gray-700 text-gray-200 hover:border-teal-300 hover:text-teal-200 disabled:opacity-40"
+                        >
+                            仅重生世界观
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { void handleQuickRestartSelect('opening_only'); }}
+                            disabled={busy}
+                            className="text-xs px-3 py-2 rounded border border-gray-700 text-gray-200 hover:border-teal-300 hover:text-teal-200 disabled:opacity-40"
+                        >
+                            仅重生开局剧情
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { void handleQuickRestartSelect('all'); }}
+                            disabled={busy}
+                            className="text-xs px-3 py-2 rounded border border-gray-700 text-gray-200 hover:border-teal-300 hover:text-teal-200 disabled:opacity-40"
+                        >
+                            世界观 + 开局剧情
+                        </button>
+                    </div>
+                    <div className="flex justify-end">
+                        <button
+                            type="button"
+                            onClick={() => setShowQuickRestartMenu(false)}
+                            className="text-[11px] px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-gray-200"
+                        >
+                            收起
+                        </button>
+                    </div>
+                </div>
+            )}
             
             {/* Main Control Bar */}
             <div className="flex items-center gap-2">
@@ -295,7 +370,7 @@ const InputArea: React.FC<Props> = ({
                     {canQuickRestart && (
                         <>
                             <button 
-                                onClick={onQuickRestart}
+                                onClick={() => setShowQuickRestartMenu(prev => !prev)}
                                 disabled={busy}
                                 className="w-10 h-full rounded-lg flex items-center justify-center text-teal-300 hover:text-teal-100 hover:bg-teal-900/20 transition-all disabled:opacity-30"
                                 title="快速重开"

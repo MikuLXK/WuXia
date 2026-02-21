@@ -37,6 +37,8 @@ import { 难度_生理 } from './difficulty/physiology';
 import { 写作_人称_第一, 写作_人称_第二, 写作_人称_第三 } from './writing/perspective';
 import { 写作_要求 } from './writing/requirements';
 import { 写作_风格 } from './writing/style';
+import { 写作_NSFW文风参考 } from './writing/nsfwStyle';
+import { 写作_避免极端情绪 } from './writing/emotionGuard';
 
 export const 默认提示词: 提示词结构[] = [
     // Core
@@ -76,5 +78,7 @@ export const 默认提示词: 提示词结构[] = [
     写作_人称_第二,
     写作_人称_第三,
     写作_要求,
-    写作_风格
+    写作_风格,
+    写作_NSFW文风参考,
+    写作_避免极端情绪
 ];
