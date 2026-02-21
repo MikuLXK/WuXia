@@ -962,9 +962,31 @@ export const useGame = () => {
         } catch (error: any) {
             if (worldStreamHeartbeat) clearInterval(worldStreamHeartbeat);
             console.error(error);
-            alert("世界生成失败: " + error.message);
+            const errorMessage = error?.message || '未知错误';
             if (openingStreaming) {
-                setView('new_game');
+                设置历史记录(prev => {
+                    const patched = prev.map(item => {
+                        if (
+                            item.role === 'assistant' &&
+                            !item.structuredResponse &&
+                            typeof item.content === 'string' &&
+                            item.content.startsWith('【生成中】')
+                        ) {
+                            return { ...item, content: `【生成失败】${errorMessage}` };
+                        }
+                        return item;
+                    });
+                    return [
+                        ...patched,
+                        {
+                            role: 'system',
+                            content: `[开局生成失败] ${errorMessage}\n可点击输入栏左侧闪电按钮“快速重开”立即重试，建角参数已保留。`,
+                            timestamp: Date.now()
+                        }
+                    ];
+                });
+            } else {
+                alert("世界生成失败: " + errorMessage);
             }
             setLoading(false);
         }

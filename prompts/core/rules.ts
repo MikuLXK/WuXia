@@ -71,9 +71,9 @@ text写什么, tavern_commands就必须更新什么。
 [变量可执行性门禁 (CRITICAL)]
 - **顺序铁律**: 必须先在 \`thinking_pre\` 完成“候选命令预演与合法性校验”，再写 \`logs\`，最后在 \`thinking_post\` 复核后输出 \`tavern_commands\`。
 - **剧情推进约束**:
-  - 非等待/休整/纯闲聊回合，必须在 \`gameState.剧情\` 产生至少 1 个可验证推进变化。
-  - 推进写入范围：\`剧情变量\` / \`当前章节\` / \`下一章预告\` / \`历史卷宗\`。
-  - 若本回合豁免推进，需在 \`剧情变量\` 写入可追溯原因与结果。
+  - 本回合优先保证“叙事-状态一致性”，不强制每回合推进主线剧情。
+  - 当玩家主动选择休整/闲逛/社交/经营时，可仅更新 \`角色/环境/社交\`，不要求改写 \`gameState.剧情\`。
+  - 仅在出现关键调查/冲突/抉择时，再推进 \`剧情变量\` / \`当前章节\` / \`下一章预告\` / \`历史卷宗\`。
 - **操作支持性检查**:
   - \`add\` 仅允许作用于数值字段；目标非数值则判定失败。
   - \`push\` 仅允许作用于数组字段；目标不可作为数组追加则判定失败。
@@ -148,7 +148,7 @@ text写什么, tavern_commands就必须更新什么。
 示例输出格式:
 \`\`\`json
 {
-  "thinking_pre": "<thinking>候选命令预演：1) set gameState.环境.时间 前值YYYY:MM:DD:HH:MM->后值YYYY:MM:DD:HH:MM，合法；2) set gameState.环境.具体地点 前值<地点甲>->后值<地点乙>，合法；3) add gameState.角色.当前精力 前值86->后值78，合法；4) add gameState.社交[0].好感度 前值12->后值15，合法；5) push gameState.社交[0].记忆 前值长度5->后值长度6，合法；6) set gameState.剧情.剧情变量.线索已获取 前值false->后值true，合法。</thinking>",
+  "thinking_pre": "<thinking>候选命令预演：1) set gameState.环境.时间 前值317:03:16:09:10->后值317:03:16:09:45，合法；2) set gameState.环境.具体地点 前值<地点甲>->后值<地点乙>，合法；3) add gameState.角色.当前精力 前值86->后值78，合法；4) add gameState.社交[0].好感度 前值12->后值15，合法；5) push gameState.社交[0].记忆 前值长度5->后值长度6，合法；6) set gameState.剧情.剧情变量.线索已获取 前值false->后值true，合法。</thinking>",
   "logs": [
     { "sender": "旁白", "text": "集市喧闹未歇，你在临街摊位前停步，向线人递出问路银钱。" },
     { "sender": "线人甲", "text": "昨夜有人在北侧驿道见到目标队伍，人数不多，行迹隐蔽。" },
@@ -158,11 +158,11 @@ text写什么, tavern_commands就必须更新什么。
   ],
   "thinking_post": "<thinking>复核 logs：已发生打探情报与互动，允许扣除精力、提升好感、写入NPC记忆并推进剧情变量。无拾取/交易完成叙事，不写入物品列表。最终命令路径均存在且类型匹配，无越界操作。</thinking>",
   "tavern_commands": [
-    { "action": "set", "key": "gameState.环境.时间", "value": "YYYY:MM:DD:HH:MM" },
+    { "action": "set", "key": "gameState.环境.时间", "value": "317:03:16:09:45" },
     { "action": "set", "key": "gameState.环境.具体地点", "value": "<地点乙>" },
     { "action": "add", "key": "gameState.角色.当前精力", "value": -8 },
     { "action": "add", "key": "gameState.社交[0].好感度", "value": 3 },
-    { "action": "push", "key": "gameState.社交[0].记忆", "value": { "内容": "线人提供了目标队伍的最新路径情报。", "时间": "YYYY:MM:DD:HH:MM" } },
+    { "action": "push", "key": "gameState.社交[0].记忆", "value": { "内容": "线人提供了目标队伍的最新路径情报。", "时间": "317:03:16:09:45" } },
     { "action": "set", "key": "gameState.剧情.剧情变量.线索已获取", "value": true }
   ],
   "shortTerm": "玩家在据点与线人接头，成功获取目标队伍最新行踪，并据此确定下一步追查方向。"

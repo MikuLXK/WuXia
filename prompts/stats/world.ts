@@ -93,10 +93,10 @@ export const 数值_世界演化: 提示词结构 = {
 - 禁止在“具体地点未命中建筑”时臆造建筑详情。
 
 11. 命令示例
-- \`set gameState.世界.活跃NPC列表[0].行动预计结束时间 "YYYY:MM:DD:HH:MM"\`
+- \`set gameState.世界.活跃NPC列表[0].行动预计结束时间 "317:03:16:10:30"\`
 - \`set gameState.世界.地图[0].归属.小地点 "小地点A"\`
 - \`set gameState.世界.建筑[0].描述 "青石外墙，门口悬挂黑底金字匾"\`
-- \`set gameState.世界.进行中事件[0].预计结束时间 "YYYY:MM:DD:HH:MM"\`
+- \`set gameState.世界.进行中事件[0].预计结束时间 "317:03:16:12:00"\`
 - \`set gameState.世界.进行中事件[0].当前状态 "已结算"\`
 - \`push gameState.世界.已结算事件 {完整事件对象}\`
 - \`delete gameState.世界.进行中事件[2]\`

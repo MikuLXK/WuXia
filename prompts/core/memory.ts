@@ -22,7 +22,7 @@ export const 核心_记忆法则: 提示词结构 = {
      - 未命中且满足入档条件：先 \`push gameState.社交\` 创建，再写 \`gameState.社交[i].记忆\`。
    - 新入档时需补写此前关键互动记忆，再追加本回合记忆，避免记忆断层。
    - 指令格式: 
-     \`push gameState.社交[TargetIndex].记忆 { "内容": "...", "时间": "YYYY:MM:DD:HH:MM" }\`
+     \`push gameState.社交[TargetIndex].记忆 { "内容": "...", "时间": "317:03:16:09:45" }\`
    - **时间格式**: 使用结构化时间 \`YYYY:MM:DD:HH:MM\`。
 
 3. **扁平化属性更新**:
