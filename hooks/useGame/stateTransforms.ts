@@ -418,6 +418,42 @@ const 合并字符串数组 = (a: any, b: any): string[] | undefined => {
     return merged.length > 0 ? merged : undefined;
 };
 
+const 标准化关系网变量 = (raw: any): Array<{ 对象姓名: string; 关系: string; 备注?: string }> | undefined => {
+    if (!Array.isArray(raw)) return undefined;
+    const merged = new Map<string, { 对象姓名: string; 关系: string; 备注?: string }>();
+    raw.forEach((item: any) => {
+        if (!item || typeof item !== 'object') return;
+        const 对象姓名 = 取首个非空文本(item?.对象姓名, item?.对象, item?.姓名) || '';
+        const 关系 = 取首个非空文本(item?.关系, item?.关系类型) || '';
+        const 备注 = typeof item?.备注 === 'string' ? item.备注.trim() : '';
+        if (!对象姓名 || !关系) return;
+        const key = `${对象姓名}__${关系}`;
+        merged.set(key, {
+            对象姓名,
+            关系,
+            ...(备注 ? { 备注 } : {})
+        });
+    });
+    const out = Array.from(merged.values());
+    return out.length > 0 ? out : undefined;
+};
+
+const 合并关系网变量 = (a: any, b: any): Array<{ 对象姓名: string; 关系: string; 备注?: string }> | undefined => {
+    const merged = new Map<string, { 对象姓名: string; 关系: string; 备注?: string }>();
+    const pushList = (raw: any) => {
+        const normalized = 标准化关系网变量(raw);
+        if (!normalized) return;
+        normalized.forEach((item) => {
+            const key = `${item.对象姓名}__${item.关系}`;
+            merged.set(key, item);
+        });
+    };
+    pushList(a);
+    pushList(b);
+    const out = Array.from(merged.values());
+    return out.length > 0 ? out : undefined;
+};
+
 const 合并内射记录 = (a: any, b: any): any[] | undefined => {
     const merged = new Map<string, any>();
     const process = (raw: any) => {
@@ -470,6 +506,10 @@ const 标准化单个NPC = (rawNpc: any, fallbackIndex: number): any => {
         npc?.档案?.衣着要点
     );
     const 记忆 = 标准化NPC记忆(npc?.记忆);
+    const 核心性格特征 = 取首个非空文本(npc?.核心性格特征);
+    const 好感度突破条件 = 取首个非空文本(npc?.好感度突破条件);
+    const 关系突破条件 = 取首个非空文本(npc?.关系突破条件);
+    const 关系网变量 = 标准化关系网变量(npc?.关系网变量);
 
     return {
         ...npc,
@@ -486,6 +526,10 @@ const 标准化单个NPC = (rawNpc: any, fallbackIndex: number): any => {
         关系状态: typeof npc?.关系状态 === 'string' ? npc.关系状态 : '未知',
         简介: typeof npc?.简介 === 'string' ? npc.简介 : '暂无简介',
         记忆,
+        ...(核心性格特征 ? { 核心性格特征 } : {}),
+        ...(好感度突破条件 ? { 好感度突破条件 } : {}),
+        ...(关系突破条件 ? { 关系突破条件 } : {}),
+        ...(Array.isArray(关系网变量) && 关系网变量.length > 0 ? { 关系网变量 } : {}),
         ...(外貌描写 ? { 外貌描写 } : {}),
         ...(身材描写 ? { 身材描写 } : {}),
         ...(衣着风格 ? { 衣着风格 } : {})
@@ -529,6 +573,7 @@ const 合并NPC对象 = (leftRaw: any, rightRaw: any, fallbackIndex: number): an
         });
         return Object.keys(out).length > 0 ? out : undefined;
     })();
+    const mergedRelationNet = 合并关系网变量(left?.关系网变量, right?.关系网变量);
 
     return {
         ...left,
@@ -553,6 +598,10 @@ const 合并NPC对象 = (leftRaw: any, rightRaw: any, fallbackIndex: number): an
             : (Number.isFinite(Number(left?.好感度)) ? Number(left.好感度) : 0),
         关系状态: 取更优文本(取字段文本(left, '关系状态'), 取字段文本(right, '关系状态')) || '未知',
         简介: 取更优文本(取字段文本(left, '简介'), 取字段文本(right, '简介')) || '暂无简介',
+        核心性格特征: 取更优文本(取字段文本(left, '核心性格特征'), 取字段文本(right, '核心性格特征')),
+        好感度突破条件: 取更优文本(取字段文本(left, '好感度突破条件'), 取字段文本(right, '好感度突破条件')),
+        关系突破条件: 取更优文本(取字段文本(left, '关系突破条件'), 取字段文本(right, '关系突破条件')),
+        关系网变量: mergedRelationNet,
         外貌描写: 取更优文本(取字段文本(left, '外貌描写'), 取字段文本(right, '外貌描写')),
         身材描写: 取更优文本(取字段文本(left, '身材描写'), 取字段文本(right, '身材描写')),
         衣着风格: 取更优文本(取字段文本(left, '衣着风格'), 取字段文本(right, '衣着风格')),

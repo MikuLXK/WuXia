@@ -35,18 +35,36 @@ export const 构建NPC上下文 = (socialData: any[], memoryConfig: 记忆配置
             .slice(-Math.max(1, limit));
     };
 
-    const 提取基础数据 = (npc: any, index: number, 是否队友: boolean) => ({
-        索引: index,
-        id: typeof npc?.id === 'string' ? npc.id : `npc_${index}`,
-        姓名: typeof npc?.姓名 === 'string' ? npc.姓名 : `角色${index}`,
-        性别: typeof npc?.性别 === 'string' ? npc.性别 : '未知',
-        境界: typeof npc?.境界 === 'string' ? npc.境界 : '未知境界',
-        身份: typeof npc?.身份 === 'string' ? npc.身份 : '未知身份',
-        是否队友,
-        关系状态: typeof npc?.关系状态 === 'string' ? npc.关系状态 : '未知',
-        好感度: typeof npc?.好感度 === 'number' ? npc.好感度 : 0,
-        简介: typeof npc?.简介 === 'string' ? npc.简介 : '暂无简介'
-    });
+    const 提取基础数据 = (npc: any, index: number, 是否队友: boolean) => {
+        const 核心性格特征 = typeof npc?.核心性格特征 === 'string' ? npc.核心性格特征.trim() : '';
+        const 好感度突破条件 = typeof npc?.好感度突破条件 === 'string' ? npc.好感度突破条件.trim() : '';
+        const 关系突破条件 = typeof npc?.关系突破条件 === 'string' ? npc.关系突破条件.trim() : '';
+        const 关系网变量 = Array.isArray(npc?.关系网变量)
+            ? npc.关系网变量
+                .map((item: any) => ({
+                    对象姓名: typeof item?.对象姓名 === 'string' ? item.对象姓名.trim() : '',
+                    关系: typeof item?.关系 === 'string' ? item.关系.trim() : '',
+                    备注: typeof item?.备注 === 'string' ? item.备注.trim() : undefined
+                }))
+                .filter((item: any) => item.对象姓名 && item.关系)
+            : [];
+        return {
+            索引: index,
+            id: typeof npc?.id === 'string' ? npc.id : `npc_${index}`,
+            姓名: typeof npc?.姓名 === 'string' ? npc.姓名 : `角色${index}`,
+            性别: typeof npc?.性别 === 'string' ? npc.性别 : '未知',
+            境界: typeof npc?.境界 === 'string' ? npc.境界 : '未知境界',
+            身份: typeof npc?.身份 === 'string' ? npc.身份 : '未知身份',
+            是否队友,
+            关系状态: typeof npc?.关系状态 === 'string' ? npc.关系状态 : '未知',
+            好感度: typeof npc?.好感度 === 'number' ? npc.好感度 : 0,
+            简介: typeof npc?.简介 === 'string' ? npc.简介 : '暂无简介',
+            ...(核心性格特征 ? { 核心性格特征 } : {}),
+            ...(好感度突破条件 ? { 好感度突破条件 } : {}),
+            ...(关系突破条件 ? { 关系突破条件 } : {}),
+            ...(关系网变量.length > 0 ? { 关系网变量 } : {})
+        };
+    };
 
     const 提取完整基础数据 = (npc: any, index: number, 是否队友: boolean) => {
         const 基础 = 提取基础数据(npc, index, 是否队友);

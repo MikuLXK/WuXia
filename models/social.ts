@@ -6,6 +6,12 @@ export interface NPC记忆 {
     时间: string; // 结构化时间戳字符串
 }
 
+export interface NPC关系边 {
+    对象姓名: string;
+    关系: string; // 当前 NPC 与对象的关系类型
+    备注?: string;
+}
+
 // 新增：子宫内射/使用记录
 export interface 子宫记录 {
     日期: string;      // 发生日期
@@ -49,6 +55,10 @@ export interface NPC结构 {
     好感度: number;
     关系状态: string; 
     简介: string;    
+    核心性格特征?: string; // 一句话锚定角色主性格（用于关系演化）
+    好感度突破条件?: string; // 下一阶段好感提升的触发条件
+    关系突破条件?: string; // 关系状态升级/转折的触发条件
+    关系网变量?: NPC关系边[]; // 重要女性角色的关系网变量（谁-和谁-是什么关系）
 
     // --- 队伍战斗属性 (仅队友强制需要；非队友可省略) ---
     攻击力?: number; 
