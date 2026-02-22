@@ -15,8 +15,8 @@ export const 默认COT伪装历史消息提示词 = `<think>
 </think>
 
 好的，已确认要求。
-将遵循当前要求结构化输出约束：仅输出合法JSON对象。
-接下来按本项目思考格式执行：先在 thinking_pre 字段内写入<thinking>...</thinking>，再继续 logs 与 thinking_post。`;
+将遵循当前要求结构化输出约束：仅输出单一合法 JSON 对象。
+接下来按本项目思考格式执行：在 thinking_pre 与 thinking_post 字段内使用 <thinking>...</thinking> 包裹思考内容。`;
 
 export const 默认短期转中期提示词 = '请根据上述短期记忆，总结出关键事件的时间、地点和结果，去除琐碎对话。';
 export const 默认中期转长期提示词 = '请将上述中期记忆概括为一段史诗般的经历，保留对角色成长有重大影响的事件。';
