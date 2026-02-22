@@ -729,6 +729,7 @@ export const generateStoryResponse = async (
     if (styleAssistantPrompt) {
         apiMessages.push({ role: 'assistant', content: styleAssistantPrompt });
     }
+    // 伪装COT历史消息必须始终放在本轮消息末尾，确保为最后一条注入消息。
     if (enableCotInjection && cotPseudoHistoryPrompt) {
         apiMessages.push({ role: 'assistant', content: cotPseudoHistoryPrompt });
     }

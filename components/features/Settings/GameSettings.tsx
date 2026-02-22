@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 游戏设置结构 } from '../../../types';
 import GameButton from '../../ui/GameButton';
 import ToggleSwitch from '../../ui/ToggleSwitch';
@@ -11,10 +11,47 @@ interface Props {
 const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [form, setForm] = useState<游戏设置结构>(settings);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [openMenu, setOpenMenu] = useState<'perspective' | 'style' | null>(null);
+    const rootRef = useRef<HTMLDivElement | null>(null);
+
+    const 叙事人称选项: Array<{ value: 游戏设置结构['叙事人称']; label: string }> = [
+        { value: '第一人称', label: '第一人称 (我)' },
+        { value: '第二人称', label: '第二人称 (你)' },
+        { value: '第三人称', label: '第三人称 (他/姓名)' }
+    ];
+    const 剧情风格选项: Array<{ value: 游戏设置结构['剧情风格']; label: string }> = [
+        { value: '后宫', label: '后宫' },
+        { value: '修炼', label: '修炼' },
+        { value: '一般', label: '一般' },
+        { value: '修罗场', label: '修罗场' },
+        { value: '纯爱', label: '纯爱' },
+        { value: 'NTL后宫', label: 'NTL后宫' }
+    ];
 
     useEffect(() => {
         setForm(settings);
     }, [settings]);
+
+    useEffect(() => {
+        if (!openMenu) return;
+
+        const handlePointerDown = (event: MouseEvent) => {
+            const root = rootRef.current;
+            if (!root) return;
+            if (event.target instanceof Node && root.contains(event.target)) return;
+            setOpenMenu(null);
+        };
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setOpenMenu(null);
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [openMenu]);
 
     const handleSave = () => {
         onSave(form);
@@ -22,8 +59,70 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
         setTimeout(() => setShowSuccess(false), 2000);
     };
 
+    const 渲染内置下拉 = (params: {
+        menuKey: 'perspective' | 'style';
+        value: string;
+        options: Array<{ value: string; label: string }>;
+        onChange: (value: string) => void;
+    }) => {
+        const selected = params.options.find(option => option.value === params.value);
+        const isOpen = openMenu === params.menuKey;
+
+        return (
+            <div className="relative">
+                <button
+                    type="button"
+                    onClick={() => setOpenMenu(prev => (prev === params.menuKey ? null : params.menuKey))}
+                    className={`w-full bg-black/40 border p-3 text-left rounded-md transition-all flex items-center justify-between ${
+                        isOpen ? 'border-wuxia-gold text-white' : 'border-gray-600 text-white'
+                    }`}
+                >
+                    <span>{selected?.label || '请选择'}</span>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180 text-wuxia-gold' : ''}`}
+                    >
+                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.512a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                    </svg>
+                </button>
+
+                {isOpen && (
+                    <div className="absolute z-50 mt-2 w-full bg-black/95 border border-wuxia-gold/40 rounded-md shadow-[0_10px_30px_rgba(0,0,0,0.45)] overflow-hidden">
+                        <div className="max-h-56 overflow-y-auto custom-scrollbar py-1">
+                            {params.options.map(option => {
+                                const active = option.value === params.value;
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => {
+                                            params.onChange(option.value);
+                                            setOpenMenu(null);
+                                        }}
+                                        className={`w-full px-3 py-2 text-left text-sm transition-colors flex items-center justify-between ${
+                                            active
+                                                ? 'bg-wuxia-gold/15 text-wuxia-gold'
+                                                : 'text-gray-200 hover:bg-white/5'
+                                        }`}
+                                    >
+                                        <span>{option.label}</span>
+                                        {active && (
+                                            <span className="text-xs text-wuxia-gold/80">当前</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     return (
-        <div className="space-y-6 animate-fadeIn">
+        <div ref={rootRef} className="space-y-6 animate-fadeIn">
             <div className="flex justify-between items-center border-b border-wuxia-gold/30 pb-3 mb-6">
                 <h3 className="text-wuxia-gold font-serif font-bold text-xl">游戏设定</h3>
                 {showSuccess && <span className="text-green-400 text-xs font-bold animate-pulse">✔ 设定已保存</span>}
@@ -48,31 +147,22 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
 
                 <div className="space-y-2">
                     <label className="text-sm text-wuxia-cyan font-bold">叙事人称</label>
-                    <select 
-                        value={form.叙事人称}
-                        onChange={(e) => setForm({...form, 叙事人称: e.target.value as any})}
-                        className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md"
-                    >
-                        <option value="第一人称">第一人称 (我)</option>
-                        <option value="第二人称">第二人称 (你)</option>
-                        <option value="第三人称">第三人称 (他/姓名)</option>
-                    </select>
+                    {渲染内置下拉({
+                        menuKey: 'perspective',
+                        value: form.叙事人称,
+                        options: 叙事人称选项,
+                        onChange: (value) => setForm({ ...form, 叙事人称: value as 游戏设置结构['叙事人称'] })
+                    })}
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
                     <label className="text-sm text-wuxia-cyan font-bold">剧情风格</label>
-                    <select
-                        value={form.剧情风格}
-                        onChange={(e) => setForm({ ...form, 剧情风格: e.target.value as 游戏设置结构['剧情风格'] })}
-                        className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md"
-                    >
-                        <option value="后宫">后宫</option>
-                        <option value="修炼">修炼</option>
-                        <option value="一般">一般</option>
-                        <option value="修罗场">修罗场</option>
-                        <option value="纯爱">纯爱</option>
-                        <option value="NTL后宫">NTL后宫</option>
-                    </select>
+                    {渲染内置下拉({
+                        menuKey: 'style',
+                        value: form.剧情风格,
+                        options: 剧情风格选项,
+                        onChange: (value) => setForm({ ...form, 剧情风格: value as 游戏设置结构['剧情风格'] })
+                    })}
                     <div className="text-xs text-gray-400">将作为 AI 助手消息注入在本轮上下文末尾，并位于 COT 伪装消息之前。</div>
                 </div>
             </div>
@@ -95,7 +185,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                 <div className="flex items-center justify-between gap-4">
                     <div>
                         <div className="text-sm text-wuxia-cyan font-bold">COT伪装历史消息注入</div>
-                        <div className="text-xs text-gray-400 mt-1">开启后，在发送本轮玩家输入前会追加一条伪装历史消息，用于强化思考段输出习惯。</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后，会在本轮上下文末尾追加一条伪装历史消息（最后一条注入消息），用于强化思考段输出习惯。</div>
                     </div>
                     <ToggleSwitch
                         checked={form.启用COT伪装注入 !== false}

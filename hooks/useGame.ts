@@ -1390,10 +1390,11 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             pushSection('recall_corpus', '剧情回忆检索回忆库', '回忆API', recallMemoryCorpus);
         }
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
+        pushSection('extra_prompt', '额外要求提示词', '系统', `【额外要求提示词】\n${extraPrompt}`);
         pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);
         pushSection('style_assistant', '剧情风格助手消息', '系统', styleAssistantPrompt);
+        // COT伪装历史消息固定置底，必须是快照中的最后一段注入消息。
         pushSection('cot_fake_history', 'COT伪装历史消息', '系统', cotPseudoPrompt ? `【COT伪装历史消息】\n${cotPseudoPrompt}` : '');
-        pushSection('extra_prompt', '额外要求提示词', '系统', `【额外要求提示词】\n${extraPrompt}`);
 
         const fullText = sections.map(section => section.content).join('\n\n');
         return {

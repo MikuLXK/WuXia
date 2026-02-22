@@ -98,6 +98,8 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
     ] as Array<{ key: string; label: string; value: string; phase: 思考阶段 }>;
     const preThinkingBlocks = thinkingBlocks.filter(item => item.phase === 'pre');
     const postThinkingBlocks = thinkingBlocks.filter(item => item.phase === 'post');
+    const 正文文本 = response.logs.map(log => log.text || '').join('\n');
+    const 中文计数 = (正文文本.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) || []).length;
 
     const handleSave = () => {
         const parsed = parseJsonWithRepair<GameResponse>(editValue);
@@ -224,7 +226,10 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
             )}
 
             {/* Footer / Info only */}
-            <div className="mt-2 flex justify-end items-center opacity-0 group-hover/turn:opacity-100 transition-opacity duration-300 gap-4">
+            <div className="mt-2 flex justify-between items-center opacity-0 group-hover/turn:opacity-100 transition-opacity duration-300 gap-4">
+                <span className="text-[9px] text-gray-600">
+                    中文计数: {中文计数}字
+                </span>
                 {response.shortTerm && (
                     <span className="text-[9px] text-gray-600 max-w-[200px] truncate" title={response.shortTerm}>
                         记忆: {response.shortTerm}
