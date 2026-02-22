@@ -27,6 +27,13 @@ const StatRow: React.FC<{ label: string; count?: number }> = ({ label, count }) 
     </div>
 );
 
+const RelationTag: React.FC<{ label: string; value?: string; accent?: string }> = ({ label, value, accent = 'text-cyan-300' }) => (
+    <div className="bg-black/35 border border-gray-800 rounded-lg p-3">
+        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">{label}</div>
+        <div className={`text-xs font-serif leading-relaxed ${accent}`}>{value?.trim() || '暂无记录'}</div>
+    </div>
+);
+
 const MobileSocial: React.FC<Props> = ({ socialList, onClose, playerName = "少侠" }) => {
     const [selectedId, setSelectedId] = useState<string | null>(
         socialList.length > 0 ? socialList[0].id : null
@@ -58,6 +65,18 @@ const MobileSocial: React.FC<Props> = ({ socialList, onClose, playerName = "少�
         (npc as any).档案?.衣着风格,
         (npc as any).档案?.衣着要点
     );
+    const 读取关系网 = (npc: NPC结构): Array<{ 对象姓名: string; 关系: string; 备注?: string }> => {
+        if (!Array.isArray(npc?.关系网变量)) return [];
+        return npc.关系网变量
+            .map((item: any) => ({
+                对象姓名: typeof item?.对象姓名 === 'string' ? item.对象姓名.trim() : '',
+                关系: typeof item?.关系 === 'string' ? item.关系.trim() : '',
+                备注: typeof item?.备注 === 'string' ? item.备注.trim() : undefined
+            }))
+            .filter(item => item.对象姓名 && item.关系);
+    };
+    const 展示关系驱动面板 = 展示女性扩展;
+    const 当前关系网 = currentNPC ? 读取关系网(currentNPC) : [];
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-3 md:hidden animate-fadeIn">
@@ -143,6 +162,42 @@ const MobileSocial: React.FC<Props> = ({ socialList, onClose, playerName = "少�
                                     {currentNPC.简介 || '暂无详细生平记录。'}
                                 </p>
                             </div>
+
+                            {展示关系驱动面板 && (
+                                <div className="bg-black/30 border border-cyan-900/40 rounded-xl p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-cyan-300 font-serif font-bold text-sm">关系驱动面板</div>
+                                        <span className="text-[10px] text-cyan-500/80 tracking-[0.2em]">动态变量</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <RelationTag label="核心性格特征" value={currentNPC.核心性格特征} accent="text-cyan-200" />
+                                        <RelationTag label="好感突破条件" value={currentNPC.好感度突破条件} accent="text-emerald-200" />
+                                        <RelationTag label="关系突破条件" value={currentNPC.关系突破条件} accent="text-amber-200" />
+                                    </div>
+                                    <div className="bg-pink-950/10 border border-pink-900/40 rounded-lg p-3">
+                                        <div className="text-[10px] text-pink-400 tracking-[0.2em] mb-2">重要女性关系网变量</div>
+                                        {当前关系网.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {当前关系网.map((edge, idx) => (
+                                                    <div key={`${edge.对象姓名}_${edge.关系}_${idx}`} className="bg-black/40 border border-pink-900/40 rounded p-2">
+                                                        <div className="text-[11px] text-pink-100">
+                                                            <span className="text-pink-300">对象：</span>{edge.对象姓名}
+                                                        </div>
+                                                        <div className="text-[11px] text-pink-100 mt-1">
+                                                            <span className="text-pink-300">关系：</span>{edge.关系}
+                                                        </div>
+                                                        {edge.备注 && (
+                                                            <div className="text-[10px] text-pink-200/80 mt-1 leading-relaxed">{edge.备注}</div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-[11px] text-pink-100/70 font-serif">暂无关系网变量</div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {展示女性扩展 && (
                                 <div className="bg-black/30 border border-pink-900/40 rounded-xl p-4 space-y-4">
