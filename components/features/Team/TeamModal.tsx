@@ -9,8 +9,7 @@ interface Props {
 }
 
 const TeamModal: React.FC<Props> = ({ character, teammates, onClose }) => {
-    // 仅展示“已编队”的 NPC（兼容老存档：若缺失该字段，按好感>0 推定为队友）
-    const activeTeammates = teammates.filter(n => (typeof n.是否队友 === 'boolean' ? n.是否队友 : n.好感度 > 0));
+    const activeTeammates = teammates.filter(n => n.是否队友 === true);
 
     // Helper for Equipment Item
     const EquipItem: React.FC<{ label: string; value?: string; highlight?: boolean }> = ({ label, value, highlight }) => (

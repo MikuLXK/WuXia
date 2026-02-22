@@ -56,11 +56,15 @@ export interface 视觉设置结构 {
     渲染层数: number; // New: Default 30
 }
 
+export type 剧情风格类型 = '后宫' | '修炼' | '一般' | '修罗场' | '纯爱' | 'NTL后宫';
+
 export interface 游戏设置结构 {
     字数要求: number; // Minimum logs body length
     叙事人称: '第一人称' | '第二人称' | '第三人称';
     启用行动选项: boolean; // Whether to require action_options output
     启用COT伪装注入: boolean; // Inject pseudo historical COT message before latest user input
+    启用多重思考: boolean; // Switch COT/format prompts to multi-thinking variants
+    剧情风格: 剧情风格类型; // Story style injected as assistant context before COT
     额外提示词: string; // Custom prompt injected at the end
 }
 

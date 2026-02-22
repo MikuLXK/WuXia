@@ -25,9 +25,22 @@ export interface GameLog {
 }
 
 export interface GameResponse {
-    thinking_pre?: string;
     logs: GameLog[];
+    thinking_pre?: string;
+    t_input?: string;
+    t_plan?: string;
+    t_state?: string;
+    t_branch?: string;
+    t_precheck?: string;
+    t_logcheck?: string;
+    t_var?: string;
+    t_npc?: string;
+    t_cmd?: string;
+    t_audit?: string;
+    t_fix?: string;
     thinking_post?: string;
+    t_mem?: string;
+    t_opts?: string;
     tavern_commands?: TavernCommand[];
     shortTerm?: string;
     action_options?: string[]; // Quick actions for the user

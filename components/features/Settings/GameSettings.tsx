@@ -58,6 +58,23 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         <option value="第三人称">第三人称 (他/姓名)</option>
                     </select>
                 </div>
+
+                <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm text-wuxia-cyan font-bold">剧情风格</label>
+                    <select
+                        value={form.剧情风格}
+                        onChange={(e) => setForm({ ...form, 剧情风格: e.target.value as 游戏设置结构['剧情风格'] })}
+                        className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md"
+                    >
+                        <option value="后宫">后宫</option>
+                        <option value="修炼">修炼</option>
+                        <option value="一般">一般</option>
+                        <option value="修罗场">修罗场</option>
+                        <option value="纯爱">纯爱</option>
+                        <option value="NTL后宫">NTL后宫</option>
+                    </select>
+                    <div className="text-xs text-gray-400">将作为 AI 助手消息注入在本轮上下文末尾，并位于 COT 伪装消息之前。</div>
+                </div>
             </div>
 
             <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
@@ -84,6 +101,20 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         checked={form.启用COT伪装注入 !== false}
                         onChange={(next) => setForm({ ...form, 启用COT伪装注入: next })}
                         ariaLabel="切换COT伪装历史消息注入"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <div className="text-sm text-wuxia-cyan font-bold">多重思考模式</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后自动切换到“多重思考版”COT与输出格式提示词。</div>
+                    </div>
+                    <ToggleSwitch
+                        checked={form.启用多重思考 === true}
+                        onChange={(next) => setForm({ ...form, 启用多重思考: next })}
+                        ariaLabel="切换多重思考模式"
                     />
                 </div>
             </div>

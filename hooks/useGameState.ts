@@ -192,6 +192,8 @@ export const useGameState = () => {
         叙事人称: '第二人称', 
         启用行动选项: true,
         启用COT伪装注入: true,
+        启用多重思考: false,
+        剧情风格: '一般',
         额外提示词: 默认额外系统提示词
     };
     const 规范化游戏设置 = (raw?: Partial<游戏设置结构> | null): 游戏设置结构 => ({
@@ -211,6 +213,10 @@ export const useGameState = () => {
             : 默认游戏设置.叙事人称,
         启用行动选项: raw?.启用行动选项 !== false,
         启用COT伪装注入: raw?.启用COT伪装注入 !== false,
+        启用多重思考: raw?.启用多重思考 === true,
+        剧情风格: raw?.剧情风格 === '后宫' || raw?.剧情风格 === '修炼' || raw?.剧情风格 === '一般' || raw?.剧情风格 === '修罗场' || raw?.剧情风格 === '纯爱' || raw?.剧情风格 === 'NTL后宫'
+            ? raw.剧情风格
+            : 默认游戏设置.剧情风格,
         额外提示词: typeof raw?.额外提示词 === 'string' ? raw.额外提示词 : 默认额外系统提示词
     });
     const [gameConfig, setGameConfig] = useState<游戏设置结构>(默认游戏设置);

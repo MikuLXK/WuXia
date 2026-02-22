@@ -21,6 +21,12 @@ interface StoryStreamOptions {
 interface StoryRequestOptions {
     enableCotInjection?: boolean;
     cotPseudoHistoryPrompt?: string;
+    styleAssistantPrompt?: string;
+}
+
+export interface StoryResponseResult {
+    response: GameResponse;
+    rawText: string;
 }
 
 interface WorldStreamOptions {
@@ -695,7 +701,7 @@ export const generateStoryResponse = async (
     streamOptions?: StoryStreamOptions,
     extraPrompt?: string,
     requestOptions?: StoryRequestOptions
-): Promise<GameResponse> => {
+): Promise<StoryResponseResult> => {
     if (!apiConfig.apiKey) throw new Error('Missing API Key');
 
     const normalizedSystemPrompt = typeof systemPrompt === 'string' ? systemPrompt.trim() : '';
@@ -705,6 +711,9 @@ export const generateStoryResponse = async (
     const cotPseudoHistoryPrompt = typeof requestOptions?.cotPseudoHistoryPrompt === 'string'
         ? requestOptions.cotPseudoHistoryPrompt.trim()
         : 默认COT伪装历史消息提示词.trim();
+    const styleAssistantPrompt = typeof requestOptions?.styleAssistantPrompt === 'string'
+        ? requestOptions.styleAssistantPrompt.trim()
+        : '';
 
     const apiMessages: 通用消息[] = [];
     if (normalizedSystemPrompt) {
@@ -717,6 +726,9 @@ export const generateStoryResponse = async (
         apiMessages.push({ role: 'system', content: `【额外要求提示词】\n${normalizedExtraPrompt}` });
     }
     apiMessages.push({ role: 'user', content: `<玩家输入>${playerInput}</玩家输入>` });
+    if (styleAssistantPrompt) {
+        apiMessages.push({ role: 'assistant', content: styleAssistantPrompt });
+    }
     if (enableCotInjection && cotPseudoHistoryPrompt) {
         apiMessages.push({ role: 'assistant', content: cotPseudoHistoryPrompt });
     }
@@ -739,9 +751,31 @@ export const generateStoryResponse = async (
                 .filter((item: any) => item && item.text.trim().length > 0)
             : [];
 
+        const thinkingFieldKeys = [
+            't_input',
+            't_plan',
+            't_state',
+            't_branch',
+            't_precheck',
+            't_logcheck',
+            't_var',
+            't_npc',
+            't_cmd',
+            't_audit',
+            't_fix',
+            't_mem',
+            't_opts'
+        ] as const;
+        const normalizedThinkingFields = Object.fromEntries(
+            thinkingFieldKeys
+                .filter((key) => typeof raw?.[key] === 'string' && raw[key].trim().length > 0)
+                .map((key) => [key, raw[key]])
+        ) as Partial<GameResponse>;
+
         return {
             thinking_pre: typeof raw?.thinking_pre === 'string' ? raw.thinking_pre : undefined,
             logs,
+            ...normalizedThinkingFields,
             thinking_post: typeof raw?.thinking_post === 'string' ? raw.thinking_post : undefined,
             tavern_commands: Array.isArray(raw?.tavern_commands) ? raw.tavern_commands : undefined,
             shortTerm: typeof raw?.shortTerm === 'string' ? raw.shortTerm : undefined,
@@ -765,13 +799,17 @@ export const generateStoryResponse = async (
         const parsed = parseJsonWithRepair<any>(content);
         if (parsed.value && typeof parsed.value === 'object') {
             const normalized = normalizeGameResponse(parsed.value);
-            if (normalized.logs.length > 0 || normalized.thinking_pre || normalized.thinking_post) {
+            const hasThinking = Object.keys(normalized).some((key) => {
+                const isThinkingField = key.startsWith('t_') || key === 'thinking_pre' || key === 'thinking_post';
+                return isThinkingField && typeof (normalized as any)[key] === 'string' && (normalized as any)[key].trim().length > 0;
+            });
+            if (normalized.logs.length > 0 || hasThinking) {
                 return normalized;
             }
         }
         return {
             logs: [{ sender: '系统', text: content }],
-            thinking_pre: `解析错误: 返回内容非标准JSON（${parsed.error || 'unknown'}）`
+            thinking_pre: `<thinking>解析错误: 返回内容非标准JSON（${parsed.error || 'unknown'}）</thinking>`
         };
     };
 
@@ -782,5 +820,8 @@ export const generateStoryResponse = async (
         responseFormatJsonObject: true
     });
 
-    return parseJsonToGameResponse(rawText);
+    return {
+        response: parseJsonToGameResponse(rawText),
+        rawText
+    };
 };

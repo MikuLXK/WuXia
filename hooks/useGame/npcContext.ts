@@ -106,7 +106,7 @@ export const 构建NPC上下文 = (socialData: any[], memoryConfig: 记忆配置
 
     const toEntry = (npc: any, index: number) => {
         const 是否在场 = typeof npc?.是否在场 === 'boolean' ? npc.是否在场 : true;
-        const 是否队友 = typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : ((npc?.好感度 || 0) > 0);
+        const 是否队友 = typeof npc?.是否队友 === 'boolean' ? npc.是否队友 : false;
         const 是否主要角色 = typeof npc?.是否主要角色 === 'boolean' ? npc.是否主要角色 : false;
         const 记忆上限 = 是否主要角色 ? 重要角色关键记忆条数N : 普通关键记忆条数N;
         const 基础数据 = 提取基础数据(npc, index, 是否队友);

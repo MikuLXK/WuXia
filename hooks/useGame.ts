@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as dbService from '../services/dbService';
 import * as aiService from '../services/aiService';
 import { applyStateCommand } from '../utils/stateHelpers';
-import { parseJsonWithRepair } from '../utils/jsonRepair';
+import { formatJsonWithRepair, parseJsonWithRepair } from '../utils/jsonRepair';
 import { estimateTextTokens } from '../utils/tokenEstimate';
 import { useGameState } from './useGameState';
 import { 规范化接口设置, 获取主剧情接口配置, 获取剧情回忆接口配置, 接口配置是否可用 } from '../utils/apiConfig';
@@ -46,6 +46,9 @@ import { 构建世界观种子提示词, 构建世界生成任务上下文提示
 import { 开场初始化任务提示词 } from '../prompts/runtime/opening';
 import { 剧情回忆检索COT提示词, 剧情回忆检索输出格式提示词 } from '../prompts/runtime/recall';
 import { 默认COT伪装历史消息提示词, 默认额外系统提示词 } from '../prompts/runtime/defaults';
+import { 获取剧情风格提示词 } from '../prompts/runtime/storyStyles';
+import { 核心_思维链_多重思考 } from '../prompts/core/cotMulti';
+import { 核心_输出格式_多重思考 } from '../prompts/core/formatMulti';
 import {
     规范化环境信息,
     构建完整地点文本,
@@ -249,10 +252,37 @@ export const useGame = () => {
         启用COT伪装注入: raw?.启用COT伪装注入 === false
             ? false
             : (typeof gameConfig?.启用COT伪装注入 === 'boolean' ? gameConfig.启用COT伪装注入 : true),
+        启用多重思考: raw?.启用多重思考 === true
+            ? true
+            : (typeof gameConfig?.启用多重思考 === 'boolean' ? gameConfig.启用多重思考 : false),
+        剧情风格: raw?.剧情风格 === '后宫' || raw?.剧情风格 === '修炼' || raw?.剧情风格 === '一般' || raw?.剧情风格 === '修罗场' || raw?.剧情风格 === '纯爱' || raw?.剧情风格 === 'NTL后宫'
+            ? raw.剧情风格
+            : (gameConfig?.剧情风格 || '一般'),
         额外提示词: typeof raw?.额外提示词 === 'string'
             ? raw.额外提示词
             : (typeof gameConfig?.额外提示词 === 'string' ? gameConfig.额外提示词 : 默认额外系统提示词)
     });
+    const 构建COT伪装提示词 = (config: 游戏设置结构): string => {
+        if (config?.启用多重思考 === true) {
+            return `<think>
+本轮思考结束
+</think>
+
+好的，已确认多重思考模式。
+后续将使用独立字段输出思考：
+t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc / t_cmd / t_audit / t_fix / t_mem / t_opts。`;
+        }
+        return 默认COT伪装历史消息提示词.trim();
+    };
+    const 构建剧情风格助手消息 = (config: 游戏设置结构): string => {
+        const stylePrompt = 获取剧情风格提示词(config.剧情风格);
+        return `【剧情风格偏好】\n${stylePrompt}`;
+    };
+    const 格式化原始AI消息 = (rawText: string, fallbackStructured: GameResponse): string => {
+        const trimmed = typeof rawText === 'string' ? rawText.trim() : '';
+        if (!trimmed) return JSON.stringify(fallbackStructured, null, 2);
+        return formatJsonWithRepair(trimmed, trimmed);
+    };
 
     const handleStartNewGameWizard = () => {
         清空重Roll快照();
@@ -656,14 +686,40 @@ export const useGame = () => {
             'write_perspective_third'
         ];
         const normalizedGameConfig = 规范化游戏设置(gameConfig);
+        const 应用多重思考提示词切换 = (
+            pool: 提示词结构[],
+            enabled: boolean
+        ): 提示词结构[] => {
+            if (!enabled) return pool;
+            const hasMultiCot = pool.some(p => p.id === 'core_cot_multi');
+            const hasMultiFormat = pool.some(p => p.id === 'core_format_multi');
+            let nextPool = pool.map(p => {
+                if (p.id === 'core_cot') return { ...p, 启用: false };
+                if (p.id === 'core_format') return { ...p, 启用: false };
+                if (p.id === 'core_cot_multi') return { ...p, 启用: true };
+                if (p.id === 'core_format_multi') return { ...p, 启用: true };
+                return p;
+            });
+            if (!hasMultiCot) {
+                nextPool = [...nextPool, { ...核心_思维链_多重思考, 启用: true }];
+            }
+            if (!hasMultiFormat) {
+                nextPool = [...nextPool, { ...核心_输出格式_多重思考, 启用: true }];
+            }
+            return nextPool;
+        };
+        const effectivePromptPool = 应用多重思考提示词切换(
+            promptPool,
+            normalizedGameConfig.启用多重思考 === true
+        );
         const selectedPerspectiveIdMap: Record<string, string> = {
             第一人称: 'write_perspective_first',
             第二人称: 'write_perspective_second',
             第三人称: 'write_perspective_third'
         };
         const selectedPerspectiveId = selectedPerspectiveIdMap[normalizedGameConfig.叙事人称] || 'write_perspective_second';
-        const selectedPerspectivePrompt = promptPool.find(p => p.id === selectedPerspectiveId);
-        const fallbackPerspectivePrompt = promptPool.find(p => perspectivePromptIds.includes(p.id) && p.启用);
+        const selectedPerspectivePrompt = effectivePromptPool.find(p => p.id === selectedPerspectiveId);
+        const fallbackPerspectivePrompt = effectivePromptPool.find(p => perspectivePromptIds.includes(p.id) && p.启用);
 
         const playerName = statePayload?.角色?.姓名 || 角色?.姓名 || '未命名';
         const 渲染提示词文本 = (content: string) => content.replace(/\$\{playerName\}/g, playerName);
@@ -679,8 +735,8 @@ export const useGame = () => {
             return `${content.trim()}\n${lengthRule}`;
         };
 
-        const enabledPrompts = promptPool.filter(p => p.启用);
-        const actionOptionsPrompt = promptPool.find(p => p.id === 'core_action_options');
+        const enabledPrompts = effectivePromptPool.filter(p => p.启用);
+        const actionOptionsPrompt = effectivePromptPool.find(p => p.id === 'core_action_options');
         const worldPrompt = 渲染提示词文本(enabledPrompts.find(p => p.id === 'core_world')?.内容 || '');
         const writeReqPrompt = enabledPrompts.find(p => p.id === 'write_req');
         const writeReqContent = writeReqPrompt
@@ -721,8 +777,10 @@ export const useGame = () => {
             '【游戏设置】',
             `字数要求: ${normalizedGameConfig.字数要求}字`,
             `叙事人称: ${normalizedGameConfig.叙事人称}`,
+            `剧情风格: ${normalizedGameConfig.剧情风格}`,
             `行动选项功能: ${normalizedGameConfig.启用行动选项 ? '开启' : '关闭'}`,
             `COT伪装注入: ${normalizedGameConfig.启用COT伪装注入 ? '开启' : '关闭'}`,
+            `多重思考模式: ${normalizedGameConfig.启用多重思考 ? '开启' : '关闭'}`,
             '',
             '【对应叙事人称提示词】',
             activePerspectiveContent || '未配置',
@@ -1067,7 +1125,8 @@ export const useGame = () => {
                 }, 420);
             }
 
-            const aiData = await aiService.generateStoryResponse(
+            const openingGameConfig = 规范化游戏设置(gameConfig);
+            const aiResult = await aiService.generateStoryResponse(
                 openingContext.systemPrompt,
                 openingScriptContext,
                 开场初始化任务提示词,
@@ -1093,9 +1152,12 @@ export const useGame = () => {
                     : undefined,
                 gameConfig.额外提示词,
                 {
-                    enableCotInjection: gameConfig.启用COT伪装注入 !== false
+                    enableCotInjection: openingGameConfig.启用COT伪装注入 !== false,
+                    styleAssistantPrompt: 构建剧情风格助手消息(openingGameConfig),
+                    cotPseudoHistoryPrompt: 构建COT伪装提示词(openingGameConfig)
                 }
             );
+            const aiData = aiResult.response;
             if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
 
             // Apply commands (use generated opening state as base to avoid stale state race)
@@ -1128,7 +1190,7 @@ export const useGame = () => {
                 role: 'assistant', 
                 content: "Opening Story", 
                 structuredResponse: aiData,
-                rawJson: JSON.stringify(aiData, null, 2),
+                rawJson: 格式化原始AI消息(aiResult.rawText, aiData),
                 timestamp: Date.now(),
                 gameTime: openingTime
             };
@@ -1284,8 +1346,10 @@ export const useGame = () => {
         const extraPrompt = typeof gameConfig?.额外提示词 === 'string' && gameConfig.额外提示词.trim().length > 0
             ? gameConfig.额外提示词.trim()
             : '未配置';
-        const cotEnabled = gameConfig?.启用COT伪装注入 !== false;
-        const cotPseudoPrompt = cotEnabled ? 默认COT伪装历史消息提示词.trim() : '';
+        const normalizedSnapshotGameConfig = 规范化游戏设置(gameConfig);
+        const cotEnabled = normalizedSnapshotGameConfig.启用COT伪装注入 !== false;
+        const cotPseudoPrompt = cotEnabled ? 构建COT伪装提示词(normalizedSnapshotGameConfig) : '';
+        const styleAssistantPrompt = 构建剧情风格助手消息(normalizedSnapshotGameConfig);
         const sections: 上下文段[] = [];
         let order = 1;
         const pushSection = (id: string, title: string, category: string, content: string) => {
@@ -1326,8 +1390,9 @@ export const useGame = () => {
             pushSection('recall_corpus', '剧情回忆检索回忆库', '回忆API', recallMemoryCorpus);
         }
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
-        pushSection('cot_fake_history', 'COT伪装历史消息', '系统', cotPseudoPrompt ? `【COT伪装历史消息】\n${cotPseudoPrompt}` : '');
         pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);
+        pushSection('style_assistant', '剧情风格助手消息', '系统', styleAssistantPrompt);
+        pushSection('cot_fake_history', 'COT伪装历史消息', '系统', cotPseudoPrompt ? `【COT伪装历史消息】\n${cotPseudoPrompt}` : '');
         pushSection('extra_prompt', '额外要求提示词', '系统', `【额外要求提示词】\n${extraPrompt}`);
 
         const fullText = sections.map(section => section.content).join('\n\n');
@@ -1493,7 +1558,8 @@ export const useGame = () => {
             }
 
             // 6. Call AI Service
-            const aiData = await aiService.generateStoryResponse(
+            const runtimeGameConfig = 规范化游戏设置(gameConfig);
+            const aiResult = await aiService.generateStoryResponse(
                 builtContext.systemPrompt,
                 contextImmediate,
                 sendInput,
@@ -1518,9 +1584,12 @@ export const useGame = () => {
                     : undefined,
                 gameConfig.额外提示词,
                 {
-                    enableCotInjection: gameConfig.启用COT伪装注入 !== false
+                    enableCotInjection: runtimeGameConfig.启用COT伪装注入 !== false,
+                    styleAssistantPrompt: 构建剧情风格助手消息(runtimeGameConfig),
+                    cotPseudoHistoryPrompt: 构建COT伪装提示词(runtimeGameConfig)
                 }
             );
+            const aiData = aiResult.response;
 
             // 7. Process Result
             processResponseCommands(aiData);
@@ -1533,7 +1602,7 @@ export const useGame = () => {
                 role: 'assistant', 
                 content: "Structured Response", 
                 structuredResponse: aiData,
-                rawJson: JSON.stringify(aiData, null, 2),
+                rawJson: 格式化原始AI消息(aiResult.rawText, aiData),
                 timestamp: Date.now(),
                 gameTime: currentGameTime
             };

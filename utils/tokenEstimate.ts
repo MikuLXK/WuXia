@@ -62,16 +62,35 @@ export const estimateTextTokensWithBreakdown = (text: string): TokenEstimateBrea
 
 export const buildHistoryTokenSource = (item: 聊天记录结构): string => {
     if (item.role === 'assistant' && item.structuredResponse) {
+        const thinkingKeys = [
+            'thinking_pre',
+            't_input',
+            't_plan',
+            't_state',
+            't_branch',
+            't_precheck',
+            't_logcheck',
+            't_var',
+            't_npc',
+            't_cmd',
+            't_audit',
+            't_fix',
+            'thinking_post',
+            't_mem',
+            't_opts'
+        ] as const;
+        const thinkingText = thinkingKeys
+            .map((key) => item.structuredResponse?.[key] || '')
+            .filter(Boolean)
+            .join('\n');
         const logs = Array.isArray(item.structuredResponse.logs)
             ? item.structuredResponse.logs.map((log) => `${log.sender}：${log.text || ''}`).join('\n')
             : '';
-        const thinkingPre = item.structuredResponse.thinking_pre || '';
-        const thinkingPost = item.structuredResponse.thinking_post || '';
         const shortTerm = item.structuredResponse.shortTerm || '';
         const actionOptions = Array.isArray(item.structuredResponse.action_options)
             ? item.structuredResponse.action_options.join('\n')
             : '';
-        return [thinkingPre, logs, thinkingPost, shortTerm, actionOptions].filter(Boolean).join('\n');
+        return [thinkingText, logs, shortTerm, actionOptions].filter(Boolean).join('\n');
     }
     return item.content || '';
 };
