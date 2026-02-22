@@ -12,6 +12,12 @@ interface Props {
 const WorldSettings: React.FC<Props> = ({ festivals, onUpdate, requestConfirm }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<节日结构 | null>(null);
+    const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const pushNotice = (type: 'success' | 'error', text: string) => {
+        setNotice({ type, text });
+        window.setTimeout(() => setNotice(null), 2200);
+    };
 
     const handleEdit = (festival: 节日结构) => {
         setEditingId(festival.id);
@@ -22,12 +28,12 @@ const WorldSettings: React.FC<Props> = ({ festivals, onUpdate, requestConfirm })
         if (!editForm) return;
         
         // Validation
-        if (editForm.月 < 1 || editForm.月 > 13) {
-            alert("月份必须在 1-12 之间");
+        if (editForm.月 < 1 || editForm.月 > 12) {
+            pushNotice('error', '月份必须在 1-12 之间');
             return;
         }
         if (editForm.日 < 1 || editForm.日 > 30) {
-             alert("日期必须在 1-30 之间");
+             pushNotice('error', '日期必须在 1-30 之间');
              return;
         }
 
@@ -42,6 +48,7 @@ const WorldSettings: React.FC<Props> = ({ festivals, onUpdate, requestConfirm })
         onUpdate(newList);
         setEditingId(null);
         setEditForm(null);
+        pushNotice('success', '节日设置已保存');
     };
 
     const handleDelete = async (id: string) => {
@@ -130,6 +137,15 @@ const WorldSettings: React.FC<Props> = ({ festivals, onUpdate, requestConfirm })
 
     return (
         <div className="space-y-6">
+            {notice && (
+                <div className={`text-xs px-3 py-2 border rounded ${
+                    notice.type === 'success'
+                        ? 'border-green-500/40 bg-green-900/20 text-green-300'
+                        : 'border-wuxia-red/40 bg-red-900/20 text-red-300'
+                }`}>
+                    {notice.text}
+                </div>
+            )}
             <div className="flex justify-between items-center">
                  <h3 className="text-wuxia-gold font-serif font-bold text-lg">世界节日设定</h3>
                  <GameButton onClick={handleAddNew} variant="primary" className="text-xs px-3 py-2">新增节日</GameButton>

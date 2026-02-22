@@ -19,6 +19,7 @@ import {
     记忆配置结构,
     记忆系统结构,
     战斗状态结构,
+    女主剧情规划结构,
 } from '../types';
 import { 默认提示词 } from '../prompts';
 import { 默认中期转长期提示词, 默认短期转中期提示词, 默认额外系统提示词 } from '../prompts/runtime/defaults';
@@ -132,6 +133,8 @@ export const useGameState = () => {
         剧情变量: {}
     });
 
+    const 创建空女主剧情规划 = (): 女主剧情规划结构 | undefined => undefined;
+
     // View State
     const [view, setView] = useState<'home' | 'game' | 'new_game'>('home');
     const [hasSave, setHasSave] = useState(false);
@@ -149,6 +152,7 @@ export const useGameState = () => {
     const [任务列表, 设置任务列表] = useState<任务结构[]>([]);
     const [约定列表, 设置约定列表] = useState<约定结构[]>([]);
     const [剧情, 设置剧情] = useState<剧情系统结构>(() => 创建空剧情()); 
+    const [女主剧情规划, 设置女主剧情规划] = useState<女主剧情规划结构 | undefined>(() => 创建空女主剧情规划());
 
     // New Game State for Memory
     const [记忆系统, 设置记忆系统] = useState<记忆系统结构>({
@@ -177,6 +181,7 @@ export const useGameState = () => {
     const [showTask, setShowTask] = useState(false);
     const [showAgreement, setShowAgreement] = useState(false);
     const [showStory, setShowStory] = useState(false);
+    const [showHeroinePlan, setShowHeroinePlan] = useState(false);
     const [showMemory, setShowMemory] = useState(false);
     
     // Save/Load Modal
@@ -193,6 +198,7 @@ export const useGameState = () => {
         启用行动选项: true,
         启用COT伪装注入: true,
         启用多重思考: false,
+        启用女主剧情规划: false,
         剧情风格: '一般',
         额外提示词: 默认额外系统提示词
     };
@@ -214,6 +220,7 @@ export const useGameState = () => {
         启用行动选项: raw?.启用行动选项 !== false,
         启用COT伪装注入: raw?.启用COT伪装注入 !== false,
         启用多重思考: raw?.启用多重思考 === true,
+        启用女主剧情规划: raw?.启用女主剧情规划 === true,
         剧情风格: raw?.剧情风格 === '后宫' || raw?.剧情风格 === '修炼' || raw?.剧情风格 === '一般' || raw?.剧情风格 === '修罗场' || raw?.剧情风格 === '纯爱' || raw?.剧情风格 === 'NTL后宫'
             ? raw.剧情风格
             : 默认游戏设置.剧情风格,
@@ -314,6 +321,7 @@ export const useGameState = () => {
         任务列表, 设置任务列表,
         约定列表, 设置约定列表,
         剧情, 设置剧情,
+        女主剧情规划, 设置女主剧情规划,
         历史记录, 设置历史记录,
         记忆系统, 设置记忆系统, 
         loading, setLoading,
@@ -330,6 +338,7 @@ export const useGameState = () => {
         showTask, setShowTask,
         showAgreement, setShowAgreement,
         showStory, setShowStory,
+        showHeroinePlan, setShowHeroinePlan,
         showMemory, setShowMemory,
         showSaveLoad, setShowSaveLoad, // New
         activeTab, setActiveTab,

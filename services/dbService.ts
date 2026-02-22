@@ -111,6 +111,17 @@ export const 删除存档 = async (id: number): Promise<void> => {
     });
 };
 
+export const 清空存档数据 = async (): Promise<void> => {
+    const db = await 初始化数据库();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
 export const 保存设置 = async (key: string, value: any): Promise<void> => {
     const db = await 初始化数据库();
     return new Promise((resolve, reject) => {
@@ -131,6 +142,102 @@ export const 读取设置 = async (key: string): Promise<any> => {
         request.onsuccess = () => resolve(request.result ? request.result.value : null);
         request.onerror = () => reject(request.error);
     });
+};
+
+export const 删除设置 = async (key: string): Promise<void> => {
+    const db = await 初始化数据库();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([SETTINGS_STORE], 'readwrite');
+        const store = transaction.objectStore(SETTINGS_STORE);
+        const request = store.delete(key);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const 批量删除设置 = async (keys: string[]): Promise<void> => {
+    if (!Array.isArray(keys) || keys.length === 0) return;
+    const db = await 初始化数据库();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([SETTINGS_STORE], 'readwrite');
+        const store = transaction.objectStore(SETTINGS_STORE);
+        keys.forEach((key) => store.delete(key));
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+    });
+};
+
+const 自定义背景天赋保护键 = ['visual_settings', 'new_game_custom_talents', 'new_game_custom_backgrounds'] as const;
+
+const 读取设置保护快照 = async (keys: string[]): Promise<Array<{ key: string; value: any }>> => {
+    const snapshots: Array<{ key: string; value: any }> = [];
+    for (const key of keys) {
+        const value = await 读取设置(key);
+        if (value !== null && value !== undefined) {
+            snapshots.push({ key, value });
+        }
+    }
+    return snapshots;
+};
+
+const 回写设置保护快照 = async (snapshots: Array<{ key: string; value: any }>): Promise<void> => {
+    for (const item of snapshots) {
+        await 保存设置(item.key, item.value);
+    }
+};
+
+export const 清空全部设置 = async (options?: { 保留APIKey?: boolean; 保留自定义背景天赋?: boolean }): Promise<void> => {
+    const keepKeys = new Set<string>();
+    if (options?.保留APIKey) keepKeys.add('api_settings');
+    if (options?.保留自定义背景天赋) {
+        自定义背景天赋保护键.forEach((key) => keepKeys.add(key));
+    }
+
+    const snapshots = await 读取设置保护快照(Array.from(keepKeys));
+    const db = await 初始化数据库();
+    const transaction = db.transaction([SETTINGS_STORE], 'readwrite');
+    transaction.objectStore(SETTINGS_STORE).clear();
+
+    return new Promise((resolve, reject) => {
+        transaction.oncomplete = async () => {
+            try {
+                await 回写设置保护快照(snapshots);
+                resolve();
+            } catch (error) {
+                reject(error);
+            }
+        };
+        transaction.onerror = () => reject(transaction.error);
+    });
+};
+
+export const 清除自定义背景与天赋 = async (): Promise<void> => {
+    const visualSettings = await 读取设置('visual_settings');
+    if (visualSettings && typeof visualSettings === 'object') {
+        const nextVisual = { ...visualSettings };
+        if ('背景图片' in nextVisual) {
+            (nextVisual as any).背景图片 = '';
+            await 保存设置('visual_settings', nextVisual);
+        }
+    }
+    await 批量删除设置(['new_game_custom_talents', 'new_game_custom_backgrounds']);
+};
+
+export const 清除系统缓存 = async (): Promise<void> => {
+    const tasks: Promise<unknown>[] = [];
+
+    if (typeof window !== 'undefined' && 'caches' in window) {
+        tasks.push((async () => {
+            const keys = await window.caches.keys();
+            await Promise.allSettled(keys.map((key) => window.caches.delete(key)));
+        })());
+    }
+
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.clear();
+    }
+
+    await Promise.allSettled(tasks);
 };
 
 export interface StorageBreakdown {
@@ -204,24 +311,32 @@ export const 获取详细存储信息 = async (): Promise<StorageBreakdown> => {
     };
 };
 
-export const 清空数据库 = async (保留APIKey: boolean): Promise<void> => {
+export const 清空全部数据 = async (options?: { 保留APIKey?: boolean; 保留自定义背景天赋?: boolean }): Promise<void> => {
     const db = await 初始化数据库();
-    let apiKey: any = null;
-    
-    if (保留APIKey) {
-        apiKey = await 读取设置('api_settings');
+    const keepKeys = new Set<string>();
+    if (options?.保留APIKey) keepKeys.add('api_settings');
+    if (options?.保留自定义背景天赋) {
+        自定义背景天赋保护键.forEach((key) => keepKeys.add(key));
     }
+    const snapshots = await 读取设置保护快照(Array.from(keepKeys));
 
     const transaction = db.transaction([STORE_NAME, SETTINGS_STORE], 'readwrite');
     transaction.objectStore(STORE_NAME).clear();
     transaction.objectStore(SETTINGS_STORE).clear();
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         transaction.oncomplete = async () => {
-            if (保留APIKey && apiKey) {
-                await 保存设置('api_settings', apiKey);
+            try {
+                await 回写设置保护快照(snapshots);
+                resolve();
+            } catch (error) {
+                reject(error);
             }
-            resolve();
         };
+        transaction.onerror = () => reject(transaction.error);
     });
+};
+
+export const 清空数据库 = async (保留APIKey: boolean): Promise<void> => {
+    await 清空全部数据({ 保留APIKey });
 };

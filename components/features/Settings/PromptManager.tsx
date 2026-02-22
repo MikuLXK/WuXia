@@ -16,6 +16,12 @@ const PromptManager: React.FC<Props> = ({ prompts, onUpdate, requestConfirm }) =
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<提示词结构 | null>(null);
     const [activeCategory, setActiveCategory] = useState<PromptCategory | 'ALL'>('ALL');
+    const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const pushNotice = (type: 'success' | 'error', text: string) => {
+        setNotice({ type, text });
+        window.setTimeout(() => setNotice(null), 2200);
+    };
 
     const handleEdit = (prompt: 提示词结构) => {
         setEditingId(prompt.id);
@@ -76,10 +82,12 @@ const PromptManager: React.FC<Props> = ({ prompts, onUpdate, requestConfirm }) =
                 const imported = JSON.parse(event.target?.result as string);
                 if (Array.isArray(imported)) {
                     onUpdate(imported);
-                    alert('导入成功');
+                    pushNotice('success', '导入成功');
+                } else {
+                    pushNotice('error', '导入失败：文件结构不是提示词数组');
                 }
             } catch (err) {
-                alert('导入失败：格式错误');
+                pushNotice('error', '导入失败：JSON 格式错误');
             }
         };
         reader.readAsText(file);
@@ -125,6 +133,15 @@ const PromptManager: React.FC<Props> = ({ prompts, onUpdate, requestConfirm }) =
 
     return (
         <div className="space-y-4">
+            {notice && (
+                <div className={`text-xs px-3 py-2 border rounded ${
+                    notice.type === 'success'
+                        ? 'border-green-500/40 bg-green-900/20 text-green-300'
+                        : 'border-wuxia-red/40 bg-red-900/20 text-red-300'
+                }`}>
+                    {notice.text}
+                </div>
+            )}
             <div className="flex justify-between items-center mb-2">
                 <GameButton onClick={handleAddNew} variant="primary" className="text-xs px-4 py-2">新增提示词</GameButton>
                 <div className="flex gap-3">

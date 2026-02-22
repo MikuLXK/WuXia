@@ -59,6 +59,12 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
         setTimeout(() => setShowSuccess(false), 2000);
     };
 
+    const 实时应用更新 = (patch: Partial<游戏设置结构>) => {
+        const next = { ...form, ...patch };
+        setForm(next);
+        onSave(next);
+    };
+
     const 渲染内置下拉 = (params: {
         menuKey: 'perspective' | 'style';
         value: string;
@@ -138,7 +144,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         value={form.字数要求}
                         onChange={(e) => {
                             const n = Number(e.target.value);
-                            setForm({ ...form, 字数要求: Number.isFinite(n) && n > 0 ? Math.max(50, Math.floor(n)) : 450 });
+                            实时应用更新({ 字数要求: Number.isFinite(n) && n > 0 ? Math.max(50, Math.floor(n)) : 450 });
                         }}
                         className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all font-serif tracking-wider"
                         placeholder="例如 450"
@@ -151,7 +157,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         menuKey: 'perspective',
                         value: form.叙事人称,
                         options: 叙事人称选项,
-                        onChange: (value) => setForm({ ...form, 叙事人称: value as 游戏设置结构['叙事人称'] })
+                        onChange: (value) => 实时应用更新({ 叙事人称: value as 游戏设置结构['叙事人称'] })
                     })}
                 </div>
 
@@ -161,7 +167,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         menuKey: 'style',
                         value: form.剧情风格,
                         options: 剧情风格选项,
-                        onChange: (value) => setForm({ ...form, 剧情风格: value as 游戏设置结构['剧情风格'] })
+                        onChange: (value) => 实时应用更新({ 剧情风格: value as 游戏设置结构['剧情风格'] })
                     })}
                     <div className="text-xs text-gray-400">将作为 AI 助手消息注入在本轮上下文末尾，并位于 COT 伪装消息之前。</div>
                 </div>
@@ -175,7 +181,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                     </div>
                     <ToggleSwitch
                         checked={form.启用行动选项 !== false}
-                        onChange={(next) => setForm({ ...form, 启用行动选项: next })}
+                        onChange={(next) => 实时应用更新({ 启用行动选项: next })}
                         ariaLabel="切换行动选项功能"
                     />
                 </div>
@@ -189,7 +195,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                     </div>
                     <ToggleSwitch
                         checked={form.启用COT伪装注入 !== false}
-                        onChange={(next) => setForm({ ...form, 启用COT伪装注入: next })}
+                        onChange={(next) => 实时应用更新({ 启用COT伪装注入: next })}
                         ariaLabel="切换COT伪装历史消息注入"
                     />
                 </div>
@@ -203,8 +209,22 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                     </div>
                     <ToggleSwitch
                         checked={form.启用多重思考 === true}
-                        onChange={(next) => setForm({ ...form, 启用多重思考: next })}
+                        onChange={(next) => 实时应用更新({ 启用多重思考: next })}
                         ariaLabel="切换多重思考模式"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <div className="text-sm text-wuxia-cyan font-bold">女主剧情规划</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后附加独立“女主剧情规划”与“女主剧情规划思考”提示词，不占用或改写原有剧情提示词。</div>
+                    </div>
+                    <ToggleSwitch
+                        checked={form.启用女主剧情规划 === true}
+                        onChange={(next) => 实时应用更新({ 启用女主剧情规划: next })}
+                        ariaLabel="切换女主剧情规划"
                     />
                 </div>
             </div>
@@ -214,6 +234,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                 <textarea 
                     value={form.额外提示词}
                     onChange={(e) => setForm({...form, 额外提示词: e.target.value})}
+                    onBlur={() => onSave(form)}
                     className="w-full h-32 bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all resize-none custom-scrollbar"
                     placeholder="在此输入需要追加到 Prompt 最后的特殊指令，例如：'严禁使用现代词汇'..."
                 />

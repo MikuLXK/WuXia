@@ -9,6 +9,7 @@ import {
 } from '../../../types';
 import GameButton from '../../ui/GameButton';
 import ToggleSwitch from '../../ui/ToggleSwitch';
+import InlineSelect from '../../ui/InlineSelect';
 import {
     创建接口配置模板,
     OpenAI兼容方案预设,
@@ -35,6 +36,11 @@ type 功能模型行 = {
 
 const providerOptions: 接口供应商类型[] = ['gemini', 'claude', 'openai', 'deepseek', 'openai_compatible'];
 const 协议覆盖选项: 请求协议覆盖类型[] = ['auto', 'openai', 'gemini', 'claude', 'deepseek'];
+const 兼容方案选项: Array<{ value: OpenAI兼容方案类型; label: string }> =
+    (Object.keys(OpenAI兼容方案预设) as OpenAI兼容方案类型[]).map((preset) => ({
+        value: preset,
+        label: OpenAI兼容方案预设[preset].label
+    }));
 
 const 功能模型行配置: 功能模型行[] = [
     { id: 'main', modelKey: '主剧情使用模型', label: '主剧情使用模型（必选）', hint: '请先获取列表后选择主剧情模型' },
@@ -218,29 +224,26 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                 <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
                     <div className="space-y-2">
                         <label className="text-sm text-wuxia-cyan font-bold">新建配置 - 供应商</label>
-                        <select
+                        <InlineSelect
                             value={newProvider}
-                            onChange={(e) => setNewProvider(e.target.value as 接口供应商类型)}
-                            className="w-full bg-black/60 border border-gray-700 p-2.5 text-white outline-none rounded-md"
-                        >
-                            {providerOptions.map(provider => (
-                                <option key={provider} value={provider}>{供应商标签[provider]}</option>
-                            ))}
-                        </select>
+                            options={providerOptions.map((provider) => ({
+                                value: provider,
+                                label: 供应商标签[provider]
+                            }))}
+                            onChange={(provider) => setNewProvider(provider)}
+                            buttonClassName="bg-black/60 border-gray-700 py-2.5"
+                        />
                     </div>
 
                     {newProvider === 'openai_compatible' && (
                         <div className="space-y-2">
                             <label className="text-sm text-wuxia-cyan font-bold">OpenAI 兼容方案</label>
-                            <select
+                            <InlineSelect
                                 value={newCompatiblePreset}
-                                onChange={(e) => setNewCompatiblePreset(e.target.value as OpenAI兼容方案类型)}
-                                className="w-full bg-black/60 border border-gray-700 p-2.5 text-white outline-none rounded-md"
-                            >
-                                {(Object.keys(OpenAI兼容方案预设) as OpenAI兼容方案类型[]).map(preset => (
-                                    <option key={preset} value={preset}>{OpenAI兼容方案预设[preset].label}</option>
-                                ))}
-                            </select>
+                                options={兼容方案选项}
+                                onChange={(preset) => setNewCompatiblePreset(preset)}
+                                buttonClassName="bg-black/60 border-gray-700 py-2.5"
+                            />
                         </div>
                     )}
 
@@ -304,15 +307,15 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
 
                             <div className="space-y-2">
                                 <label className="text-sm text-wuxia-cyan font-bold">请求协议覆盖</label>
-                                <select
+                                <InlineSelect
                                     value={activeConfig.协议覆盖 || 'auto'}
-                                    onChange={(e) => updateActiveConfig({ 协议覆盖: e.target.value as 请求协议覆盖类型 })}
-                                    className="w-full bg-black/60 border border-gray-700 p-2.5 text-white outline-none rounded-md"
-                                >
-                                    {协议覆盖选项.map(mode => (
-                                        <option key={mode} value={mode}>{请求协议覆盖标签[mode]}</option>
-                                    ))}
-                                </select>
+                                    options={协议覆盖选项.map((mode) => ({
+                                        value: mode,
+                                        label: 请求协议覆盖标签[mode]
+                                    }))}
+                                    onChange={(mode) => updateActiveConfig({ 协议覆盖: mode })}
+                                    buttonClassName="bg-black/60 border-gray-700 py-2.5"
+                                />
                                 <div className="text-[11px] text-gray-400">
                                     默认“自动识别”。如果第三方接口模型名与协议不匹配，可在此强制切换。
                                 </div>
@@ -321,22 +324,18 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                             {activeConfig.供应商 === 'openai_compatible' && (
                                 <div className="space-y-2">
                                     <label className="text-sm text-wuxia-cyan font-bold">OpenAI 兼容方案</label>
-                                    <select
+                                    <InlineSelect
                                         value={activeConfig.兼容方案 || 'custom'}
-                                        onChange={(e) => {
-                                            const nextPreset = e.target.value as OpenAI兼容方案类型;
+                                        options={兼容方案选项}
+                                        onChange={(nextPreset) => {
                                             const presetUrl = OpenAI兼容方案预设[nextPreset].baseUrl;
                                             updateActiveConfig({
                                                 兼容方案: nextPreset,
                                                 baseUrl: presetUrl || activeConfig.baseUrl
                                             });
                                         }}
-                                        className="w-full bg-black/60 border border-gray-700 p-2.5 text-white outline-none rounded-md"
-                                    >
-                                        {(Object.keys(OpenAI兼容方案预设) as OpenAI兼容方案类型[]).map(preset => (
-                                            <option key={preset} value={preset}>{OpenAI兼容方案预设[preset].label}</option>
-                                        ))}
-                                    </select>
+                                        buttonClassName="bg-black/60 border-gray-700 py-2.5"
+                                    />
                                 </div>
                             )}
 
@@ -415,23 +414,22 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
 
                                 <div className="flex gap-3 items-end">
                                     <div className="flex-1">
-                                        <select
+                                        <InlineSelect
                                             value={displayValue}
-                                            onChange={(e) => updatePlaceholder(row.modelKey, e.target.value)}
-                                            disabled={disabled}
-                                            className={`w-full bg-black/50 border p-2.5 text-white outline-none rounded-md ${
-                                                disabled ? 'border-gray-700 opacity-70 cursor-not-allowed' : 'border-gray-600 focus:border-wuxia-gold'
-                                            }`}
-                                        >
-                                            <option value="" disabled>
-                                                {disabled ? `跟随主剧情模型：${主剧情解析模型 || '未设置'}` : (options.length ? '请选择模型' : '请先点击获取列表')}
-                                            </option>
-                                            {options.map(model => (
-                                                <option key={`${row.id}-${model}`} value={model}>
-                                                    {model}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            options={options.map((model) => ({
+                                                value: model,
+                                                label: model
+                                            }))}
+                                            onChange={(model) => updatePlaceholder(row.modelKey, model)}
+                                            disabled={disabled || options.length === 0}
+                                            placeholder={disabled
+                                                ? `跟随主剧情模型：${主剧情解析模型 || '未设置'}`
+                                                : (options.length ? '请选择模型' : '请先点击获取列表')}
+                                            buttonClassName={disabled
+                                                ? 'bg-black/30 border-gray-700 py-2.5'
+                                                : 'bg-black/50 border-gray-600 py-2.5'}
+                                            panelClassName="max-w-full"
+                                        />
                                         {!disabled && options.length === 0 && (
                                             <div className="text-[11px] text-gray-500 mt-1">{row.hint}</div>
                                         )}

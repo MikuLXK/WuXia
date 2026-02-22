@@ -3,6 +3,7 @@ import GameButton from '../../ui/GameButton';
 import { WorldGenConfig, 角色数据结构, 天赋结构, 背景结构, 游戏难度 } from '../../../types';
 import { 预设天赋, 预设背景 } from '../../../data/presets';
 import { OrnateBorder } from '../../ui/decorations/OrnateBorder';
+import InlineSelect from '../../ui/InlineSelect';
 import * as dbService from '../../../services/dbService';
 
 interface Props {
@@ -20,6 +21,29 @@ interface Props {
 const STEPS = ['世界观', '角色基础', '天赋背景', '确认生成'];
 const 自定义天赋存储键 = 'new_game_custom_talents';
 const 自定义背景存储键 = 'new_game_custom_backgrounds';
+const 难度下拉选项: Array<{ value: 游戏难度; label: string }> = [
+    { value: 'relaxed', label: '轻松 (剧情模式)' },
+    { value: 'easy', label: '简单 (初入江湖)' },
+    { value: 'normal', label: '正常 (标准体验)' },
+    { value: 'hard', label: '困难 (刀光剑影)' },
+    { value: 'extreme', label: '极限 (修罗炼狱)' }
+];
+const 武力层次下拉选项: Array<{ value: WorldGenConfig['powerLevel']; label: string }> = [
+    { value: '低武', label: '低武 (拳脚兵刃)' },
+    { value: '中武', label: '中武 (内气外放)' },
+    { value: '高武', label: '高武 (搬山填海)' },
+    { value: '修仙', label: '修仙 (长生久视)' }
+];
+const 世界版图下拉选项: Array<{ value: WorldGenConfig['worldSize']; label: string }> = [
+    { value: '弹丸之地', label: '弹丸之地 (一岛或一城)' },
+    { value: '九州宏大', label: '九州宏大 (万里河山)' },
+    { value: '无尽位面', label: '无尽位面 (多重世界)' }
+];
+const 宗门密度下拉选项: Array<{ value: WorldGenConfig['sectDensity']; label: string }> = [
+    { value: '稀少', label: '稀少 (隐世不出)' },
+    { value: '适中', label: '适中 (数大宗门)' },
+    { value: '林立', label: '林立 (百家争鸣)' }
+];
 
 type DropdownProps = {
     value: number;
@@ -391,54 +415,35 @@ const NewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, request
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm text-wuxia-cyan font-bold">游戏难度</label>
-                                            <select 
+                                            <InlineSelect
                                                 value={worldConfig.difficulty}
-                                                onChange={e => setWorldConfig({...worldConfig, difficulty: e.target.value as 游戏难度})}
-                                                className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md"
-                                            >
-                                                <option value="relaxed">轻松 (剧情模式)</option>
-                                                <option value="easy">简单 (初入江湖)</option>
-                                                <option value="normal">正常 (标准体验)</option>
-                                                <option value="hard">困难 (刀光剑影)</option>
-                                                <option value="extreme">极限 (修罗炼狱)</option>
-                                            </select>
+                                                options={难度下拉选项}
+                                                onChange={(difficulty) => setWorldConfig({ ...worldConfig, difficulty })}
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm text-wuxia-cyan font-bold">武力层次</label>
-                                            <select 
+                                            <InlineSelect
                                                 value={worldConfig.powerLevel}
-                                                onChange={e => setWorldConfig({...worldConfig, powerLevel: e.target.value as any})}
-                                                className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md"
-                                            >
-                                                <option value="低武">低武 (拳脚兵刃)</option>
-                                                <option value="中武">中武 (内气外放)</option>
-                                                <option value="高武">高武 (搬山填海)</option>
-                                                <option value="修仙">修仙 (长生久视)</option>
-                                            </select>
+                                                options={武力层次下拉选项}
+                                                onChange={(powerLevel) => setWorldConfig({ ...worldConfig, powerLevel })}
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm text-wuxia-cyan font-bold">世界版图</label>
-                                            <select 
+                                            <InlineSelect
                                                 value={worldConfig.worldSize}
-                                                onChange={e => setWorldConfig({...worldConfig, worldSize: e.target.value as any})}
-                                                className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md"
-                                            >
-                                                <option value="弹丸之地">弹丸之地 (一岛或一城)</option>
-                                                <option value="九州宏大">九州宏大 (万里河山)</option>
-                                                <option value="无尽位面">无尽位面 (多重世界)</option>
-                                            </select>
+                                                options={世界版图下拉选项}
+                                                onChange={(worldSize) => setWorldConfig({ ...worldConfig, worldSize })}
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm text-wuxia-cyan font-bold">宗门密度</label>
-                                            <select 
+                                            <InlineSelect
                                                 value={worldConfig.sectDensity}
-                                                onChange={e => setWorldConfig({...worldConfig, sectDensity: e.target.value as any})}
-                                                className="w-full bg-black/40 border border-gray-600 p-3 text-white outline-none focus:border-wuxia-gold rounded-md"
-                                            >
-                                                <option value="稀少">稀少 (隐世不出)</option>
-                                                <option value="适中">适中 (数大宗门)</option>
-                                                <option value="林立">林立 (百家争鸣)</option>
-                                            </select>
+                                                options={宗门密度下拉选项}
+                                                onChange={(sectDensity) => setWorldConfig({ ...worldConfig, sectDensity })}
+                                            />
                                         </div>
                                     </div>
 

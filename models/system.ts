@@ -8,6 +8,7 @@ import { 世界数据结构 } from './world';
 import { 详细门派结构 } from './sect';
 import { 任务结构, 约定结构 } from './task';
 import { 剧情系统结构 } from './story';
+import { 女主剧情规划结构 } from './heroinePlan';
 import { 战斗状态结构 } from './battle';
 
 export type 接口供应商类型 = 'gemini' | 'claude' | 'openai' | 'deepseek' | 'openai_compatible';
@@ -64,6 +65,7 @@ export interface 游戏设置结构 {
     启用行动选项: boolean; // Whether to require action_options output
     启用COT伪装注入: boolean; // Inject pseudo historical COT message before latest user input
     启用多重思考: boolean; // Switch COT/format prompts to multi-thinking variants
+    启用女主剧情规划: boolean; // Inject heroine planning prompts as optional addon
     剧情风格: 剧情风格类型; // Story style injected as assistant context before COT
     额外提示词: string; // Custom prompt injected at the end
 }
@@ -120,6 +122,7 @@ export interface 存档结构 {
     任务列表?: 任务结构[];
     约定列表?: 约定结构[];
     剧情?: 剧情系统结构;
+    女主剧情规划?: 女主剧情规划结构;
     
     // New Settings in Save
     记忆系统?: 记忆系统结构;

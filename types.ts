@@ -9,6 +9,7 @@ export * from './models/kungfu';
 export * from './models/sect'; 
 export * from './models/task'; 
 export * from './models/story'; 
+export * from './models/heroinePlan';
 export * from './models/battle';
 
 // New types for the advanced chat system

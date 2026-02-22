@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { 接口设置结构, 单接口配置结构, 功能模型占位配置结构 } from '../../../types';
 import GameButton from '../../ui/GameButton';
 import ToggleSwitch from '../../ui/ToggleSwitch';
+import InlineSelect from '../../ui/InlineSelect';
 import { 规范化接口设置 } from '../../../utils/apiConfig';
 
 interface Props {
@@ -142,25 +143,21 @@ const RecallModelSettings: React.FC<Props> = ({ settings, onSave }) => {
                 <div className="flex gap-3 items-end">
                     <div className="flex-1 space-y-1">
                         <label className="text-xs text-gray-300">剧情回忆使用模型</label>
-                        <select
+                        <InlineSelect
                             value={recallModelDisplay}
-                            onChange={(e) => updatePlaceholder('剧情回忆使用模型', e.target.value)}
-                            disabled={!独立模型开启}
-                            className={`w-full bg-black/50 border p-2.5 text-white outline-none rounded-md ${
-                                独立模型开启 ? 'border-gray-600 focus:border-wuxia-gold' : 'border-gray-700 opacity-70 cursor-not-allowed'
-                            }`}
-                        >
-                            <option value="" disabled>
-                                {!独立模型开启
-                                    ? `跟随主剧情模型：${主剧情解析模型 || '未设置'}`
-                                    : (selectOptions.length ? '请选择模型' : '请先点击获取列表')}
-                            </option>
-                            {selectOptions.map(model => (
-                                <option key={`recall-model-${model}`} value={model}>
-                                    {model}
-                                </option>
-                            ))}
-                        </select>
+                            options={selectOptions.map((model) => ({
+                                value: model,
+                                label: model
+                            }))}
+                            onChange={(model) => updatePlaceholder('剧情回忆使用模型', model)}
+                            disabled={!独立模型开启 || selectOptions.length === 0}
+                            placeholder={!独立模型开启
+                                ? `跟随主剧情模型：${主剧情解析模型 || '未设置'}`
+                                : (selectOptions.length ? '请选择模型' : '请先点击获取列表')}
+                            buttonClassName={独立模型开启
+                                ? 'bg-black/50 border-gray-600 py-2.5'
+                                : 'bg-black/30 border-gray-700 py-2.5'}
+                        />
                     </div>
                     <GameButton
                         onClick={handleFetchModels}

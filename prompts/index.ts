@@ -9,6 +9,8 @@ import { 核心_记忆法则 } from './core/memory';
 import { 核心_世界观 } from './core/world'; // New
 import { 核心_思维链 } from './core/cot';   // New
 import { 核心_思维链_多重思考 } from './core/cotMulti';
+import { 核心_女主剧情规划 } from './core/heroinePlan';
+import { 核心_女主剧情规划_思考 } from './core/heroinePlanCot';
 import { 核心_古代现实基本逻辑 } from './core/ancientRealism';
 import { 核心_剧情推动 } from './core/story';
 import { 核心_行动选项规范 } from './core/actionOptions';
@@ -54,6 +56,8 @@ export const 默认提示词: 提示词结构[] = [
     核心_行动选项规范,
     核心_数据格式,
     核心_记忆法则,
+    核心_女主剧情规划,
+    核心_女主剧情规划_思考,
     核心_思维链, // Added
     核心_思维链_多重思考,
 

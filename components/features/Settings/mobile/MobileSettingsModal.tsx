@@ -77,8 +77,8 @@ const MobileSettingsModal: React.FC<Props> = ({
     ] as const;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[220] flex items-center justify-center p-3 md:hidden animate-fadeIn">
-            <div className="w-full max-w-[680px] h-[86vh] bg-[#0b0b0c]/95 border border-wuxia-gold/30 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.85)] flex flex-col">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[220] flex items-start justify-center p-3 pt-5 md:hidden animate-fadeIn overflow-y-auto">
+            <div className="w-full max-w-[680px] h-[86vh] max-h-[92dvh] bg-[#0b0b0c]/95 border border-wuxia-gold/30 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.85)] flex flex-col">
                 <div className="shrink-0 px-4 py-3 border-b border-gray-800/70 bg-black/35">
                     <div className="flex items-center justify-between">
                         <div>
@@ -131,7 +131,7 @@ const MobileSettingsModal: React.FC<Props> = ({
                     {activeTab === 'world' && <WorldSettings festivals={festivals || []} onUpdate={onUpdateFestivals} requestConfirm={requestConfirm} />}
                     {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}
                     {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
-                    {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} requestConfirm={requestConfirm} />}
+                    {activeTab === 'storage' && <StorageManager requestConfirm={requestConfirm} />}
                     {activeTab === 'history' && <HistoryViewer history={history} memorySystem={memorySystem} />}
                     {activeTab === 'context' && contextSnapshot && (
                         <ContextViewer

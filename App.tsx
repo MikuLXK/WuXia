@@ -28,6 +28,7 @@ import MobileTask from './components/features/Task/MobileTask';
 import AgreementModal from './components/features/Agreement/AgreementModal';
 import StoryModal from './components/features/Story/StoryModal'; 
 import MobileStory from './components/features/Story/MobileStory';
+import HeroinePlanModal from './components/features/Story/HeroinePlanModal';
 import MemoryModal from './components/features/Memory/MemoryModal'; 
 import MobileMemory from './components/features/Memory/MobileMemory';
 import SaveLoadModal from './components/features/SaveLoad/SaveLoadModal'; // New
@@ -153,6 +154,7 @@ const App: React.FC = () => {
         state.showTask ? '任务' :
         state.showAgreement ? '约定' :
         state.showStory ? '剧情' :
+        state.showHeroinePlan ? '规划' :
         state.showMemory ? '记忆' :
         state.showSaveLoad.show ? (state.showSaveLoad.mode === 'save' ? '保存' : '读取') :
         state.showSettings ? '设置' :
@@ -171,6 +173,7 @@ const App: React.FC = () => {
         setters.setShowTask(false);
         setters.setShowAgreement(false);
         setters.setShowStory(false);
+        setters.setShowHeroinePlan(false);
         setters.setShowMemory(false);
         setters.setShowSaveLoad({ show: false, mode: 'save' });
         setters.setShowSettings(false);
@@ -217,6 +220,9 @@ const App: React.FC = () => {
                 break;
             case '剧情':
                 setters.setShowStory(true);
+                break;
+            case '规划':
+                setters.setShowHeroinePlan(true);
                 break;
             case '记忆':
                 setters.setShowMemory(true);
@@ -335,7 +341,9 @@ const App: React.FC = () => {
                                 onOpenTask={() => setters.setShowTask(true)} 
                                 onOpenAgreement={() => setters.setShowAgreement(true)} 
                                 onOpenStory={() => setters.setShowStory(true)}
+                                onOpenHeroinePlan={() => setters.setShowHeroinePlan(true)}
                                 onOpenMemory={() => setters.setShowMemory(true)}
+                                enableHeroinePlan={state.gameConfig.启用女主剧情规划 === true}
                                 onSave={() => setters.setShowSaveLoad({ show: true, mode: 'save' })}
                                 onLoad={() => setters.setShowSaveLoad({ show: true, mode: 'load' })}
                             />
@@ -346,6 +354,7 @@ const App: React.FC = () => {
                     <MobileQuickMenu
                         activeWindow={activeMobileWindow}
                         onMenuClick={handleMobileMenuClick}
+                        enableHeroinePlan={state.gameConfig.启用女主剧情规划 === true}
                     />
 
                     {/* 移动端底部世界大事栏 */}
@@ -653,6 +662,13 @@ const App: React.FC = () => {
                                 onClose={() => setters.setShowStory(false)}
                             />
                         </>
+                    )}
+
+                    {state.showHeroinePlan && state.gameConfig.启用女主剧情规划 === true && (
+                        <HeroinePlanModal
+                            plan={state.女主剧情规划}
+                            onClose={() => setters.setShowHeroinePlan(false)}
+                        />
                     )}
 
                     {state.showMemory && (

@@ -87,11 +87,12 @@ const SettingsModal: React.FC<Props> = ({
     ] as const;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-0 md:p-4 animate-fadeIn">
-            <OrnateBorder className="w-full h-full md:max-w-4xl md:h-[700px] flex shadow-[0_0_80px_rgba(0,0,0,0.9)] p-0 overflow-hidden backdrop-blur-md rounded-none md:rounded-xl">
-                <div className="flex w-full h-full">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] overflow-y-auto animate-fadeIn">
+            <div className="min-h-full w-full flex items-start md:items-center justify-center p-0 md:p-4">
+                <OrnateBorder className="w-full h-[100dvh] md:max-w-4xl md:h-[700px] md:max-h-[calc(100vh-2rem)] flex shadow-[0_0_80px_rgba(0,0,0,0.9)] p-0 overflow-hidden backdrop-blur-md rounded-none md:rounded-xl">
+                    <div className="flex w-full h-full min-h-0">
                     {/* Sidebar */}
-                    <div className="hidden md:flex w-1/4 bg-black/40 border-r border-wuxia-gold/10 flex-col pt-12 relative z-10">
+                    <div className="hidden md:flex w-1/4 bg-black/40 border-r border-wuxia-gold/10 flex-col pt-12 relative z-10 min-h-0">
                         <h2 className="text-2xl text-wuxia-gold font-serif font-black px-6 mb-8 italic">设置</h2>
                         <div className="flex-1 overflow-y-auto custom-scrollbar">
                             {tabItems.map(item => (
@@ -133,7 +134,7 @@ const SettingsModal: React.FC<Props> = ({
                     </div>
 
                     {/* Mobile Header */}
-                    <div className="md:hidden w-full h-full flex flex-col">
+                    <div className="md:hidden w-full h-full flex flex-col min-h-0">
                         <div className="shrink-0 border-b border-wuxia-gold/20 bg-black/60">
                             <div className="px-4 py-3 flex items-center justify-between">
                                 <h2 className="text-lg text-wuxia-gold font-serif font-black tracking-wider">设置</h2>
@@ -174,14 +175,14 @@ const SettingsModal: React.FC<Props> = ({
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 p-4 overflow-y-auto relative z-10 custom-scrollbar">
+                        <div className="flex-1 min-h-0 p-4 overflow-y-auto relative z-10 custom-scrollbar">
                             {activeTab === 'api' && <ApiSettings settings={apiConfig} onSave={onSaveApi} />}
                             {activeTab === 'recall' && <RecallModelSettings settings={apiConfig} onSave={onSaveApi} />}
                             {activeTab === 'prompt' && <PromptManager prompts={prompts} onUpdate={onUpdatePrompts} requestConfirm={requestConfirm} />}
                             {activeTab === 'world' && <WorldSettings festivals={festivals || []} onUpdate={onUpdateFestivals} requestConfirm={requestConfirm} />}
                             {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}
                             {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
-                            {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} requestConfirm={requestConfirm} />} 
+                            {activeTab === 'storage' && <StorageManager requestConfirm={requestConfirm} />} 
                             {activeTab === 'history' && <HistoryViewer history={history} memorySystem={memorySystem} />} 
                             {activeTab === 'context' && contextSnapshot && (
                                 <ContextViewer
@@ -201,14 +202,14 @@ const SettingsModal: React.FC<Props> = ({
                     </div>
 
                     {/* Desktop Content */}
-                    <div className="hidden md:block flex-1 p-8 overflow-y-auto relative z-10 custom-scrollbar">
+                    <div className="hidden md:block flex-1 min-h-0 p-8 overflow-y-auto relative z-10 custom-scrollbar">
                         {activeTab === 'api' && <ApiSettings settings={apiConfig} onSave={onSaveApi} />}
                         {activeTab === 'recall' && <RecallModelSettings settings={apiConfig} onSave={onSaveApi} />}
                         {activeTab === 'prompt' && <PromptManager prompts={prompts} onUpdate={onUpdatePrompts} requestConfirm={requestConfirm} />}
                         {activeTab === 'world' && <WorldSettings festivals={festivals || []} onUpdate={onUpdateFestivals} requestConfirm={requestConfirm} />}
                         {activeTab === 'theme' && <ThemeSettings currentTheme={currentTheme} onThemeChange={onThemeChange} />}
                         {activeTab === 'visual' && <VisualSettings settings={visualConfig} onSave={onSaveVisual} />}
-                        {activeTab === 'storage' && <StorageManager history={history} prompts={prompts} requestConfirm={requestConfirm} />} 
+                        {activeTab === 'storage' && <StorageManager requestConfirm={requestConfirm} />} 
                         {activeTab === 'history' && <HistoryViewer history={history} memorySystem={memorySystem} />} 
                         {activeTab === 'context' && contextSnapshot && (
                             <ContextViewer
@@ -225,8 +226,9 @@ const SettingsModal: React.FC<Props> = ({
                             <MemorySettings settings={memoryConfig} onSave={onSaveMemory} />
                         )}
                     </div>
-                </div>
-            </OrnateBorder>
+                    </div>
+                </OrnateBorder>
+            </div>
         </div>
     );
 };

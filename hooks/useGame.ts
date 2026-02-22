@@ -16,7 +16,8 @@ import {
     世界数据结构,
     战斗状态结构,
     详细门派结构,
-    剧情系统结构
+    剧情系统结构,
+    女主剧情规划结构
 } from '../types';
 import { useEffect, useRef, useState } from 'react';
 import * as dbService from '../services/dbService';
@@ -49,6 +50,8 @@ import { 默认COT伪装历史消息提示词, 默认额外系统提示词 } fro
 import { 获取剧情风格提示词 } from '../prompts/runtime/storyStyles';
 import { 核心_思维链_多重思考 } from '../prompts/core/cotMulti';
 import { 核心_输出格式_多重思考 } from '../prompts/core/formatMulti';
+import { 核心_女主剧情规划 } from '../prompts/core/heroinePlan';
+import { 核心_女主剧情规划_思考 } from '../prompts/core/heroinePlanCot';
 import {
     规范化环境信息,
     构建完整地点文本,
@@ -69,6 +72,7 @@ type 回合快照结构 = {
         任务列表: any[];
         约定列表: any[];
         剧情: 剧情系统结构;
+        女主剧情规划?: 女主剧情规划结构;
         记忆系统: 记忆系统结构;
     };
     回档前历史: 聊天记录结构[];
@@ -127,6 +131,7 @@ export const useGame = () => {
         任务列表, 设置任务列表,
         约定列表, 设置约定列表,
         剧情, 设置剧情,
+        女主剧情规划, 设置女主剧情规划,
         历史记录, 设置历史记录,
         记忆系统, 设置记忆系统,
         loading, setLoading,
@@ -143,6 +148,7 @@ export const useGame = () => {
         showTask, setShowTask,
         showAgreement, setShowAgreement,
         showStory, setShowStory,
+        showHeroinePlan, setShowHeroinePlan,
         showMemory, setShowMemory,
         showSaveLoad, setShowSaveLoad,
         activeTab, setActiveTab,
@@ -197,6 +203,7 @@ export const useGame = () => {
             深拷贝(snapshot.回档前状态.剧情),
             深拷贝(snapshot.回档前状态.环境)
         ));
+        设置女主剧情规划(规范化女主剧情规划状态(深拷贝(snapshot.回档前状态.女主剧情规划)));
         设置记忆系统(深拷贝(snapshot.回档前状态.记忆系统));
         设置历史记录(深拷贝(snapshot.回档前历史));
     };
@@ -255,6 +262,9 @@ export const useGame = () => {
         启用多重思考: raw?.启用多重思考 === true
             ? true
             : (typeof gameConfig?.启用多重思考 === 'boolean' ? gameConfig.启用多重思考 : false),
+        启用女主剧情规划: raw?.启用女主剧情规划 === true
+            ? true
+            : (typeof gameConfig?.启用女主剧情规划 === 'boolean' ? gameConfig.启用女主剧情规划 : false),
         剧情风格: raw?.剧情风格 === '后宫' || raw?.剧情风格 === '修炼' || raw?.剧情风格 === '一般' || raw?.剧情风格 === '修罗场' || raw?.剧情风格 === '纯爱' || raw?.剧情风格 === 'NTL后宫'
             ? raw.剧情风格
             : (gameConfig?.剧情风格 || '一般'),
@@ -460,6 +470,129 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         };
     };
 
+    const 规范化女主剧情规划状态 = (raw?: any): 女主剧情规划结构 | undefined => {
+        const planRaw = raw && typeof raw === 'object' ? raw : null;
+        if (!planRaw) return undefined;
+
+        const 纯文本 = (value: any): string => (typeof value === 'string' ? value.trim() : '');
+        const inSet = <T extends string>(value: string, allowed: readonly T[], fallback: T): T => (
+            (allowed as readonly string[]).includes(value) ? value as T : fallback
+        );
+        const 取整数 = (value: any, fallback: number, min: number = 0, max: number = 999): number => {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return fallback;
+            return Math.max(min, Math.min(max, Math.floor(n)));
+        };
+
+        const 女主条目 = Array.isArray(planRaw?.女主条目)
+            ? planRaw.女主条目
+                .map((item: any) => {
+                    if (!item || typeof item !== 'object') return null;
+                    const 最近推进时间Raw = 纯文本(item?.最近推进时间);
+                    const 最近推进时间 = 最近推进时间Raw
+                        ? (normalizeCanonicalGameTime(最近推进时间Raw) || 最近推进时间Raw)
+                        : '';
+                    return {
+                        女主ID: 纯文本(item?.女主ID),
+                        女主名: 纯文本(item?.女主名),
+                        重要度: inSet(纯文本(item?.重要度), ['核心', '主要', '支线'] as const, '主要'),
+                        登场状态: inSet(纯文本(item?.登场状态), ['未登场', '可触发', '已登场'] as const, '未登场'),
+                        首登触发条件: 纯文本(item?.首登触发条件),
+                        首登场景建议: 纯文本(item?.首登场景建议),
+                        当前关系阶段: inSet(纯文本(item?.当前关系阶段), ['陌生', '接触', '信任', '暧昧', '绑定'] as const, '陌生'),
+                        当前阶段目标: 纯文本(item?.当前阶段目标),
+                        下一突破条件: 纯文本(item?.下一突破条件),
+                        互动优先级: 取整数(item?.互动优先级, 50, 1, 100),
+                        既有男性锚点: Array.isArray(item?.既有男性锚点)
+                            ? item.既有男性锚点
+                                .map((anchor: any) => {
+                                    if (!anchor || typeof anchor !== 'object') return null;
+                                    const 姓名 = 纯文本(anchor?.姓名);
+                                    const 关系 = 纯文本(anchor?.关系);
+                                    if (!姓名 || !关系) return null;
+                                    return {
+                                        姓名,
+                                        关系,
+                                        情感强度: 取整数(anchor?.情感强度, 50, 0, 100),
+                                        崩溃进度: 取整数(anchor?.崩溃进度, 0, 0, 100)
+                                    };
+                                })
+                                .filter(Boolean)
+                            : [],
+                        阻断记录: Array.isArray(item?.阻断记录) ? item.阻断记录.map((v: any) => 纯文本(v)).filter(Boolean) : [],
+                        已完成节点: Array.isArray(item?.已完成节点) ? item.已完成节点.map((v: any) => 纯文本(v)).filter(Boolean) : [],
+                        待完成节点: Array.isArray(item?.待完成节点) ? item.待完成节点.map((v: any) => 纯文本(v)).filter(Boolean) : [],
+                        最近推进时间
+                    };
+                })
+                .filter(Boolean)
+            : [];
+
+        const 互动排期 = Array.isArray(planRaw?.互动排期)
+            ? planRaw.互动排期
+                .map((item: any) => {
+                    if (!item || typeof item !== 'object') return null;
+                    const 失效时间Raw = 纯文本(item?.失效时间);
+                    const 失效时间 = 失效时间Raw
+                        ? (normalizeCanonicalGameTime(失效时间Raw) || 失效时间Raw)
+                        : '';
+                    const 事件ID = 纯文本(item?.事件ID);
+                    const 女主ID = 纯文本(item?.女主ID);
+                    if (!事件ID || !女主ID) return null;
+                    return {
+                        事件ID,
+                        女主ID,
+                        类型: inSet(纯文本(item?.类型), ['初见', '日常', '协作', '冲突', '修罗场', '亲密', '公开站队'] as const, '日常'),
+                        描述: 纯文本(item?.描述),
+                        触发条件: 纯文本(item?.触发条件),
+                        失效时间,
+                        成功效果: 纯文本(item?.成功效果),
+                        失败效果: 纯文本(item?.失败效果),
+                        状态: inSet(纯文本(item?.状态), ['待触发', '已触发', '已失效'] as const, '待触发')
+                    };
+                })
+                .filter(Boolean)
+            : [];
+
+        const 群像镜头规划 = Array.isArray(planRaw?.群像镜头规划)
+            ? planRaw.群像镜头规划
+                .map((item: any) => {
+                    if (!item || typeof item !== 'object') return null;
+                    const 镜头ID = 纯文本(item?.镜头ID);
+                    if (!镜头ID) return null;
+                    return {
+                        镜头ID,
+                        参与者: Array.isArray(item?.参与者) ? item.参与者.map((v: any) => 纯文本(v)).filter(Boolean) : [],
+                        焦点: 纯文本(item?.焦点),
+                        预期冲突: 纯文本(item?.预期冲突),
+                        状态: inSet(纯文本(item?.状态), ['待执行', '已执行'] as const, '待执行')
+                    };
+                })
+                .filter(Boolean)
+            : [];
+
+        const 规则约束Raw = planRaw?.规则约束 && typeof planRaw.规则约束 === 'object' ? planRaw.规则约束 : {};
+        const 登场队列 = Array.isArray(planRaw?.登场队列)
+            ? planRaw.登场队列.map((id: any) => 纯文本(id)).filter(Boolean)
+            : [];
+
+        return {
+            规划版本: 纯文本(planRaw?.规划版本) || 'v1',
+            当前阶段: inSet(纯文本(planRaw?.当前阶段), ['开局铺垫', '并线发展', '冲突升级', '收束定局'] as const, '开局铺垫'),
+            当前焦点女主ID: 纯文本(planRaw?.当前焦点女主ID),
+            登场队列,
+            女主条目: 女主条目 as any,
+            互动排期: 互动排期 as any,
+            群像镜头规划: 群像镜头规划 as any,
+            规则约束: {
+                单回合主推进上限: 取整数(规则约束Raw?.单回合主推进上限, 1, 0, 5),
+                单回合次推进上限: 取整数(规则约束Raw?.单回合次推进上限, 1, 0, 5),
+                连续同女主推进上限: 取整数(规则约束Raw?.连续同女主推进上限, 2, 1, 10),
+                低压回合保底互动数: 取整数(规则约束Raw?.低压回合保底互动数, 1, 0, 5)
+            }
+        };
+    };
+
     const 战斗结束自动清空 = (battleLike: any, storyLike?: any): 战斗状态结构 => {
         const battle = 规范化战斗状态(battleLike);
         const 敌方 = battle.敌方;
@@ -522,7 +655,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             玩家门派: sectState,
             任务列表: initialTasks,
             约定列表: initialAgreements,
-            剧情: 创建开场空白剧情()
+            剧情: 创建开场空白剧情(),
+            女主剧情规划: undefined as 女主剧情规划结构 | undefined
         };
     };
 
@@ -548,6 +682,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             在场NPC档案: string;
             游戏设置: string;
             剧情安排: string;
+            女主剧情规划状态: string;
             世界状态: string;
             环境状态: string;
             角色状态: string;
@@ -679,6 +814,10 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
 
             return `【剧情安排】\n${JSON.stringify(normalizedStory)}`;
         };
+        const 构建女主剧情规划文本 = (payload: any) => {
+            const normalizedPlan = 规范化女主剧情规划状态(payload?.女主剧情规划);
+            return `【女主剧情规划】\n${JSON.stringify(normalizedPlan || {})}`;
+        };
 
         const perspectivePromptIds = [
             'write_perspective_first',
@@ -708,9 +847,32 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             }
             return nextPool;
         };
-        const effectivePromptPool = 应用多重思考提示词切换(
+        const 应用女主剧情规划提示词切换 = (
+            pool: 提示词结构[],
+            enabled: boolean
+        ): 提示词结构[] => {
+            const hasPlan = pool.some(p => p.id === 'core_heroine_plan');
+            const hasPlanCot = pool.some(p => p.id === 'core_heroine_plan_cot');
+            let nextPool = pool.map(p => {
+                if (p.id === 'core_heroine_plan') return { ...p, 启用: enabled };
+                if (p.id === 'core_heroine_plan_cot') return { ...p, 启用: enabled };
+                return p;
+            });
+            if (enabled && !hasPlan) {
+                nextPool = [...nextPool, { ...核心_女主剧情规划, 启用: true }];
+            }
+            if (enabled && !hasPlanCot) {
+                nextPool = [...nextPool, { ...核心_女主剧情规划_思考, 启用: true }];
+            }
+            return nextPool;
+        };
+        let effectivePromptPool = 应用多重思考提示词切换(
             promptPool,
             normalizedGameConfig.启用多重思考 === true
+        );
+        effectivePromptPool = 应用女主剧情规划提示词切换(
+            effectivePromptPool,
+            normalizedGameConfig.启用女主剧情规划 === true
         );
         const selectedPerspectiveIdMap: Record<string, string> = {
             第一人称: 'write_perspective_first',
@@ -781,6 +943,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             `行动选项功能: ${normalizedGameConfig.启用行动选项 ? '开启' : '关闭'}`,
             `COT伪装注入: ${normalizedGameConfig.启用COT伪装注入 ? '开启' : '关闭'}`,
             `多重思考模式: ${normalizedGameConfig.启用多重思考 ? '开启' : '关闭'}`,
+            `女主剧情规划: ${normalizedGameConfig.启用女主剧情规划 ? '开启' : '关闭'}`,
             '',
             '【对应叙事人称提示词】',
             activePerspectiveContent || '未配置',
@@ -789,6 +952,9 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             writeReqContent || '未配置'
         ].join('\n');
         const contextStoryPlan = 构建剧情安排(statePayload);
+        const contextHeroinePlan = normalizedGameConfig.启用女主剧情规划
+            ? 构建女主剧情规划文本(statePayload)
+            : '';
         const worldData = 规范化世界状态(statePayload?.世界);
         const battleData = statePayload?.战斗 && typeof statePayload.战斗 === 'object' ? statePayload.战斗 : {};
         const sectData = statePayload?.玩家门派 && typeof statePayload.玩家门派 === 'object' ? statePayload.玩家门派 : {};
@@ -820,6 +986,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 contextNPCData,
                 contextSettings,
                 contextStoryPlan,
+                contextHeroinePlan,
                 contextWorldState,
                 contextEnvironmentState,
                 contextRoleState,
@@ -841,6 +1008,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 在场NPC档案: contextNPCData,
                 游戏设置: contextSettings,
                 剧情安排: contextStoryPlan,
+                女主剧情规划状态: contextHeroinePlan,
                 世界状态: contextWorldState,
                 环境状态: contextEnvironmentState,
                 角色状态: contextRoleState,
@@ -1083,7 +1251,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 玩家门派: contextData.玩家门派 || 玩家门派,
                 任务列表: contextData.任务列表 || 任务列表,
                 约定列表: contextData.约定列表 || 约定列表,
-                剧情: 规范化剧情状态(contextData.剧情 || 剧情, openingEnv)
+                剧情: 规范化剧情状态(contextData.剧情 || 剧情, openingEnv),
+                女主剧情规划: 规范化女主剧情规划状态(contextData.女主剧情规划 ?? 女主剧情规划)
             };
             const openingContext = 构建系统提示词(
                 promptSnapshot,
@@ -1167,7 +1336,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 社交: contextData.社交 || 社交,
                 世界: contextData.世界 || 世界,
                 战斗: contextData.战斗 || 战斗,
-                剧情: 规范化剧情状态(contextData.剧情 || 剧情, contextData.环境 || 环境)
+                剧情: 规范化剧情状态(contextData.剧情 || 剧情, contextData.环境 || 环境),
+                女主剧情规划: 规范化女主剧情规划状态(contextData.女主剧情规划 ?? 女主剧情规划)
             });
 
             const openingCanonicalTime = normalizeCanonicalGameTime(openingStateAfterCommands?.环境?.时间);
@@ -1240,6 +1410,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             世界: typeof 世界;
             战斗: typeof 战斗;
             剧情: typeof 剧情;
+            女主剧情规划?: 女主剧情规划结构;
         }
     ) => {
         let charBuffer = baseState?.角色 || 角色;
@@ -1248,16 +1419,18 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         let worldBuffer = 规范化世界状态(baseState?.世界 || 世界);
         let battleBuffer = 规范化战斗状态(baseState?.战斗 || 战斗);
         let storyBuffer = 规范化剧情状态(baseState?.剧情 || 剧情, envBuffer);
+        let heroinePlanBuffer = 规范化女主剧情规划状态(baseState?.女主剧情规划 ?? 女主剧情规划);
 
         if (Array.isArray(response.tavern_commands)) {
             response.tavern_commands.forEach(cmd => {
-                const res = applyStateCommand(charBuffer, envBuffer, socialBuffer, worldBuffer, battleBuffer, storyBuffer, cmd.key, cmd.value, cmd.action);
+                const res = applyStateCommand(charBuffer, envBuffer, socialBuffer, worldBuffer, battleBuffer, storyBuffer, heroinePlanBuffer, cmd.key, cmd.value, cmd.action);
                 charBuffer = res.char;
                 envBuffer = 规范化环境信息(res.env);
                 socialBuffer = 规范化社交列表(res.social, { 合并同名: false });
                 worldBuffer = 规范化世界状态(res.world);
                 battleBuffer = res.battle;
                 storyBuffer = res.story;
+                heroinePlanBuffer = 规范化女主剧情规划状态(res.heroinePlan);
             });
 
             battleBuffer = 战斗结束自动清空(battleBuffer, storyBuffer);
@@ -1271,6 +1444,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             设置世界(规范化世界状态(worldBuffer));
             设置战斗(battleBuffer);
             设置剧情(normalizedStory);
+            设置女主剧情规划(规范化女主剧情规划状态(heroinePlanBuffer));
             socialBuffer = mergedSocial;
             storyBuffer = normalizedStory;
         }
@@ -1281,7 +1455,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             社交: 规范化社交列表(socialBuffer),
             世界: 规范化世界状态(worldBuffer),
             战斗: battleBuffer,
-            剧情: 规范化剧情状态(storyBuffer, envBuffer)
+            剧情: 规范化剧情状态(storyBuffer, envBuffer),
+            女主剧情规划: 规范化女主剧情规划状态(heroinePlanBuffer)
         };
     };
 
@@ -1331,7 +1506,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 玩家门派,
                 任务列表,
                 约定列表,
-                剧情: 规范化剧情状态(剧情, 环境)
+                剧情: 规范化剧情状态(剧情, 环境),
+                女主剧情规划: 规范化女主剧情规划状态(女主剧情规划)
             },
             recallContextMode
                 ? { 禁用中期长期记忆: true, 禁用短期记忆: true }
@@ -1374,6 +1550,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         pushSection('npc_present', '当前场景NPC档案', '系统', builtContext.contextPieces.在场NPC档案);
         pushSection('game_settings', '游戏设置', '系统', builtContext.contextPieces.游戏设置);
         pushSection('story_plan', '剧情安排', '系统', builtContext.contextPieces.剧情安排);
+        pushSection('heroine_plan', '女主剧情规划', '系统', builtContext.contextPieces.女主剧情规划状态);
         pushSection('state_world', '世界', '系统', builtContext.contextPieces.世界状态);
         pushSection('state_environment', '当前环境', '系统', builtContext.contextPieces.环境状态);
         pushSection('state_role', '角色', '系统', builtContext.contextPieces.角色状态);
@@ -1490,6 +1667,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 任务列表: 深拷贝(任务列表),
                 约定列表: 深拷贝(约定列表),
                 剧情: 深拷贝(剧情),
+                女主剧情规划: 深拷贝(女主剧情规划),
                 记忆系统: 深拷贝(memBeforeSend)
             },
             回档前历史: 深拷贝(historyBeforeSend)
@@ -1532,7 +1710,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                     玩家门派,
                     任务列表,
                     约定列表,
-                    剧情: 规范化剧情状态(剧情, 环境)
+                    剧情: 规范化剧情状态(剧情, 环境),
+                    女主剧情规划: 规范化女主剧情规划状态(女主剧情规划)
                 },
                 recallContextActiveForMain
                     ? { 禁用中期长期记忆: true, 禁用短期记忆: true }
@@ -1752,6 +1931,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             任务列表: 任务列表,
             约定列表: 约定列表,
             剧情: 规范化剧情状态(剧情, 环境),
+            女主剧情规划: 规范化女主剧情规划状态(女主剧情规划),
             记忆系统: 记忆系统,
             游戏设置: gameConfig,
             记忆配置: memoryConfig,
@@ -1785,6 +1965,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             save.剧情 || 创建开场空白剧情(),
             save.环境信息 || 创建开场空白环境()
         ));
+        设置女主剧情规划(规范化女主剧情规划状态((save as any).女主剧情规划));
         设置历史记录(save.历史记录);
         设置记忆系统(规范化记忆系统(save.记忆系统));
         
@@ -1806,7 +1987,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             canQuickRestart: Boolean(最近开局配置)
         },
         setters: {
-            setShowSettings, setShowInventory, setShowEquipment, setShowSocial, setShowTeam, setShowKungfu, setShowWorld, setShowMap, setShowSect, setShowTask, setShowAgreement, setShowStory, setShowMemory, setShowSaveLoad,
+            setShowSettings, setShowInventory, setShowEquipment, setShowSocial, setShowTeam, setShowKungfu, setShowWorld, setShowMap, setShowSect, setShowTask, setShowAgreement, setShowStory, setShowHeroinePlan, setShowMemory, setShowSaveLoad,
             setActiveTab, setCurrentTheme,
             setApiConfig, setVisualConfig, setPrompts
         },

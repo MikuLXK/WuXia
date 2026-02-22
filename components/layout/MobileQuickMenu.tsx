@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 interface Props {
     activeWindow: string | null;
     onMenuClick: (menu: string) => void;
+    enableHeroinePlan?: boolean;
 }
 
 type IconName =
@@ -19,6 +20,7 @@ type IconName =
     | 'task'
     | 'agreement'
     | 'story'
+    | 'plan'
     | 'memory'
     | 'settings'
     | 'save'
@@ -40,32 +42,32 @@ const MENU_ICON_MAP: Record<string, IconName> = {
     任务: 'task',
     约定: 'agreement',
     剧情: 'story',
+    规划: 'plan',
     记忆: 'memory',
     设置: 'settings',
     保存: 'save',
     读取: 'load',
 };
 
-const MOBILE_ALL_MENUS = [
-    ...PRIMARY_MENUS,
-    '地图',
-    '功法',
-    '队伍',
-    '门派',
-    '任务',
-    '约定',
-    '剧情',
-    '记忆',
-    '保存',
-    '读取',
-    '设置',
-];
-
 const getIcon = (menu: string): IconName => MENU_ICON_MAP[menu] || 'grid';
 
-const MobileQuickMenu: React.FC<Props> = ({ activeWindow, onMenuClick }) => {
+const MobileQuickMenu: React.FC<Props> = ({ activeWindow, onMenuClick, enableHeroinePlan = false }) => {
     const [showAllMenus, setShowAllMenus] = useState(false);
-    const allMenus = useMemo(() => MOBILE_ALL_MENUS, []);
+    const allMenus = useMemo(() => ([
+        ...PRIMARY_MENUS,
+        '地图',
+        '功法',
+        '队伍',
+        '门派',
+        '任务',
+        '约定',
+        '剧情',
+        ...(enableHeroinePlan ? ['规划'] : []),
+        '记忆',
+        '保存',
+        '读取',
+        '设置',
+    ]), [enableHeroinePlan]);
 
     const handleMenuClick = (menu: string) => {
         onMenuClick(menu);
@@ -215,6 +217,8 @@ const IconGlyph = ({ name, className }: { name: IconName; className?: string }) 
             return <svg viewBox="0 0 24 24" className={svgClass} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M7 6.5h10v11H7z" /><path d="M9.5 9.5h5M9.5 12h5M9.5 14.5h3" /><path d="m14.5 16.5 1.2 1.2 2.8-2.8" /></svg>;
         case 'story':
             return <svg viewBox="0 0 24 24" className={svgClass} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5.5 5.5h13v13h-13z" /><path d="M8.5 9h7M8.5 12h7M8.5 15h4" /></svg>;
+        case 'plan':
+            return <svg viewBox="0 0 24 24" className={svgClass} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4.5 6.5h15v11h-15z" /><path d="M7.5 9.5h9M7.5 12.5h5" /><path d="m13.5 14.5 1.5 1.5 3-3" /></svg>;
         case 'memory':
             return <svg viewBox="0 0 24 24" className={svgClass} fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="7.5" /><path d="M12 8.3V12l3 1.7" /></svg>;
         case 'save':

@@ -15,7 +15,9 @@ interface Props {
     onOpenTask: () => void; 
     onOpenAgreement: () => void;
     onOpenStory: () => void; 
+    onOpenHeroinePlan: () => void;
     onOpenMemory: () => void; 
+    enableHeroinePlan?: boolean;
     onSave: () => void; // Now triggers Modal open logic
     onLoad: () => void; // Now triggers Modal open logic
 }
@@ -23,7 +25,8 @@ interface Props {
 const RightPanel: React.FC<Props> = ({ 
     onOpenSettings, onOpenInventory, onOpenEquipment, onOpenTeam, 
     onOpenSocial, onOpenKungfu, onOpenWorld, onOpenMap, onOpenSect, 
-    onOpenTask, onOpenAgreement, onOpenStory, onOpenMemory,
+    onOpenTask, onOpenAgreement, onOpenStory, onOpenHeroinePlan, onOpenMemory,
+    enableHeroinePlan = false,
     onSave, onLoad 
 }) => {
     
@@ -40,7 +43,8 @@ const RightPanel: React.FC<Props> = ({
         { label: '门派', action: onOpenSect, color: 'primary' },
         { label: '任务', action: onOpenTask, color: 'primary' },
         { label: '约定', action: onOpenAgreement, color: 'primary' },
-        { label: '剧情', action: onOpenStory, color: 'primary' }, 
+        { label: '剧情', action: onOpenStory, color: 'primary' },
+        ...(enableHeroinePlan ? [{ label: '规划', action: onOpenHeroinePlan, color: 'primary' }] : []),
         { label: '记忆', action: onOpenMemory, color: 'primary' }, 
     ];
 
