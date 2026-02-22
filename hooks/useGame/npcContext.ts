@@ -151,60 +151,44 @@ export const 构建NPC上下文 = (socialData: any[], memoryConfig: 记忆配置
 
     const entries = npcList.map((npc, index) => toEntry(npc, index));
 
-    const 在场重要角色档案 = entries
-        .filter(n => n.是否在场 && n.是否主要角色)
-        .map((n) => {
-            const row: Record<string, any> = {
-                完整基础数据: n.完整基础数据,
-                关键记忆: n.关键记忆
-            };
-            if (n.队伍战斗附加) {
-                row.队伍战斗附加 = n.队伍战斗附加;
-            }
-            return row;
-        });
+    const 在场数据 = Object.fromEntries(
+        entries
+            .filter(n => n.是否在场)
+            .map(n => {
+                const key = `[${n.索引}] ${n.姓名}`;
+                const baseData = n.是否主要角色 ? n.完整基础数据 : n.基础数据;
+                const data = {
+                    ...baseData,
+                    是否主要角色: n.是否主要角色,
+                    关键记忆: n.关键记忆,
+                    ...(n.队伍战斗附加 && { 战斗状态: n.队伍战斗附加 })
+                };
+                return [key, data];
+            })
+    );
 
-    const 在场普通角色档案 = entries
-        .filter(n => n.是否在场 && !n.是否主要角色)
-        .map((n) => {
-            const row: Record<string, any> = {
-                基础数据: n.基础数据,
-                关键记忆: n.关键记忆
-            };
-            if (n.队伍战斗附加) {
-                row.队伍战斗附加 = n.队伍战斗附加;
-            }
-            return row;
-        });
-
-    const 离场重要角色档案 = entries
-        .filter(n => !n.是否在场 && n.是否主要角色)
-        .map((n) => ({
-            完整基础数据: n.完整基础数据,
-            关键记忆: n.关键记忆
-        }));
-
-    const 离场普通角色简报 = entries
-        .filter(n => !n.是否在场 && !n.是否主要角色)
-        .map(n => `[${n.索引}]${n.姓名}-${n.性别}-${n.境界}-${n.简介}-${n.最后互动.内容}-${n.最后互动.时间}`);
-
-    const 在场数据 = {
-        在场角色: {
-            重要角色: 在场重要角色档案,
-            普通角色: 在场普通角色档案
-        }
-    };
-
-    const 离场数据 = {
-        离场角色档案: {
-            重要角色: 离场重要角色档案,
-            普通角色简报: 离场普通角色简报
-        }
-    };
+    const 离场数据 = Object.fromEntries(
+        entries
+            .filter(n => !n.是否在场)
+            .map(n => {
+                const key = `[${n.索引}] ${n.姓名}`;
+                if (n.是否主要角色) {
+                    const data = {
+                        ...n.完整基础数据,
+                        是否主要角色: n.是否主要角色,
+                        关键记忆: n.关键记忆
+                    };
+                    return [key, data];
+                } else {
+                    const summary = `${n.性别}-${n.境界}-${n.简介}-${n.基础数据.关系状态}-好感度:${n.基础数据.好感度}-最后互动:[${n.最后互动.时间}] ${n.最后互动.内容}`;
+                    return [key, summary];
+                }
+            })
+    );
 
     return {
-        在场数据块: `【当前场景NPC档案】\n${JSON.stringify(在场数据)}`,
-        离场数据块: `【离场NPC档案】\n${JSON.stringify(离场数据)}`
+        在场数据块: `【当前场景NPC档案】(源于 gameState.社交)\n${JSON.stringify(在场数据, null, 2)}`,
+        离场数据块: `【离场NPC档案】(源于 gameState.社交)\n${JSON.stringify(离场数据, null, 2)}`
     };
 };
 
