@@ -722,12 +722,13 @@ export const generateStoryResponse = async (
     if (normalizedContext) {
         apiMessages.push({ role: 'system', content: normalizedContext });
     }
-    if (normalizedExtraPrompt) {
-        apiMessages.push({ role: 'system', content: `【额外要求提示词】\n${normalizedExtraPrompt}` });
-    }
     apiMessages.push({ role: 'user', content: `<玩家输入>${playerInput}</玩家输入>` });
     if (styleAssistantPrompt) {
         apiMessages.push({ role: 'assistant', content: styleAssistantPrompt });
+    }
+    // 额外要求提示词固定放在卡COT前，作为倒数第二条注入消息。
+    if (normalizedExtraPrompt) {
+        apiMessages.push({ role: 'assistant', content: normalizedExtraPrompt });
     }
     // 伪装COT历史消息必须始终放在本轮消息末尾，确保为最后一条注入消息。
     if (enableCotInjection && cotPseudoHistoryPrompt) {
