@@ -29,6 +29,18 @@ export interface StoryResponseResult {
     rawText: string;
 }
 
+export class StoryResponseParseError extends Error {
+    rawText: string;
+    parseDetail?: string;
+
+    constructor(message: string, rawText: string, parseDetail?: string) {
+        super(message);
+        this.name = 'StoryResponseParseError';
+        this.rawText = rawText;
+        this.parseDetail = parseDetail;
+    }
+}
+
 interface WorldStreamOptions {
     stream?: boolean;
     onDelta?: (delta: string, accumulated: string) => void;
@@ -809,10 +821,8 @@ export const generateStoryResponse = async (
                 return normalized;
             }
         }
-        return {
-            logs: [{ sender: '系统', text: content }],
-            thinking_pre: `<thinking>解析错误: 返回内容非标准JSON（${parsed.error || 'unknown'}）</thinking>`
-        };
+        const detail = parsed.error || '返回内容结构不完整';
+        throw new StoryResponseParseError(`返回内容非标准JSON（${detail}）`, content, detail);
     };
 
     const rawText = await 请求模型文本(apiConfig, apiMessages, {

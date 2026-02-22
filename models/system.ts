@@ -105,11 +105,20 @@ export interface 聊天记录结构 {
     [key: string]: any; // Allow extensibility for structuredResponse etc.
 }
 
+export interface 存档元数据结构 {
+    schemaVersion?: number;
+    历史记录条数?: number;
+    历史记录是否裁剪?: boolean;
+    包含提示词快照?: boolean;
+    自动存档签名?: string;
+}
+
 export interface 存档结构 {
     id: number;
     类型: 'manual' | 'auto'; // Added Save Type
     时间戳: number;
-    描述: string;
+    描述?: string; // Legacy field, no longer required by UI
+    元数据?: 存档元数据结构;
     角色数据: 角色数据结构;
     环境信息: 环境信息结构;
     历史记录: 聊天记录结构[];

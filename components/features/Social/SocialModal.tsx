@@ -6,9 +6,10 @@ interface Props {
     socialList: NPC结构[];
     onClose: () => void;
     playerName?: string; // Add playerName prop to check for first time taker
+    onToggleMajorRole?: (npcId: string, nextIsMajor: boolean) => void;
 }
 
-const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少侠" }) => {
+const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少侠", onToggleMajorRole }) => {
     const [selectedId, setSelectedId] = useState<string | null>(
         socialList.length > 0 ? socialList[0].id : null
     );
@@ -51,6 +52,10 @@ const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少�
     };
     const 展示关系驱动面板 = 展示女性扩展;
     const 当前关系网 = currentNPC ? 读取关系网(currentNPC) : [];
+    const 切换重要角色状态 = (npc: NPC结构) => {
+        if (!onToggleMajorRole) return;
+        onToggleMajorRole(npc.id, !Boolean(npc.是否主要角色));
+    };
 
     // Helper for Privacy Tags
     const PrivateTag: React.FC<{ label: string; value?: string; color?: string }> = ({ label, value, color = "text-pink-300" }) => (
@@ -153,6 +158,28 @@ const SocialModal: React.FC<Props> = ({ socialList, onClose, playerName = "少�
                                                 {currentNPC.是否队友 ? '队伍成员' : '非队伍成员'}
                                             </span>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => 切换重要角色状态(currentNPC)}
+                                            className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-700 bg-black/40 hover:border-wuxia-gold/60 transition-colors"
+                                            title="切换是否重要角色"
+                                        >
+                                            <span className="text-[11px] text-gray-300 tracking-wide">重要角色</span>
+                                            <span className={`relative w-10 h-5 rounded-full border transition-colors ${
+                                                currentNPC.是否主要角色
+                                                    ? 'bg-wuxia-gold/20 border-wuxia-gold/70'
+                                                    : 'bg-gray-900 border-gray-700'
+                                            }`}>
+                                                <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all ${
+                                                    currentNPC.是否主要角色
+                                                        ? 'left-[21px] bg-wuxia-gold'
+                                                        : 'left-0.5 bg-gray-500'
+                                                }`} />
+                                            </span>
+                                            <span className={`text-[10px] ${currentNPC.是否主要角色 ? 'text-wuxia-gold' : 'text-gray-500'}`}>
+                                                {currentNPC.是否主要角色 ? '开启' : '关闭'}
+                                            </span>
+                                        </button>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-4xl font-serif text-wuxia-red mb-1">♥ {currentNPC.好感度}</div>

@@ -1,13 +1,13 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as dbService from '../../../services/dbService';
 import { 存档结构 } from '../../../types';
+import { parseJsonWithRepair } from '../../../utils/jsonRepair';
 import GameButton from '../../ui/GameButton';
 
 interface Props {
     onClose: () => void;
     onLoadGame: (save: 存档结构) => void;
-    onSaveGame?: (desc: string) => void; // Optional if in read-only mode
+    onSaveGame?: () => void | Promise<void>;
     mode: 'save' | 'load';
     requestConfirm?: (options: { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean }) => Promise<boolean>;
 }
@@ -16,10 +16,11 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode,
     const [saves, setSaves] = useState<存档结构[]>([]);
     const [activeTab, setActiveTab] = useState<'auto' | 'manual'>('manual');
     const [loading, setLoading] = useState(true);
-    const [saveDesc, setSaveDesc] = useState('');
+    const [syncing, setSyncing] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
-        loadSaves();
+        void loadSaves();
     }, []);
 
     const loadSaves = async () => {
@@ -27,11 +28,43 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode,
         try {
             const list = await dbService.读取存档列表();
             setSaves(list);
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const 读取地点文本 = (save: 存档结构): string => {
+        const env = save.环境信息 || ({} as any);
+        const list = [env.具体地点, env.小地点, env.中地点, env.大地点]
+            .map((item: any) => (typeof item === 'string' ? item.trim() : ''))
+            .filter(Boolean);
+        return list[0] || '未知地点';
+    };
+
+    const 读取时间文本 = (save: 存档结构): string => {
+        const timeText = typeof save.环境信息?.时间 === 'string' ? save.环境信息.时间.trim() : '';
+        return timeText || new Date(save.时间戳).toLocaleString();
+    };
+
+    const 构建存档标题 = (save: 存档结构): string => {
+        const roleName = typeof save.角色数据?.姓名 === 'string' ? save.角色数据.姓名.trim() : '';
+        return roleName || '未知角色';
+    };
+
+    const 构建存档摘要 = (save: 存档结构): string => {
+        const historyCount = typeof save.元数据?.历史记录条数 === 'number'
+            ? save.元数据.历史记录条数
+            : (Array.isArray(save.历史记录) ? save.历史记录.length : 0);
+        const tags: string[] = [
+            save.类型 === 'auto' ? '自动快照' : '手动快照',
+            `历史 ${historyCount} 条`
+        ];
+        if (save.元数据?.历史记录是否裁剪) {
+            tags.push('已裁剪');
+        }
+        return tags.join(' · ');
     };
 
     const handleDelete = async (id: number, e: React.MouseEvent) => {
@@ -49,7 +82,7 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode,
         const ok = requestConfirm
             ? await requestConfirm({
                 title: '读取存档',
-                message: `读取存档：${save.描述}？`,
+                message: `读取存档：${构建存档标题(save)}（${读取地点文本(save)}）？`,
                 confirmText: '读取'
             })
             : true;
@@ -58,25 +91,93 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode,
     };
 
     const handleSave = async () => {
-        if (onSaveGame) {
-            onSaveGame(saveDesc || "手动存档");
-            setSaveDesc('');
-            // Switch to manual tab and reload to show new save
+        if (!onSaveGame || syncing) return;
+        setSyncing(true);
+        try {
+            await Promise.resolve(onSaveGame());
             setActiveTab('manual');
             await loadSaves();
+        } catch (error: any) {
+            console.error(error);
+            alert(`保存失败：${error?.message || '未知错误'}`);
+        } finally {
+            setSyncing(false);
         }
     };
 
-    const filteredSaves = saves.filter(s => {
-        if (activeTab === 'auto') return s.类型 === 'auto';
-        return s.类型 !== 'auto'; // Default to manual for undefined types too
+    const handleExport = async () => {
+        if (syncing) return;
+        setSyncing(true);
+        try {
+            const payload = await dbService.导出存档数据();
+            const content = JSON.stringify(payload, null, 2);
+            const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const stamp = new Date().toISOString().replace(/[:]/g, '-');
+            link.href = url;
+            link.download = `wuxia-saves-${stamp}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error(error);
+            alert(`导出失败：${error?.message || '未知错误'}`);
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const handleTriggerImport = async () => {
+        const ok = requestConfirm
+            ? await requestConfirm({
+                title: '导入存档',
+                message: '导入将以“合并+去重”方式写入本地存档，是否继续？',
+                confirmText: '继续导入'
+            })
+            : true;
+        if (!ok) return;
+        fileInputRef.current?.click();
+    };
+
+    const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.currentTarget.value = '';
+        if (!file) return;
+
+        setSyncing(true);
+        try {
+            const fileText = await file.text();
+            const parsed = parseJsonWithRepair<any>(fileText);
+            if (!parsed.value) {
+                throw new Error(parsed.error || 'JSON 解析失败');
+            }
+
+            const result = await dbService.导入存档数据(parsed.value, { 覆盖现有: false });
+            await loadSaves();
+            setActiveTab('manual');
+
+            const repairedTip = parsed.usedRepair ? '\n检测到文件存在格式问题，已本地自动修复后导入。' : '';
+            alert(`导入完成：新增 ${result.imported} 条，跳过 ${result.skipped} 条。${repairedTip}`);
+        } catch (error: any) {
+            console.error(error);
+            alert(`导入失败：${error?.message || '未知错误'}`);
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const filteredSaves = saves.filter((save) => {
+        if (activeTab === 'auto') return save.类型 === 'auto';
+        return save.类型 !== 'auto';
     });
+    const busy = loading || syncing;
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[300] flex items-center justify-center p-4 animate-fadeIn">
             <div className="bg-ink-black/95 border border-wuxia-gold/30 w-full max-w-4xl h-[600px] flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] rounded-2xl relative overflow-hidden">
-                
-                {/* Header */}
+
                 <div className="h-16 shrink-0 border-b border-gray-800/50 bg-black/40 flex items-center justify-between px-6 relative z-50">
                     <h3 className="text-wuxia-gold font-serif font-bold text-2xl tracking-[0.3em] drop-shadow-md">
                         {mode === 'save' ? '铭刻时光' : '时光回溯'}
@@ -84,35 +185,54 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode,
                     <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-2xl">×</button>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Left: New Save (Only in Save Mode) or Stats */}
                     {mode === 'save' && (
                         <div className="w-[30%] bg-black/20 border-r border-gray-800/50 p-6 flex flex-col gap-4">
-                            <h4 className="text-wuxia-gold font-bold text-sm uppercase tracking-widest">新建存档</h4>
-                            <textarea 
-                                value={saveDesc}
-                                onChange={(e) => setSaveDesc(e.target.value)}
-                                placeholder="输入存档描述..."
-                                className="w-full h-32 bg-black/30 border border-gray-700 p-3 text-gray-300 focus:border-wuxia-gold outline-none resize-none text-sm"
-                            />
-                            <GameButton onClick={handleSave} variant="primary" className="w-full">
-                                确认保存
+                            <h4 className="text-wuxia-gold font-bold text-sm uppercase tracking-widest">手动存档</h4>
+                            <p className="text-xs text-gray-400 leading-relaxed">
+                                手动与自动存档都会完整保存全部内容。自动存档仅在数量上保留最近三条。
+                            </p>
+                            <GameButton onClick={() => { void handleSave(); }} disabled={!onSaveGame || busy} variant="primary" className="w-full">
+                                立即保存
                             </GameButton>
                         </div>
                     )}
 
-                    {/* Right: List */}
                     <div className="flex-1 flex flex-col bg-ink-wash/5">
-                        {/* Tabs */}
+                        <div className="px-6 pt-4 pb-3 border-b border-gray-800/50 flex justify-end gap-2">
+                            <GameButton
+                                onClick={() => { void handleExport(); }}
+                                disabled={busy}
+                                variant="secondary"
+                                className="px-4 py-2 text-xs"
+                            >
+                                导出存档
+                            </GameButton>
+                            <GameButton
+                                onClick={() => { void handleTriggerImport(); }}
+                                disabled={busy}
+                                variant="secondary"
+                                className="px-4 py-2 text-xs"
+                            >
+                                导入存档
+                            </GameButton>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".json,application/json,text/plain"
+                                className="hidden"
+                                onChange={(e) => { void handleImportFileChange(e); }}
+                            />
+                        </div>
+
                         <div className="flex border-b border-gray-800/50">
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('manual')}
                                 className={`flex-1 py-3 text-sm font-bold tracking-widest transition-colors ${activeTab === 'manual' ? 'bg-wuxia-gold/10 text-wuxia-gold border-b-2 border-wuxia-gold' : 'text-gray-500 hover:text-gray-300'}`}
                             >
                                 手动存档
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('auto')}
                                 className={`flex-1 py-3 text-sm font-bold tracking-widest transition-colors ${activeTab === 'auto' ? 'bg-wuxia-gold/10 text-wuxia-gold border-b-2 border-wuxia-gold' : 'text-gray-500 hover:text-gray-300'}`}
                             >
@@ -120,14 +240,16 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode,
                             </button>
                         </div>
 
-                        {/* List Area */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
-                            {filteredSaves.length === 0 && (
+                            {filteredSaves.length === 0 && !loading && (
                                 <div className="text-center text-gray-600 py-10">暂无记录</div>
                             )}
-                            
-                            {filteredSaves.map(save => (
-                                <div 
+                            {loading && (
+                                <div className="text-center text-gray-500 py-10">读取中...</div>
+                            )}
+
+                            {filteredSaves.map((save) => (
+                                <div
                                     key={save.id}
                                     onClick={() => { void handleLoadClick(save); }}
                                     className={`relative bg-black/40 border border-gray-700 p-4 rounded-lg group transition-all flex flex-col gap-2 ${mode === 'load' ? 'cursor-pointer hover:border-wuxia-gold/50 hover:bg-black/60' : ''}`}
@@ -137,22 +259,25 @@ const SaveLoadModal: React.FC<Props> = ({ onClose, onLoadGame, onSaveGame, mode,
                                             <span className={`text-[10px] px-1.5 rounded border ${save.类型 === 'auto' ? 'border-blue-500 text-blue-400' : 'border-wuxia-gold text-wuxia-gold'}`}>
                                                 {save.类型 === 'auto' ? 'AUTO' : 'MANUAL'}
                                             </span>
-                                            <span className="font-bold text-gray-200 text-sm">{save.角色数据?.姓名 || '未知角色'}</span>
+                                            <span className="font-bold text-gray-200 text-sm">{构建存档标题(save)}</span>
                                             <span className="text-xs text-gray-500">
-                                                {save.角色数据?.境界} | {save.环境信息?.具体地点}
+                                                {save.角色数据?.境界 || '未知境界'}
                                             </span>
                                         </div>
                                         <div className="text-[10px] text-gray-600 font-mono">
                                             {new Date(save.时间戳).toLocaleString()}
                                         </div>
                                     </div>
-                                    
-                                    <div className="text-xs text-gray-400 italic border-l-2 border-gray-700 pl-2">
-                                        {save.描述}
+
+                                    <div className="text-xs text-gray-400 border-l-2 border-gray-700 pl-2">
+                                        {读取地点文本(save)} · {读取时间文本(save)}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500">
+                                        {构建存档摘要(save)}
                                     </div>
 
-                                    <button 
-                                        onClick={(e) => handleDelete(save.id, e)}
+                                    <button
+                                        onClick={(e) => { void handleDelete(save.id, e); }}
                                         className="absolute top-4 right-4 text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                                         title="删除"
                                     >

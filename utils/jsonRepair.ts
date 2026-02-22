@@ -183,11 +183,68 @@ const repairUnterminatedStringByParseError = (input: string, errorMessage?: stri
     return closeDanglingString(input);
 };
 
+const repairExpectedQuotedPropertyNameByParseError = (input: string, errorMessage?: string): string => {
+    if (!errorMessage) return input;
+    if (!/Expected double-quoted property name in JSON/i.test(errorMessage)) return input;
+    const posMatch = errorMessage.match(/position\s+(\d+)/i);
+    const pos = posMatch ? Number(posMatch[1]) : NaN;
+    if (!Number.isFinite(pos)) return input;
+
+    const nextIdx = findNextNonWhitespaceIndex(input, pos);
+    if (nextIdx < 0) return input;
+    const nextCh = input[nextIdx];
+
+    const prevIdx = findPrevNonWhitespaceIndex(input, nextIdx - 1);
+    if (prevIdx >= 0) {
+        const prevCh = input[prevIdx];
+        if ((nextCh === '}' || nextCh === ']') && prevCh === ',') {
+            return `${input.slice(0, prevIdx)}${input.slice(prevIdx + 1)}`;
+        }
+    }
+
+    if (nextCh === ',') {
+        const afterComma = findNextNonWhitespaceIndex(input, nextIdx + 1);
+        if (afterComma >= 0 && (input[afterComma] === '}' || input[afterComma] === ']')) {
+            return `${input.slice(0, nextIdx)}${input.slice(nextIdx + 1)}`;
+        }
+    }
+
+    const escapeDoubleQuote = (text: string) => text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const singleQuotedKeyFixed = input.replace(
+        /([{,]\s*)'([^'\\]*(?:\\.[^'\\]*)*)'(\s*:)/g,
+        (_m, p1, p2, p3) => `${p1}"${escapeDoubleQuote(p2)}"${p3}`
+    );
+    if (singleQuotedKeyFixed !== input) {
+        return singleQuotedKeyFixed;
+    }
+
+    const keyStartChar = input[nextIdx];
+    const isKeyStart = /[A-Za-z_\u4e00-\u9fa5]/.test(keyStartChar);
+    if (isKeyStart) {
+        let endIdx = nextIdx + 1;
+        while (endIdx < input.length && /[A-Za-z0-9_\u4e00-\u9fa5-]/.test(input[endIdx])) {
+            endIdx += 1;
+        }
+        const colonIdx = findNextNonWhitespaceIndex(input, endIdx);
+        const prevTokenIdx = findPrevNonWhitespaceIndex(input, nextIdx - 1);
+        const keyBoundaryOk = prevTokenIdx < 0 || input[prevTokenIdx] === '{' || input[prevTokenIdx] === ',';
+        if (colonIdx >= 0 && input[colonIdx] === ':' && keyBoundaryOk) {
+            const keyText = input.slice(nextIdx, endIdx);
+            return `${input.slice(0, nextIdx)}"${keyText}"${input.slice(endIdx)}`;
+        }
+    }
+
+    return quoteBareKeys(removeTrailingCommas(input));
+};
+
 const errorGuidedRepair = (input: string, firstError?: string): string => {
     let text = input;
     let lastError = firstError;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
         let next = repairMissingCommaByParseError(text, lastError);
+        if (next === text) {
+            next = repairExpectedQuotedPropertyNameByParseError(text, lastError);
+        }
         if (next === text) {
             next = repairUnterminatedStringByParseError(text, lastError);
         }

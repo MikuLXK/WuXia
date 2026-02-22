@@ -8,6 +8,8 @@ type SendResult = {
     attachedRecallPreview?: string;
     preparedRecallTag?: string;
     needRecallConfirm?: boolean;
+    needRerollConfirm?: boolean;
+    parseErrorMessage?: string;
 };
 
 type RecallProgress = {
@@ -68,6 +70,20 @@ const InputArea: React.FC<Props> = ({
                 onRecallProgress: (progress) => setRecallProgress(progress)
             });
             if (result?.cancelled) {
+                if (result.needRerollConfirm) {
+                    const confirmed = requestConfirm
+                        ? await requestConfirm({
+                            title: '响应解析失败',
+                            message: `${result.parseErrorMessage || '模型返回了非标准 JSON。'}\n\n是否立即重ROLL并回填上一轮输入？`,
+                            confirmText: '重ROLL',
+                            cancelText: '取消'
+                        })
+                        : false;
+                    if (confirmed) {
+                        handleReroll();
+                    }
+                    return;
+                }
                 if (result.needRecallConfirm && result.preparedRecallTag) {
                     const confirmed = requestConfirm
                         ? await requestConfirm({

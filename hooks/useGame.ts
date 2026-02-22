@@ -106,6 +106,8 @@ type 发送结果 = {
     attachedRecallPreview?: string;
     preparedRecallTag?: string;
     needRecallConfirm?: boolean;
+    needRerollConfirm?: boolean;
+    parseErrorMessage?: string;
 };
 
 type 回忆检索进度 = {
@@ -164,11 +166,17 @@ export const useGame = () => {
         scrollRef, abortControllerRef
     } = gameState;
     const 回合快照栈Ref = useRef<回合快照结构[]>([]);
+    const 最近自动存档时间戳Ref = useRef<number>(0);
+    const 最近自动存档签名Ref = useRef<string>('');
     const [可重Roll计数, set可重Roll计数] = useState(0);
     const [最近开局配置, 设置最近开局配置] = useState<最近开局配置结构 | null>(null);
 
     // --- Actions ---
     const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
+    const 重置自动存档状态 = () => {
+        最近自动存档时间戳Ref.current = 0;
+        最近自动存档签名Ref.current = '';
+    };
 
     const 同步重Roll计数 = () => {
         set可重Roll计数(回合快照栈Ref.current.length);
@@ -296,6 +304,21 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
 
     const handleStartNewGameWizard = () => {
         清空重Roll快照();
+        重置自动存档状态();
+        设置最近开局配置(null);
+        setLoading(false);
+        设置环境(创建开场空白环境());
+        设置社交([]);
+        设置世界(创建开场空白世界());
+        设置战斗(创建开场空白战斗());
+        设置玩家门派(创建空门派状态());
+        设置任务列表([]);
+        设置约定列表([]);
+        设置剧情(创建开场空白剧情());
+        设置女主剧情规划(undefined);
+        设置记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
+        设置历史记录([]);
+        setWorldEvents([]);
         setView('new_game');
     };
 
@@ -1380,7 +1403,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             }
             
             // Trigger auto-save after full opening response
-            performAutoSave();
+            void performAutoSave({ history: [...initialHistory, newAiMsg] });
 
         } catch (e: any) {
             if (openingStreamHeartbeat) clearInterval(openingStreamHeartbeat);
@@ -1397,6 +1420,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
     };
 
     const handleReturnToHome = () => {
+        重置自动存档状态();
         setView('home');
         return true;
     };
@@ -1804,7 +1828,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             }
             
             // 8. Auto Save Trigger
-            performAutoSave();
+            void performAutoSave({ history: [...updatedDisplayHistory, newAiMsg] });
             return { attachedRecallPreview };
 
         } catch (error: any) {
@@ -1818,6 +1842,15 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 }
                 console.log("Request aborted by user");
                 return { cancelled: true };
+            } else if (error instanceof aiService.StoryResponseParseError || error?.name === 'StoryResponseParseError') {
+                // 解析失败时不写入伪结构 assistant 消息，交给前端弹窗确认是否重ROLL。
+                设置历史记录(historyBeforeSend);
+                设置记忆系统(memBeforeSend);
+                return {
+                    cancelled: true,
+                    needRerollConfirm: true,
+                    parseErrorMessage: error?.message || '返回内容非标准JSON，建议重ROLL'
+                };
             } else {
                 弹出重Roll快照();
                 const errorMsg: 聊天记录结构 = { role: 'system', content: `[系统错误]: ${error.message}`, timestamp: Date.now() };
@@ -1917,43 +1950,113 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         await dbService.保存设置('festivals', newFestivals);
     };
     
+    const 存档格式版本 = 2;
+    const 自动存档最小间隔毫秒 = 30000;
+
+    const 构建存档历史记录 = (sourceHistory?: 聊天记录结构[]): 聊天记录结构[] => {
+        const rawHistory = Array.isArray(sourceHistory)
+            ? sourceHistory
+            : (Array.isArray(历史记录) ? 历史记录 : []);
+        return 深拷贝(rawHistory);
+    };
+
+    const 构建存档记忆系统 = (): 记忆系统结构 => {
+        const normalizedMemory = 规范化记忆系统(记忆系统);
+        return 深拷贝(normalizedMemory);
+    };
+
+    const 构建自动存档签名 = (sourceHistory?: 聊天记录结构[]): string => {
+        const historyBase = Array.isArray(sourceHistory)
+            ? sourceHistory
+            : (Array.isArray(历史记录) ? 历史记录 : []);
+        const historySize = historyBase.length;
+        const latestMsg = historySize > 0 ? historyBase[historySize - 1] : null;
+        const latestDigest = latestMsg
+            ? `${latestMsg.role}:${latestMsg.timestamp}:${(latestMsg.content || '').toString().slice(0, 30)}`
+            : 'none';
+        const timeText = normalizeCanonicalGameTime(环境.时间) || 环境.时间 || '';
+        const locationText = 构建完整地点文本(环境) || '';
+        return `${timeText}|${locationText}|${historySize}|${latestDigest}`;
+    };
+
     // Unified Save Function (Internal)
-    const createSaveData = (desc: string, type: 'manual' | 'auto'): Omit<存档结构, 'id'> => {
+    const createSaveData = (
+        type: 'manual' | 'auto',
+        autoSignature?: string,
+        snapshot?: { history?: 聊天记录结构[] }
+    ): Omit<存档结构, 'id'> => {
+        const historySource = Array.isArray(snapshot?.history)
+            ? snapshot.history
+            : (Array.isArray(历史记录) ? 历史记录 : []);
+        const historySnapshot = 构建存档历史记录(historySource);
+        const rawPromptsSnapshot = 深拷贝(prompts);
+        const promptsSnapshot = Array.isArray(rawPromptsSnapshot) ? rawPromptsSnapshot : undefined;
+
         return {
             类型: type,
             时间戳: Date.now(),
-            描述: desc,
-            角色数据: 角色,
-            环境信息: 规范化环境信息(环境),
-            历史记录: 历史记录,
-            社交: 社交,
-            世界: 世界,
-            战斗: 战斗,
-            玩家门派: 玩家门派,
-            任务列表: 任务列表,
-            约定列表: 约定列表,
-            剧情: 规范化剧情状态(剧情, 环境),
-            女主剧情规划: 规范化女主剧情规划状态(女主剧情规划),
-            记忆系统: 记忆系统,
-            游戏设置: gameConfig,
-            记忆配置: memoryConfig,
-            提示词快照: prompts // Save current prompts (including world gen)
+            元数据: {
+                schemaVersion: 存档格式版本,
+                历史记录条数: historySnapshot.length,
+                历史记录是否裁剪: false,
+                包含提示词快照: Boolean(promptsSnapshot),
+                自动存档签名: type === 'auto' ? (autoSignature || '') : undefined
+            },
+            角色数据: 深拷贝(角色),
+            环境信息: 规范化环境信息(深拷贝(环境)),
+            历史记录: historySnapshot,
+            社交: 深拷贝(社交),
+            世界: 深拷贝(世界),
+            战斗: 深拷贝(战斗),
+            玩家门派: 深拷贝(玩家门派),
+            任务列表: 深拷贝(任务列表),
+            约定列表: 深拷贝(约定列表),
+            剧情: 规范化剧情状态(深拷贝(剧情), 深拷贝(环境)),
+            女主剧情规划: 规范化女主剧情规划状态(
+                女主剧情规划 ? 深拷贝(女主剧情规划) : undefined
+            ),
+            记忆系统: 构建存档记忆系统(),
+            游戏设置: 深拷贝(gameConfig),
+            记忆配置: 深拷贝(memoryConfig),
+            提示词快照: promptsSnapshot
         };
     };
 
-    const handleSaveGame = async (desc: string) => {
-        const save = createSaveData(desc, 'manual');
+    const handleSaveGame = async () => {
+        const save = createSaveData('manual');
         await dbService.保存存档(save);
+        setHasSave(true);
     };
 
-    const performAutoSave = async () => {
-        const desc = `[自动] ${构建完整地点文本(环境)} - ${new Date().toLocaleTimeString()}`;
-        const save = createSaveData(desc, 'auto');
-        await dbService.保存存档(save);
+    const performAutoSave = async (snapshot?: { history?: 聊天记录结构[] }) => {
+        const historySource = Array.isArray(snapshot?.history)
+            ? snapshot.history
+            : (Array.isArray(历史记录) ? 历史记录 : []);
+        if (!Array.isArray(historySource) || historySource.length === 0) return;
+        const signature = 构建自动存档签名(historySource);
+        const now = Date.now();
+        if (signature && signature === 最近自动存档签名Ref.current) return;
+        if (
+            最近自动存档时间戳Ref.current > 0 &&
+            now - 最近自动存档时间戳Ref.current < 自动存档最小间隔毫秒
+        ) {
+            return;
+        }
+
+        try {
+            const save = createSaveData('auto', signature, { history: historySource });
+            await dbService.保存存档(save);
+            最近自动存档签名Ref.current = signature;
+            最近自动存档时间戳Ref.current = now;
+            setHasSave(true);
+        } catch (error) {
+            console.error('自动存档失败', error);
+        }
     };
 
     const handleLoadGame = async (save: 存档结构) => {
         清空重Roll快照();
+        重置自动存档状态();
         设置最近开局配置(null);
         设置角色(规范化角色物品容器映射(save.角色数据));
         设置环境(规范化环境信息(save.环境信息 || 创建开场空白环境()));
@@ -1968,18 +2071,34 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             save.环境信息 || 创建开场空白环境()
         ));
         设置女主剧情规划(规范化女主剧情规划状态((save as any).女主剧情规划));
-        设置历史记录(save.历史记录);
+        设置历史记录(Array.isArray(save.历史记录) ? save.历史记录 : []);
         设置记忆系统(规范化记忆系统(save.记忆系统));
         
         if (save.游戏设置) setGameConfig(规范化游戏设置(save.游戏设置));
         if (save.记忆配置) setMemoryConfig(规范化记忆配置(save.记忆配置));
-        if (save.提示词快照) {
+        if (Array.isArray(save.提示词快照)) {
             setPrompts(save.提示词快照); // Restore world settings etc.
             await dbService.保存设置('prompts', save.提示词快照);
         }
         
+        setHasSave(true);
         setView('game');
         setShowSaveLoad({ show: false, mode: 'load' }); // Close modal
+    };
+
+    const updateNpcMajorRole = (npcId: string, isMajor: boolean) => {
+        if (!npcId) return;
+        设置社交((prev) => {
+            const baseList = Array.isArray(prev) ? prev : [];
+            const nextList = baseList.map((npc: any) => {
+                if (!npc || npc.id !== npcId) return npc;
+                return {
+                    ...npc,
+                    是否主要角色: isMajor
+                };
+            });
+            return 规范化社交列表(nextList, { 合并同名: false });
+        });
     };
 
     return {
@@ -2005,6 +2124,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             handleGenerateWorld,
             handleQuickRestart,
             handleReturnToHome,
+            updateNpcMajorRole,
             getContextSnapshot: buildContextSnapshot
         }
     };

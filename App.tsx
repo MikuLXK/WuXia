@@ -584,12 +584,14 @@ const App: React.FC = () => {
                             <SocialModal 
                                 socialList={state.社交} 
                                 onClose={() => setters.setShowSocial(false)} 
-                                playerName={state.角色.姓名} 
+                                playerName={state.角色.姓名}
+                                onToggleMajorRole={actions.updateNpcMajorRole}
                             />
                             <MobileSocial
                                 socialList={state.社交}
                                 onClose={() => setters.setShowSocial(false)}
                                 playerName={state.角色.姓名}
+                                onToggleMajorRole={actions.updateNpcMajorRole}
                             />
                         </>
                     )}
