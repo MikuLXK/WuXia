@@ -1084,7 +1084,7 @@ export const generateStoryResponse = async (
     }
     apiMessages.push({
         role: 'user',
-        content: typeof playerInput === 'string' && playerInput.trim().length > 0 ? playerInput : '继续。'
+        content: typeof playerInput === 'string' && playerInput.trim().length > 0 ? playerInput : '开始任务。'
     });
 
     const normalizeGameResponse = (raw: any): GameResponse => {
