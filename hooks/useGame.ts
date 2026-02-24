@@ -264,6 +264,11 @@ export const useGame = () => {
         叙事人称: raw?.叙事人称 === '第一人称' || raw?.叙事人称 === '第二人称' || raw?.叙事人称 === '第三人称'
             ? raw.叙事人称
             : (gameConfig?.叙事人称 || '第二人称'),
+        JSON模式: raw?.JSON模式 === 'auto' || raw?.JSON模式 === 'on' || raw?.JSON模式 === 'off'
+            ? raw.JSON模式
+            : (gameConfig?.JSON模式 === 'auto' || gameConfig?.JSON模式 === 'on' || gameConfig?.JSON模式 === 'off')
+                ? gameConfig.JSON模式
+                : 'auto',
         启用行动选项: raw?.启用行动选项 !== false,
         启用COT伪装注入: raw?.启用COT伪装注入 === false
             ? false
@@ -295,7 +300,8 @@ export const useGame = () => {
 
 好的，已确认多重思考模式。
 后续将使用独立字段输出思考：
-t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc / t_cmd / t_audit / t_fix / t_mem / t_opts。`;
+t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc / t_cmd / t_audit / t_fix / t_mem / t_opts。
+接下来我将按要求输出内容：`;
         }
         return 默认COT伪装历史消息提示词.trim();
     };
@@ -1434,6 +1440,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             '【游戏设置】',
             `字数要求: ${normalizedGameConfig.字数要求}字`,
             `叙事人称: ${normalizedGameConfig.叙事人称}`,
+            `JSON mode: ${normalizedGameConfig.JSON模式 === 'auto' ? '自动' : normalizedGameConfig.JSON模式 === 'on' ? '开启' : '关闭'}`,
             `剧情风格: ${normalizedGameConfig.剧情风格}`,
             `行动选项功能: ${normalizedGameConfig.启用行动选项 ? '开启' : '关闭'}`,
             `防止说话: ${normalizedGameConfig.启用防止说话 ? '开启' : '关闭'}`,
@@ -1534,7 +1541,6 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         重置自动存档状态();
 
         const openingBase = 创建开场基础状态(charData, worldConfig);
-        应用开场基态(openingBase);
 
         if (openingStreaming) {
             const worldStreamMarker = Date.now();
@@ -1620,6 +1626,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 }, 420);
             }
 
+            const worldGameConfig = 规范化游戏设置(gameConfig);
             const generatedWorldPrompt = await aiService.generateWorldData(
                 worldGenerationContext,
                 charData,
@@ -1645,7 +1652,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                             }));
                         }
                     }
-                    : undefined
+                    : undefined,
+                worldGameConfig.JSON模式
             );
             if (worldStreamHeartbeat) clearInterval(worldStreamHeartbeat);
 
@@ -1807,7 +1815,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                     enableCotInjection: openingGameConfig.启用COT伪装注入 !== false,
                     styleAssistantPrompt: 构建剧情风格助手消息(openingGameConfig),
                     cotPseudoHistoryPrompt: 构建COT伪装提示词(openingGameConfig),
-                    lengthRequirementPrompt: openingLengthRequirementPrompt
+                    lengthRequirementPrompt: openingLengthRequirementPrompt,
+                    jsonMode: openingGameConfig.JSON模式
                 }
             );
             const aiData = aiResult.response;
@@ -1823,6 +1832,11 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 剧情: 规范化剧情状态(contextData.剧情 || 剧情, contextData.环境 || 环境),
                 女主剧情规划: 规范化女主剧情规划状态(contextData.女主剧情规划 ?? 女主剧情规划)
             });
+            // 开场期：非 tavern_commands 可写域（门派/任务/约定）也必须在此时重置，避免沿用旧存档数据。
+            设置玩家门派(contextData.玩家门派 || 创建占位门派状态(contextData.角色 || 角色));
+            设置任务列表(Array.isArray(contextData.任务列表) ? contextData.任务列表 : []);
+            设置约定列表(Array.isArray(contextData.约定列表) ? contextData.约定列表 : []);
+            setWorldEvents([]);
 
             const openingCanonicalTime = normalizeCanonicalGameTime(openingStateAfterCommands?.环境?.时间);
             const openingTime = openingCanonicalTime
@@ -2255,7 +2269,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                     enableCotInjection: runtimeGameConfig.启用COT伪装注入 !== false,
                     styleAssistantPrompt: 构建剧情风格助手消息(runtimeGameConfig),
                     cotPseudoHistoryPrompt: 构建COT伪装提示词(runtimeGameConfig),
-                    lengthRequirementPrompt
+                    lengthRequirementPrompt,
+                    jsonMode: runtimeGameConfig.JSON模式
                 }
             );
             const aiData = aiResult.response;
@@ -2361,7 +2376,6 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 return;
             }
             const openingBase = 创建开场基础状态(charData, worldConfig);
-            应用开场基态(openingBase);
             if (view !== 'game') {
                 setView('game');
             }

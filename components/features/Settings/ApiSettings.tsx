@@ -10,6 +10,7 @@ import {
 import GameButton from '../../ui/GameButton';
 import ToggleSwitch from '../../ui/ToggleSwitch';
 import InlineSelect from '../../ui/InlineSelect';
+import * as aiService from '../../../services/aiService';
 import {
     创建接口配置模板,
     OpenAI兼容方案预设,
@@ -72,6 +73,13 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [newProvider, setNewProvider] = useState<接口供应商类型>('openai');
     const [newCompatiblePreset, setNewCompatiblePreset] = useState<OpenAI兼容方案类型>('custom');
+    const [testingConnection, setTestingConnection] = useState(false);
+    const [testResultModal, setTestResultModal] = useState<{
+        open: boolean;
+        title: string;
+        content: string;
+        ok: boolean;
+    }>({ open: false, title: '', content: '', ok: false });
 
     useEffect(() => {
         const normalized = 规范化接口设置(settings);
@@ -211,6 +219,53 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
         setSelectedConfigId(normalized.activeConfigId || normalized.configs[0]?.id || null);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 2000);
+    };
+
+    const handleTestConnection = async () => {
+        if (!activeConfig) return;
+        const modelForTest = (form.功能模型占位.主剧情使用模型 || '').trim() || (activeConfig.model || '').trim();
+        if (!activeConfig.apiKey || !activeConfig.baseUrl) {
+            setMessage('请先填写当前配置的 API Key 和 Base URL');
+            return;
+        }
+        if (!modelForTest) {
+            setMessage('请先填写主剧情模型或配置默认模型');
+            return;
+        }
+        setMessage('');
+        setTestingConnection(true);
+        try {
+            const result = await aiService.testConnection({
+                ...activeConfig,
+                model: modelForTest
+            });
+            const title = result.ok ? '连接测试成功' : '连接测试失败';
+            const meta = [
+                `配置: ${activeConfig.名称 || activeConfig.id}`,
+                `供应商: ${供应商标签[activeConfig.供应商]}`,
+                `模型: ${modelForTest}`,
+                `Base URL: ${activeConfig.baseUrl}`,
+                '',
+                '---',
+                '',
+                result.detail
+            ].join('\n');
+            setTestResultModal({
+                open: true,
+                title,
+                content: meta,
+                ok: result.ok
+            });
+        } catch (e: any) {
+            setTestResultModal({
+                open: true,
+                title: '连接测试失败',
+                content: String(e?.message || '未知错误'),
+                ok: false
+            });
+        } finally {
+            setTestingConnection(false);
+        }
     };
 
     return (
@@ -359,6 +414,19 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                                     className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all"
                                 />
                             </div>
+                            <div className="pt-1">
+                                <GameButton
+                                    onClick={handleTestConnection}
+                                    variant="secondary"
+                                    className="w-full"
+                                    disabled={testingConnection}
+                                >
+                                    {testingConnection ? '测试中...' : '测试连接'}
+                                </GameButton>
+                                <div className="text-[11px] text-gray-400 mt-1">
+                                    将发送一次极短请求验证 API 连通性与当前模型可用性。
+                                </div>
+                            </div>
 
                             <div className="pt-2">
                                 <GameButton onClick={handleDeleteActive} variant="danger" className="w-full">
@@ -463,6 +531,44 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                     {showSuccess ? '✔ 配置已保存' : '保存配置'}
                 </GameButton>
             </div>
+
+            {testResultModal.open && (
+                <div
+                    className="fixed inset-0 z-[260] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                    onClick={() => setTestResultModal(prev => ({ ...prev, open: false }))}
+                >
+                    <div
+                        className="w-full max-w-3xl rounded-lg border border-wuxia-gold/30 bg-black/90 p-5 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between gap-4 mb-4">
+                            <h4 className={`text-lg font-serif font-bold ${testResultModal.ok ? 'text-green-400' : 'text-red-400'}`}>
+                                {testResultModal.title || '连接测试结果'}
+                            </h4>
+                            <button
+                                type="button"
+                                onClick={() => setTestResultModal(prev => ({ ...prev, open: false }))}
+                                className="text-gray-400 hover:text-white transition-colors"
+                                aria-label="关闭测试结果"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar rounded-md border border-gray-700/80 bg-black/60 p-3 text-xs text-gray-200 whitespace-pre-wrap">
+                            {testResultModal.content}
+                        </div>
+                        <div className="pt-4 flex justify-end">
+                            <GameButton
+                                onClick={() => setTestResultModal(prev => ({ ...prev, open: false }))}
+                                variant="primary"
+                                className="px-6"
+                            >
+                                关闭
+                            </GameButton>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

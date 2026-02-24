@@ -59,10 +59,12 @@ export interface 视觉设置结构 {
 
 export type 剧情风格类型 = '后宫' | '修炼' | '一般' | '修罗场' | '纯爱' | 'NTL后宫';
 export type NTL后宫档位 = '禁止乱伦' | '假乱伦' | '无限制';
+export type JSON模式设置 = 'auto' | 'on' | 'off';
 
 export interface 游戏设置结构 {
     字数要求: number; // Minimum logs body length
     叙事人称: '第一人称' | '第二人称' | '第三人称';
+    JSON模式: JSON模式设置; // API JSON mode switch (auto/on/off)
     启用行动选项: boolean; // Whether to require action_options output
     启用COT伪装注入: boolean; // Inject pseudo historical COT message before latest user input
     启用多重思考: boolean; // Switch COT/format prompts to multi-thinking variants

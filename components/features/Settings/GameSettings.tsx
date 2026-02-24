@@ -11,7 +11,7 @@ interface Props {
 const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [form, setForm] = useState<游戏设置结构>(settings);
     const [showSuccess, setShowSuccess] = useState(false);
-    const [openMenu, setOpenMenu] = useState<'perspective' | 'style' | 'ntl' | null>(null);
+    const [openMenu, setOpenMenu] = useState<'perspective' | 'style' | 'ntl' | 'json' | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
 
     const 叙事人称选项: Array<{ value: 游戏设置结构['叙事人称']; label: string }> = [
@@ -31,6 +31,11 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
         { value: '禁止乱伦', label: '禁止乱伦' },
         { value: '假乱伦', label: '假乱伦' },
         { value: '无限制', label: '无限制' }
+    ];
+    const JSON模式选项: Array<{ value: 游戏设置结构['JSON模式']; label: string }> = [
+        { value: 'auto', label: '自动 (Auto)' },
+        { value: 'on', label: '开启 (On)' },
+        { value: 'off', label: '关闭 (Off)' }
     ];
 
     useEffect(() => {
@@ -71,7 +76,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     };
 
     const 渲染内置下拉 = (params: {
-        menuKey: 'perspective' | 'style' | 'ntl';
+        menuKey: 'perspective' | 'style' | 'ntl' | 'json';
         value: string;
         options: Array<{ value: string; label: string }>;
         onChange: (value: string) => void;
@@ -164,6 +169,17 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         options: 叙事人称选项,
                         onChange: (value) => 实时应用更新({ 叙事人称: value as 游戏设置结构['叙事人称'] })
                     })}
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm text-wuxia-cyan font-bold">JSON mode（结构化输出）</label>
+                    {渲染内置下拉({
+                        menuKey: 'json',
+                        value: form.JSON模式,
+                        options: JSON模式选项,
+                        onChange: (value) => 实时应用更新({ JSON模式: value as 游戏设置结构['JSON模式'] })
+                    })}
+                    <div className="text-xs text-gray-400">自动：按模型支持情况启用 JSON mode；开启：强制使用；关闭：只靠提示词约束。</div>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">

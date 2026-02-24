@@ -195,6 +195,7 @@ export const useGameState = () => {
     const 默认游戏设置: 游戏设置结构 = {
         字数要求: 450,
         叙事人称: '第二人称', 
+        JSON模式: 'auto',
         启用行动选项: true,
         启用COT伪装注入: true,
         启用多重思考: false,
@@ -219,6 +220,9 @@ export const useGameState = () => {
         叙事人称: raw?.叙事人称 === '第一人称' || raw?.叙事人称 === '第二人称' || raw?.叙事人称 === '第三人称'
             ? raw.叙事人称
             : 默认游戏设置.叙事人称,
+        JSON模式: raw?.JSON模式 === 'auto' || raw?.JSON模式 === 'on' || raw?.JSON模式 === 'off'
+            ? raw.JSON模式
+            : 默认游戏设置.JSON模式,
         启用行动选项: raw?.启用行动选项 !== false,
         启用COT伪装注入: raw?.启用COT伪装注入 !== false,
         启用多重思考: raw?.启用多重思考 === true,
