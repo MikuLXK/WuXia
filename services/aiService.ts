@@ -24,6 +24,7 @@ interface StoryRequestOptions {
     styleAssistantPrompt?: string;
     lengthRequirementPrompt?: string;
     jsonMode?: JSON模式设置;
+    errorDetailLimit?: number;
 }
 
 export interface ConnectionTestResult {
@@ -942,7 +943,8 @@ export const generateStoryResponse = async (
         temperature: 0.7,
         signal,
         streamOptions,
-        responseFormatJsonObject
+        responseFormatJsonObject,
+        errorDetailLimit: requestOptions?.errorDetailLimit
     });
 
     return {

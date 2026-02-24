@@ -109,6 +109,8 @@ type 发送结果 = {
     needRecallConfirm?: boolean;
     needRerollConfirm?: boolean;
     parseErrorMessage?: string;
+    errorDetail?: string;
+    errorTitle?: string;
 };
 
 type 回忆检索进度 = {
@@ -317,6 +319,28 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         const trimmed = typeof rawText === 'string' ? rawText.trim() : '';
         if (!trimmed) return JSON.stringify(fallbackStructured, null, 2);
         return formatJsonWithRepair(trimmed, trimmed);
+    };
+    const 格式化错误详情 = (error: any): string => {
+        if (!error) return '未知错误';
+        if (typeof error === 'string') return error;
+        const lines: string[] = [];
+        if (error?.name) lines.push(`Name: ${error.name}`);
+        if (typeof error?.status === 'number') lines.push(`Status: ${error.status}`);
+        if (typeof error?.message === 'string' && error.message.trim()) {
+            lines.push(`Message: ${error.message}`);
+        }
+        const detail = error?.detail ?? error?.parseDetail;
+        if (detail) {
+            const detailText = typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2);
+            lines.push('Detail:');
+            lines.push(detailText);
+        }
+        if (lines.length > 0) return lines.join('\n');
+        try {
+            return JSON.stringify(error, null, 2);
+        } catch {
+            return String(error);
+        }
     };
 
     const handleStartNewGameWizard = () => {
@@ -2270,7 +2294,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                     styleAssistantPrompt: 构建剧情风格助手消息(runtimeGameConfig),
                     cotPseudoHistoryPrompt: 构建COT伪装提示词(runtimeGameConfig),
                     lengthRequirementPrompt,
-                    jsonMode: runtimeGameConfig.JSON模式
+                    jsonMode: runtimeGameConfig.JSON模式,
+                    errorDetailLimit: Number.POSITIVE_INFINITY
                 }
             );
             const aiData = aiResult.response;
@@ -2331,9 +2356,17 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 };
             } else {
                 弹出重Roll快照();
-                const errorMsg: 聊天记录结构 = { role: 'system', content: `[系统错误]: ${error.message}`, timestamp: Date.now() };
+                const detail = 格式化错误详情(error);
+                const summary = typeof error?.message === 'string' && error.message.trim().length > 0
+                    ? error.message
+                    : (typeof error === 'string' ? error : '未知错误');
+                const errorMsg: 聊天记录结构 = { role: 'system', content: `[系统错误]: ${summary}`, timestamp: Date.now() };
                 设置历史记录([...updatedDisplayHistory, errorMsg]);
-                return { cancelled: true };
+                return {
+                    cancelled: true,
+                    errorDetail: detail,
+                    errorTitle: '请求失败'
+                };
             }
         } finally {
             setLoading(false);

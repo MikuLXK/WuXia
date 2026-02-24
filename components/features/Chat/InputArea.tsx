@@ -10,6 +10,8 @@ type SendResult = {
     needRecallConfirm?: boolean;
     needRerollConfirm?: boolean;
     parseErrorMessage?: string;
+    errorDetail?: string;
+    errorTitle?: string;
 };
 
 type RecallProgress = {
@@ -53,6 +55,11 @@ const InputArea: React.FC<Props> = ({
     const [pendingRecallTag, setPendingRecallTag] = useState('');
     const [recallProgress, setRecallProgress] = useState<RecallProgress | null>(null);
     const [showQuickRestartMenu, setShowQuickRestartMenu] = useState(false);
+    const [errorModal, setErrorModal] = useState<{ open: boolean; title: string; content: string }>({
+        open: false,
+        title: '',
+        content: ''
+    });
     const quickActionsRef = useRef<HTMLDivElement | null>(null);
     const dragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
     const suppressClickUntilRef = useRef(0);
@@ -111,6 +118,13 @@ const InputArea: React.FC<Props> = ({
                 if (result.attachedRecallPreview) {
                     setAttachedRecallPreview(result.attachedRecallPreview);
                     setShowAttachedRecall(false);
+                }
+                if (result.errorDetail) {
+                    setErrorModal({
+                        open: true,
+                        title: result.errorTitle || '请求失败',
+                        content: result.errorDetail
+                    });
                 }
                 return;
             }
@@ -450,6 +464,44 @@ const InputArea: React.FC<Props> = ({
                 )}
 
             </div>
+
+            {errorModal.open && (
+                <div
+                    className="fixed inset-0 z-[260] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                    onClick={() => setErrorModal(prev => ({ ...prev, open: false }))}
+                >
+                    <div
+                        className="w-full max-w-3xl rounded-lg border border-wuxia-gold/30 bg-black/90 p-5 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between gap-4 mb-4">
+                            <h4 className="text-lg font-serif font-bold text-wuxia-gold">
+                                {errorModal.title || '请求失败'}
+                            </h4>
+                            <button
+                                type="button"
+                                onClick={() => setErrorModal(prev => ({ ...prev, open: false }))}
+                                className="text-gray-400 hover:text-white transition-colors"
+                                aria-label="关闭错误详情"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar rounded-md border border-gray-700/80 bg-black/60 p-3 text-xs text-gray-200 whitespace-pre-wrap">
+                            {errorModal.content}
+                        </div>
+                        <div className="pt-4 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setErrorModal(prev => ({ ...prev, open: false }))}
+                                className="px-6 py-2 text-xs font-bold bg-wuxia-gold text-ink-black rounded hover:bg-white transition-colors"
+                            >
+                                关闭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
