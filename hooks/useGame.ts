@@ -644,7 +644,6 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         const 当前焦点女主ID = 女主ID集合.has(当前焦点女主IDRaw) ? 当前焦点女主IDRaw : '';
 
         return {
-            规划版本: 纯文本(planRaw?.规划版本) || 'v1',
             当前阶段: inSet(纯文本(planRaw?.当前阶段), ['开局铺垫', '并线发展', '冲突升级', '收束定局'] as const, '开局铺垫'),
             当前焦点女主ID,
             登场队列,
@@ -786,58 +785,336 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         const 构建环境状态文本 = (payload: any) => {
             const source = payload || {};
             const env = 规范化环境信息(source?.环境);
-            const fullLocation = 构建完整地点文本(env);
-            const rawTime = typeof env?.时间 === 'string' ? env.时间.trim() : '';
-            const canonicalTime = rawTime ? (normalizeCanonicalGameTime(rawTime) || rawTime) : '';
-            const dateMatch = canonicalTime.match(/^(\d{1,6}):(\d{2}):(\d{2})/);
-            const 当前日期 = dateMatch ? `${dateMatch[1]}:${dateMatch[2]}:${dateMatch[3]}` : '未知日期';
-            const 当前节日 = env?.节日?.名称?.trim() || '平常日';
-            const 当前天气 = env?.天气?.天气?.trim() || '未知天气';
-            const 天气结束日期 = env?.天气?.结束日期?.trim() || '未知';
-            const 环境变量名称 = env?.环境变量?.名称?.trim() || '无';
-            const 环境变量描述 = env?.环境变量?.描述?.trim() || '无';
-            const 环境变量效果 = env?.环境变量?.效果?.trim() || '无';
-            return [
-                '【当前环境】',
-                `当前日期: ${当前日期}`,
-                `当前地点: ${fullLocation}`,
-                `天气: ${当前天气}`,
-                `天气结束日期: ${天气结束日期}`,
-                `环境变量: ${环境变量名称}`,
-                `环境描述: ${环境变量描述}`,
-                `环境效果: ${环境变量效果}`,
-                `当前节日: ${当前节日}`,
-                `游戏天数: ${typeof env?.游戏天数 === 'number' && Number.isFinite(env.游戏天数) ? env.游戏天数 : 1}`
-            ].join('\n');
+            const 取文本 = (value: any) => (typeof value === 'string' ? value : '');
+            const 取数值 = (value: any, fallback: number = 0) => (
+                typeof value === 'number' && Number.isFinite(value) ? value : fallback
+            );
+            const 节日原始 = env?.节日 && typeof env.节日 === 'object' ? env.节日 : null;
+            const 天气原始 = env?.天气 && typeof env.天气 === 'object' ? env.天气 : {};
+            const 环境变量原始 = env?.环境变量 && typeof env.环境变量 === 'object' ? env.环境变量 : null;
+            const orderedEnv = {
+                时间: 取文本(env?.时间),
+                大地点: 取文本(env?.大地点),
+                中地点: 取文本(env?.中地点),
+                小地点: 取文本(env?.小地点),
+                具体地点: 取文本(env?.具体地点),
+                节日: 节日原始
+                    ? {
+                        名称: 取文本(节日原始?.名称),
+                        简介: 取文本(节日原始?.简介),
+                        效果: 取文本(节日原始?.效果)
+                    }
+                    : null,
+                天气: {
+                    天气: 取文本(天气原始?.天气),
+                    结束日期: 取文本(天气原始?.结束日期)
+                },
+                环境变量: 环境变量原始
+                    ? {
+                        名称: 取文本(环境变量原始?.名称),
+                        描述: 取文本(环境变量原始?.描述),
+                        效果: 取文本(环境变量原始?.效果)
+                    }
+                    : null,
+                游戏天数: 取数值(env?.游戏天数, 1)
+            };
+            return `【当前环境】\n${JSON.stringify(orderedEnv, null, 2)}`;
         };
 
         const 构建角色状态文本 = (payload: any) => {
             const source = payload || {};
             const role = source?.角色 && typeof source.角色 === 'object' ? source.角色 : {};
-            const {
-                姓名,
-                称号,
-                境界,
-                性别,
-                年龄,
-                出生日期,
-                外貌,
+            const 取文本 = (value: any) => (typeof value === 'string' ? value : '');
+            const 取数值 = (value: any, fallback: number = 0) => (
+                typeof value === 'number' && Number.isFinite(value) ? value : fallback
+            );
+            const 取数组 = (value: any) => (Array.isArray(value) ? value : []);
+            const 天赋列表 = 取数组(role?.天赋列表).map((item: any) => ({
+                名称: 取文本(item?.名称),
+                描述: 取文本(item?.描述),
+                效果: 取文本(item?.效果)
+            }));
+            const 出身背景原始 = role?.出身背景 && typeof role.出身背景 === 'object' ? role.出身背景 : {};
+            const 出身背景 = {
+                名称: 取文本(出身背景原始?.名称),
+                描述: 取文本(出身背景原始?.描述),
+                效果: 取文本(出身背景原始?.效果)
+            };
+            const 金钱原始 = role?.金钱 && typeof role.金钱 === 'object' ? role.金钱 : {};
+            const 金钱 = {
+                金元宝: 取数值(金钱原始?.金元宝),
+                银子: 取数值(金钱原始?.银子),
+                铜钱: 取数值(金钱原始?.铜钱)
+            };
+            const 装备原始 = role?.装备 && typeof role.装备 === 'object' ? role.装备 : {};
+            const 装备 = {
+                头部: 取文本(装备原始?.头部),
+                胸部: 取文本(装备原始?.胸部),
+                腿部: 取文本(装备原始?.腿部),
+                手部: 取文本(装备原始?.手部),
+                足部: 取文本(装备原始?.足部),
+                主武器: 取文本(装备原始?.主武器),
+                副武器: 取文本(装备原始?.副武器),
+                暗器: 取文本(装备原始?.暗器),
+                背部: 取文本(装备原始?.背部),
+                腰部: 取文本(装备原始?.腰部),
+                坐骑: 取文本(装备原始?.坐骑)
+            };
+
+            const orderedRole = {
+                姓名: 取文本(role?.姓名),
+                性别: 取文本(role?.性别),
+                年龄: 取数值(role?.年龄),
+                出生日期: 取文本(role?.出生日期),
+                外貌: 取文本(role?.外貌),
+                称号: 取文本(role?.称号),
+                境界: 取文本(role?.境界),
                 天赋列表,
                 出身背景,
-                ...角色其余信息
-            } = role;
-            return [
-                '【角色】',
-                `姓名: ${typeof 姓名 === 'string' && 姓名.trim() ? 姓名.trim() : '未命名'}`,
-                `角色基础信息: ${JSON.stringify({ 称号, 境界, 性别, 年龄, 出生日期, 外貌, 天赋列表, 出身背景 })}`,
-                `角色其余信息: ${JSON.stringify(角色其余信息)}`
-            ].join('\n');
+                所属门派ID: 取文本(role?.所属门派ID),
+                门派职位: 取文本(role?.门派职位),
+                门派贡献: 取数值(role?.门派贡献),
+                金钱,
+                当前精力: 取数值(role?.当前精力),
+                最大精力: 取数值(role?.最大精力),
+                当前饱腹: 取数值(role?.当前饱腹),
+                最大饱腹: 取数值(role?.最大饱腹),
+                当前口渴: 取数值(role?.当前口渴),
+                最大口渴: 取数值(role?.最大口渴),
+                当前负重: 取数值(role?.当前负重),
+                最大负重: 取数值(role?.最大负重),
+                力量: 取数值(role?.力量),
+                敏捷: 取数值(role?.敏捷),
+                体质: 取数值(role?.体质),
+                根骨: 取数值(role?.根骨),
+                悟性: 取数值(role?.悟性),
+                福源: 取数值(role?.福源),
+                头部当前血量: 取数值(role?.头部当前血量),
+                头部最大血量: 取数值(role?.头部最大血量),
+                头部状态: 取文本(role?.头部状态),
+                胸部当前血量: 取数值(role?.胸部当前血量),
+                胸部最大血量: 取数值(role?.胸部最大血量),
+                胸部状态: 取文本(role?.胸部状态),
+                腹部当前血量: 取数值(role?.腹部当前血量),
+                腹部最大血量: 取数值(role?.腹部最大血量),
+                腹部状态: 取文本(role?.腹部状态),
+                左手当前血量: 取数值(role?.左手当前血量),
+                左手最大血量: 取数值(role?.左手最大血量),
+                左手状态: 取文本(role?.左手状态),
+                右手当前血量: 取数值(role?.右手当前血量),
+                右手最大血量: 取数值(role?.右手最大血量),
+                右手状态: 取文本(role?.右手状态),
+                左腿当前血量: 取数值(role?.左腿当前血量),
+                左腿最大血量: 取数值(role?.左腿最大血量),
+                左腿状态: 取文本(role?.左腿状态),
+                右腿当前血量: 取数值(role?.右腿当前血量),
+                右腿最大血量: 取数值(role?.右腿最大血量),
+                右腿状态: 取文本(role?.右腿状态),
+                装备,
+                物品列表: 取数组(role?.物品列表),
+                功法列表: 取数组(role?.功法列表),
+                当前经验: 取数值(role?.当前经验),
+                升级经验: 取数值(role?.升级经验),
+                玩家BUFF: 取数组(role?.玩家BUFF)
+            };
+
+            return `【用户角色数据】\n${JSON.stringify(orderedRole, null, 2)}`;
         };
         const 归一化文本 = (value: any) => (
             typeof value === 'string'
                 ? value.trim().replace(/\s+/g, '').toLowerCase()
                 : ''
         );
+        const 构建世界状态文本 = (payload: any) => {
+            const world = 规范化世界状态(payload?.世界);
+            const 取文本 = (value: any) => (typeof value === 'string' ? value : '');
+            const 取数组 = (value: any) => (Array.isArray(value) ? value : []);
+            const 取布尔 = (value: any) => (typeof value === 'boolean' ? value : false);
+            const 取归属 = (raw: any) => ({
+                大地点: 取文本(raw?.大地点),
+                中地点: 取文本(raw?.中地点),
+                小地点: 取文本(raw?.小地点)
+            });
+            const 规范化事件 = (event: any) => ({
+                ID: 取文本(event?.ID),
+                类型: 取文本(event?.类型),
+                标题: 取文本(event?.标题),
+                内容: 取文本(event?.内容),
+                发生地点: 取文本(event?.发生地点),
+                开始时间: 取文本(event?.开始时间),
+                预计结束时间: 取文本(event?.预计结束时间),
+                当前状态: 取文本(event?.当前状态),
+                事件结果: 取文本(event?.事件结果),
+                消逝时间: 取文本(event?.消逝时间),
+                是否重大事件: 取布尔(event?.是否重大事件),
+                关联势力: 取数组(event?.关联势力),
+                关联人物: 取数组(event?.关联人物)
+            });
+            const orderedWorld = {
+                活跃NPC列表: 取数组(world?.活跃NPC列表).map((npc: any) => ({
+                    ID: 取文本(npc?.ID),
+                    姓名: 取文本(npc?.姓名),
+                    称号: 取文本(npc?.称号),
+                    所属势力: 取文本(npc?.所属势力),
+                    境界: 取文本(npc?.境界),
+                    当前位置: 取文本(npc?.当前位置),
+                    状态: 取文本(npc?.状态),
+                    当前行动描述: 取文本(npc?.当前行动描述),
+                    行动开始时间: 取文本(npc?.行动开始时间),
+                    行动预计结束时间: 取文本(npc?.行动预计结束时间),
+                    持有重宝: 取数组(npc?.持有重宝)
+                })),
+                地图: 取数组(world?.地图).map((item: any) => ({
+                    名称: 取文本(item?.名称),
+                    坐标: 取文本(item?.坐标),
+                    描述: 取文本(item?.描述),
+                    归属: 取归属(item?.归属),
+                    内部建筑: 取数组(item?.内部建筑)
+                })),
+                建筑: 取数组(world?.建筑).map((item: any) => ({
+                    名称: 取文本(item?.名称),
+                    描述: 取文本(item?.描述),
+                    归属: 取归属(item?.归属)
+                })),
+                进行中事件: 取数组(world?.进行中事件).map(规范化事件),
+                已结算事件: 取数组(world?.已结算事件).map(规范化事件),
+                江湖史册: 取数组(world?.江湖史册).map(规范化事件)
+            };
+
+            return `【世界】\n${JSON.stringify(orderedWorld, null, 2)}`;
+        };
+        const 构建战斗状态文本 = (payload: any) => {
+            const battle = 规范化战斗状态(payload?.战斗);
+            const 取文本 = (value: any) => (typeof value === 'string' ? value : '');
+            const 取数组 = (value: any) => (Array.isArray(value) ? value : []);
+            const 取数值 = (value: any, fallback: number = 0) => (
+                typeof value === 'number' && Number.isFinite(value) ? value : fallback
+            );
+            const enemyRaw = battle?.敌方 && typeof battle.敌方 === 'object' ? battle.敌方 : null;
+            const orderedEnemy = enemyRaw
+                ? {
+                    名字: 取文本(enemyRaw?.名字),
+                    境界: 取文本(enemyRaw?.境界),
+                    简介: 取文本(enemyRaw?.简介),
+                    技能: 取数组(enemyRaw?.技能),
+                    战斗力: 取数值(enemyRaw?.战斗力),
+                    防御力: 取数值(enemyRaw?.防御力),
+                    当前血量: 取数值(enemyRaw?.当前血量),
+                    最大血量: 取数值(enemyRaw?.最大血量),
+                    当前精力: 取数值(enemyRaw?.当前精力),
+                    最大精力: 取数值(enemyRaw?.最大精力)
+                }
+                : null;
+            const orderedBattle = {
+                是否战斗中: battle?.是否战斗中 === true,
+                敌方: orderedEnemy
+            };
+            return `【战斗】\n${JSON.stringify(orderedBattle, null, 2)}`;
+        };
+        const 构建门派状态文本 = (payload: any) => {
+            const sect = payload?.玩家门派 && typeof payload.玩家门派 === 'object' ? payload.玩家门派 : {};
+            const 取文本 = (value: any) => (typeof value === 'string' ? value : '');
+            const 取数组 = (value: any) => (Array.isArray(value) ? value : []);
+            const 取数值 = (value: any, fallback: number = 0) => (
+                typeof value === 'number' && Number.isFinite(value) ? value : fallback
+            );
+            const 任务列表 = 取数组(sect?.任务列表).map((task: any) => ({
+                id: 取文本(task?.id),
+                标题: 取文本(task?.标题),
+                描述: 取文本(task?.描述),
+                类型: 取文本(task?.类型),
+                难度: 取数值(task?.难度),
+                发布日期: 取文本(task?.发布日期),
+                截止日期: 取文本(task?.截止日期),
+                刷新日期: 取文本(task?.刷新日期),
+                奖励贡献: 取数值(task?.奖励贡献),
+                奖励资金: 取数值(task?.奖励资金),
+                奖励物品: 取数组(task?.奖励物品),
+                当前状态: 取文本(task?.当前状态)
+            }));
+            const 兑换列表 = 取数组(sect?.兑换列表).map((item: any) => ({
+                id: 取文本(item?.id),
+                物品名称: 取文本(item?.物品名称),
+                类型: 取文本(item?.类型),
+                兑换价格: 取数值(item?.兑换价格),
+                库存: 取数值(item?.库存),
+                要求职位: 取文本(item?.要求职位)
+            }));
+            const 重要成员 = 取数组(sect?.重要成员).map((member: any) => ({
+                id: 取文本(member?.id),
+                姓名: 取文本(member?.姓名),
+                性别: 取文本(member?.性别),
+                年龄: 取数值(member?.年龄),
+                境界: 取文本(member?.境界),
+                身份: 取文本(member?.身份),
+                简介: 取文本(member?.简介)
+            }));
+            const orderedSect = {
+                ID: 取文本(sect?.ID),
+                名称: 取文本(sect?.名称),
+                简介: 取文本(sect?.简介),
+                门规: 取数组(sect?.门规),
+                门派资金: 取数值(sect?.门派资金),
+                门派物资: 取数值(sect?.门派物资),
+                建设度: 取数值(sect?.建设度),
+                玩家职位: 取文本(sect?.玩家职位),
+                玩家贡献: 取数值(sect?.玩家贡献),
+                任务列表,
+                兑换列表,
+                重要成员
+            };
+            return `【玩家门派】\n${JSON.stringify(orderedSect, null, 2)}`;
+        };
+        const 构建任务列表文本 = (payload: any) => {
+            const tasks = Array.isArray(payload?.任务列表) ? payload.任务列表 : [];
+            const 取文本 = (value: any) => (typeof value === 'string' ? value : '');
+            const 取数组 = (value: any) => (Array.isArray(value) ? value : []);
+            const 取数值 = (value: any, fallback: number = 0) => (
+                typeof value === 'number' && Number.isFinite(value) ? value : fallback
+            );
+            const 取布尔 = (value: any) => (typeof value === 'boolean' ? value : false);
+            const orderedTasks = tasks.map((task: any) => ({
+                标题: 取文本(task?.标题),
+                描述: 取文本(task?.描述),
+                类型: 取文本(task?.类型),
+                发布人: 取文本(task?.发布人),
+                发布地点: 取文本(task?.发布地点),
+                推荐境界: 取文本(task?.推荐境界),
+                截止时间: 取文本(task?.截止时间),
+                当前状态: 取文本(task?.当前状态),
+                目标列表: 取数组(task?.目标列表).map((goal: any) => ({
+                    描述: 取文本(goal?.描述),
+                    当前进度: 取数值(goal?.当前进度),
+                    总需进度: 取数值(goal?.总需进度),
+                    完成状态: 取布尔(goal?.完成状态)
+                })),
+                奖励描述: 取数组(task?.奖励描述),
+                剧情暗线: 取文本(task?.剧情暗线)
+            }));
+            return `【任务列表】\n${JSON.stringify(orderedTasks, null, 2)}`;
+        };
+        const 构建约定列表文本 = (payload: any) => {
+            const agreements = Array.isArray(payload?.约定列表) ? payload.约定列表 : [];
+            const 取文本 = (value: any) => (typeof value === 'string' ? value : '');
+            const 取数值 = (value: any, fallback: number = 0) => (
+                typeof value === 'number' && Number.isFinite(value) ? value : fallback
+            );
+            const orderedAgreements = agreements.map((item: any) => ({
+                对象: 取文本(item?.对象),
+                头衔: 取文本(item?.头衔),
+                性质: 取文本(item?.性质),
+                标题: 取文本(item?.标题),
+                誓言内容: 取文本(item?.誓言内容),
+                约定地点: 取文本(item?.约定地点),
+                约定时间: 取文本(item?.约定时间),
+                有效时段: 取数值(item?.有效时段),
+                当前状态: 取文本(item?.当前状态),
+                履行后果: 取文本(item?.履行后果),
+                违约后果: 取文本(item?.违约后果),
+                背景故事: 取文本(item?.背景故事)
+            }));
+            return `【约定列表】\n${JSON.stringify(orderedAgreements, null, 2)}`;
+        };
         const 构建地图建筑状态文本 = (payload: any) => {
             const source = payload || {};
             const env = 规范化环境信息(source?.环境);
@@ -902,12 +1179,118 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         };
         const 构建剧情安排 = (payload: any) => {
             const normalizedStory = 规范化剧情状态(payload?.剧情, payload?.环境);
+            const orderedStory = {
+                当前章节: {
+                    ID: normalizedStory.当前章节?.ID ?? '',
+                    序号: normalizedStory.当前章节?.序号 ?? 1,
+                    标题: normalizedStory.当前章节?.标题 ?? '',
+                    背景故事: normalizedStory.当前章节?.背景故事 ?? '',
+                    主要矛盾: normalizedStory.当前章节?.主要矛盾 ?? '',
+                    结束条件: Array.isArray(normalizedStory.当前章节?.结束条件)
+                        ? normalizedStory.当前章节.结束条件.map((cond: any) => ({
+                            类型: cond?.类型 ?? '事件',
+                            描述: cond?.描述 ?? '',
+                            ...(cond?.判定值 !== undefined ? { 判定值: cond.判定值 } : {}),
+                            ...(cond?.对应变量键名 ? { 对应变量键名: cond.对应变量键名 } : {})
+                        }))
+                        : [],
+                    伏笔列表: Array.isArray(normalizedStory.当前章节?.伏笔列表)
+                        ? normalizedStory.当前章节.伏笔列表
+                        : []
+                },
+                下一章预告: {
+                    标题: normalizedStory.下一章预告?.标题 ?? '',
+                    大纲: normalizedStory.下一章预告?.大纲 ?? ''
+                },
+                历史卷宗: Array.isArray(normalizedStory.历史卷宗)
+                    ? normalizedStory.历史卷宗.map((arc: any) => ({
+                        标题: arc?.标题 ?? '',
+                        结语: arc?.结语 ?? ''
+                    }))
+                    : [],
+                近期剧情规划: normalizedStory.近期剧情规划 ?? '',
+                中期剧情规划: normalizedStory.中期剧情规划 ?? '',
+                长期剧情规划: normalizedStory.长期剧情规划 ?? '',
+                待触发事件: Array.isArray(normalizedStory.待触发事件)
+                    ? normalizedStory.待触发事件.map((event: any) => ({
+                        名称: event?.名称 ?? '',
+                        描述: event?.描述 ?? '',
+                        '触发条件/时间': event?.['触发条件/时间'] ?? '',
+                        失效时间: event?.失效时间 ?? ''
+                    }))
+                    : [],
+                剧情变量: normalizedStory.剧情变量 ?? {}
+            };
 
-            return `【剧情安排】\n${JSON.stringify(normalizedStory)}`;
+            return `【剧情安排】\n${JSON.stringify(orderedStory, null, 2)}`;
         };
         const 构建女主剧情规划文本 = (payload: any) => {
             const normalizedPlan = 规范化女主剧情规划状态(payload?.女主剧情规划);
-            return `【女主剧情规划】\n${JSON.stringify(normalizedPlan || {})}`;
+            if (!normalizedPlan) {
+                return `【女主剧情规划】\n{}`;
+            }
+
+            const orderedPlan = {
+                当前阶段: normalizedPlan.当前阶段 ?? '开局铺垫',
+                当前焦点女主ID: normalizedPlan.当前焦点女主ID ?? '',
+                登场队列: Array.isArray(normalizedPlan.登场队列) ? normalizedPlan.登场队列 : [],
+                女主条目: Array.isArray(normalizedPlan.女主条目)
+                    ? normalizedPlan.女主条目.map((item: any) => ({
+                        女主ID: item?.女主ID ?? '',
+                        女主名: item?.女主名 ?? '',
+                        重要度: item?.重要度 ?? '主要',
+                        登场状态: item?.登场状态 ?? '未登场',
+                        首登触发条件: item?.首登触发条件 ?? '',
+                        首登场景建议: item?.首登场景建议 ?? '',
+                        当前关系阶段: item?.当前关系阶段 ?? '陌生',
+                        当前阶段目标: item?.当前阶段目标 ?? '',
+                        下一突破条件: item?.下一突破条件 ?? '',
+                        互动优先级: typeof item?.互动优先级 === 'number' ? item.互动优先级 : 0,
+                        既有男性锚点: Array.isArray(item?.既有男性锚点)
+                            ? item.既有男性锚点.map((anchor: any) => ({
+                                姓名: anchor?.姓名 ?? '',
+                                关系: anchor?.关系 ?? '',
+                                情感强度: typeof anchor?.情感强度 === 'number' ? anchor.情感强度 : 0,
+                                崩溃进度: typeof anchor?.崩溃进度 === 'number' ? anchor.崩溃进度 : 0
+                            }))
+                            : [],
+                        阻断记录: Array.isArray(item?.阻断记录) ? item.阻断记录 : [],
+                        已完成节点: Array.isArray(item?.已完成节点) ? item.已完成节点 : [],
+                        待完成节点: Array.isArray(item?.待完成节点) ? item.待完成节点 : [],
+                        最近推进时间: item?.最近推进时间 ?? ''
+                    }))
+                    : [],
+                互动排期: Array.isArray(normalizedPlan.互动排期)
+                    ? normalizedPlan.互动排期.map((item: any) => ({
+                        事件ID: item?.事件ID ?? '',
+                        女主ID: item?.女主ID ?? '',
+                        类型: item?.类型 ?? '日常',
+                        描述: item?.描述 ?? '',
+                        触发条件: item?.触发条件 ?? '',
+                        失效时间: item?.失效时间 ?? '',
+                        成功效果: item?.成功效果 ?? '',
+                        失败效果: item?.失败效果 ?? '',
+                        状态: item?.状态 ?? '待触发'
+                    }))
+                    : [],
+                群像镜头规划: Array.isArray(normalizedPlan.群像镜头规划)
+                    ? normalizedPlan.群像镜头规划.map((item: any) => ({
+                        镜头ID: item?.镜头ID ?? '',
+                        参与者: Array.isArray(item?.参与者) ? item.参与者 : [],
+                        焦点: item?.焦点 ?? '',
+                        预期冲突: item?.预期冲突 ?? '',
+                        状态: item?.状态 ?? '待执行'
+                    }))
+                    : [],
+                规则约束: {
+                    单回合主推进上限: normalizedPlan.规则约束?.单回合主推进上限 ?? 0,
+                    单回合次推进上限: normalizedPlan.规则约束?.单回合次推进上限 ?? 0,
+                    连续同女主推进上限: normalizedPlan.规则约束?.连续同女主推进上限 ?? 0,
+                    低压回合保底互动数: normalizedPlan.规则约束?.低压回合保底互动数 ?? 0
+                }
+            };
+
+            return `【女主剧情规划】\n${JSON.stringify(orderedPlan, null, 2)}`;
         };
 
         const perspectivePromptIds = [
@@ -1069,18 +1452,13 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         const contextHeroinePlan = normalizedGameConfig.启用女主剧情规划
             ? 构建女主剧情规划文本(statePayload)
             : '';
-        const worldData = 规范化世界状态(statePayload?.世界);
-        const battleData = statePayload?.战斗 && typeof statePayload.战斗 === 'object' ? statePayload.战斗 : {};
-        const sectData = statePayload?.玩家门派 && typeof statePayload.玩家门派 === 'object' ? statePayload.玩家门派 : {};
-        const tasksData = Array.isArray(statePayload?.任务列表) ? statePayload.任务列表 : [];
-        const agreementsData = Array.isArray(statePayload?.约定列表) ? statePayload.约定列表 : [];
-        const contextWorldState = `【世界】\n${JSON.stringify(worldData)}`;
+        const contextWorldState = 构建世界状态文本(statePayload);
         const contextEnvironmentState = 构建环境状态文本(statePayload);
         const contextRoleState = 构建角色状态文本(statePayload);
-        const contextBattleState = `【战斗】\n${JSON.stringify(battleData)}`;
-        const contextSectState = `【玩家门派】\n${JSON.stringify(sectData)}`;
-        const contextTaskState = `【任务列表】\n${JSON.stringify(tasksData)}`;
-        const contextAgreementState = `【约定列表】\n${JSON.stringify(agreementsData)}`;
+        const contextBattleState = 构建战斗状态文本(statePayload);
+        const contextSectState = 构建门派状态文本(statePayload);
+        const contextTaskState = 构建任务列表文本(statePayload);
+        const contextAgreementState = 构建约定列表文本(statePayload);
         const shortMemoryEntries = options?.禁用短期记忆
             ? []
             : memoryData.短期记忆
@@ -1650,17 +2028,17 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
 
         pushSection('world_prompt', '世界观提示词', '系统', builtContext.contextPieces.worldPrompt);
         pushSection('world_map', '地图与建筑', '系统', builtContext.contextPieces.地图建筑状态);
-        pushSection('npc_away', '离场NPC档案', '系统', builtContext.contextPieces.离场NPC档案);
+        pushSection('npc_away', '以下为不在场角色', '系统', builtContext.contextPieces.离场NPC档案);
         pushSection('other_prompts', '叙事/规则提示词', '系统', builtContext.contextPieces.otherPrompts);
         pushSection('memory_long', '长期记忆', '记忆', builtContext.contextPieces.长期记忆);
         pushSection('memory_mid', '中期记忆', '记忆', builtContext.contextPieces.中期记忆);
-        pushSection('npc_present', '当前场景NPC档案', '系统', builtContext.contextPieces.在场NPC档案);
+        pushSection('npc_present', '以下为在场角色', '系统', builtContext.contextPieces.在场NPC档案);
         pushSection('game_settings', '游戏设置', '系统', builtContext.contextPieces.游戏设置);
         pushSection('story_plan', '剧情安排', '系统', builtContext.contextPieces.剧情安排);
         pushSection('heroine_plan', '女主剧情规划', '系统', builtContext.contextPieces.女主剧情规划状态);
         pushSection('state_world', '世界', '系统', builtContext.contextPieces.世界状态);
         pushSection('state_environment', '当前环境', '系统', builtContext.contextPieces.环境状态);
-        pushSection('state_role', '角色', '系统', builtContext.contextPieces.角色状态);
+        pushSection('state_role', '用户角色数据', '系统', builtContext.contextPieces.角色状态);
         pushSection('state_battle', '战斗', '系统', builtContext.contextPieces.战斗状态);
         pushSection('state_sect', '玩家门派', '系统', builtContext.contextPieces.门派状态);
         pushSection('state_tasks', '任务列表', '系统', builtContext.contextPieces.任务状态);

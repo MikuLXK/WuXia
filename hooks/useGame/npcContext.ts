@@ -187,8 +187,8 @@ export const 构建NPC上下文 = (socialData: any[], memoryConfig: 记忆配置
     );
 
     return {
-        在场数据块: `【当前场景NPC档案】(源于 gameState.社交)\n${JSON.stringify(在场数据, null, 2)}`,
-        离场数据块: `【离场NPC档案】(源于 gameState.社交)\n${JSON.stringify(离场数据, null, 2)}`
+        在场数据块: `【以下为在场角色】(源于 gameState.社交)\n${JSON.stringify(在场数据, null, 2)}`,
+        离场数据块: `【以下为不在场角色】(源于 gameState.社交)\n${JSON.stringify(离场数据, null, 2)}`
     };
 };
 

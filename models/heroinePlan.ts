@@ -44,7 +44,6 @@ export interface 群像镜头规划结构 {
 }
 
 export interface 女主剧情规划结构 {
-    规划版本: string; // e.g. v1
     当前阶段: '开局铺垫' | '并线发展' | '冲突升级' | '收束定局';
     当前焦点女主ID: string;
     登场队列: string[];
@@ -58,4 +57,3 @@ export interface 女主剧情规划结构 {
         低压回合保底互动数: number;
     };
 }
-

@@ -223,7 +223,6 @@ const HeroinePlanModal: React.FC<Props> = ({ plan, onClose }) => {
                             <div className='p-4 border-b border-gray-800/50'>
                                 <SectionHeader title='当前焦点' color='cyan'/>
                                 <div className="text-lg font-serif font-bold text-white mb-1">{当前焦点名}</div>
-                                <div className="text-[10px] text-gray-500">规划版本 {plan?.规划版本 || 'v1'}</div>
                             </div>
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
                                <SectionHeader title='登场序列' color='red'/>
