@@ -22,7 +22,7 @@ import {
     女主剧情规划结构,
 } from '../types';
 import { 默认提示词 } from '../prompts';
-import { 默认中期转长期提示词, 默认短期转中期提示词, 默认额外系统提示词 } from '../prompts/runtime/defaults';
+import { 默认中期转长期提示词, 默认短期转中期提示词, 默认额外系统提示词, 旧版默认额外系统提示词 } from '../prompts/runtime/defaults';
 import { 节日列表 } from '../data/world'; 
 import * as dbService from '../services/dbService';
 import { THEMES } from '../styles/themes';
@@ -201,6 +201,7 @@ export const useGameState = () => {
         启用多重思考: false,
         启用女主剧情规划: false,
         启用防止说话: true,
+        启用免责声明输出: true,
         剧情风格: '一般',
         NTL后宫档位: '禁止乱伦',
         额外提示词: 默认额外系统提示词
@@ -228,13 +229,20 @@ export const useGameState = () => {
         启用多重思考: raw?.启用多重思考 === true,
         启用女主剧情规划: raw?.启用女主剧情规划 === true,
         启用防止说话: raw?.启用防止说话 !== false,
+        启用免责声明输出: raw?.启用免责声明输出 !== false,
         剧情风格: raw?.剧情风格 === '后宫' || raw?.剧情风格 === '修炼' || raw?.剧情风格 === '一般' || raw?.剧情风格 === '修罗场' || raw?.剧情风格 === '纯爱' || raw?.剧情风格 === 'NTL后宫'
             ? raw.剧情风格
             : 默认游戏设置.剧情风格,
         NTL后宫档位: raw?.NTL后宫档位 === '禁止乱伦' || raw?.NTL后宫档位 === '假乱伦' || raw?.NTL后宫档位 === '无限制'
             ? raw.NTL后宫档位
             : 默认游戏设置.NTL后宫档位,
-        额外提示词: typeof raw?.额外提示词 === 'string' ? raw.额外提示词 : 默认额外系统提示词
+        额外提示词: (() => {
+            const candidate = typeof raw?.额外提示词 === 'string' ? raw.额外提示词 : 默认额外系统提示词;
+            const trimmed = candidate.trim();
+            if (!trimmed) return 默认额外系统提示词;
+            if (trimmed === 旧版默认额外系统提示词.trim()) return 默认额外系统提示词;
+            return candidate;
+        })()
     });
     const [gameConfig, setGameConfig] = useState<游戏设置结构>(默认游戏设置);
 

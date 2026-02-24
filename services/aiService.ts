@@ -21,8 +21,10 @@ interface StoryStreamOptions {
 interface StoryRequestOptions {
     enableCotInjection?: boolean;
     cotPseudoHistoryPrompt?: string;
+    leadingAssistantPrompt?: string;
     styleAssistantPrompt?: string;
     lengthRequirementPrompt?: string;
+    disclaimerRequirementPrompt?: string;
     jsonMode?: JSON模式设置;
     errorDetailLimit?: number;
 }
@@ -98,6 +100,23 @@ const 响应详情疑似不支持流式 = (text: string): boolean => {
     if (raw.includes('sse')) return true;
     if (!raw.includes('stream')) return false;
     return raw.includes('unsupported') || raw.includes('not support') || raw.includes('not supported') || raw.includes('invalid');
+};
+
+const 响应详情疑似不支持maxTokens参数 = (text: string): boolean => {
+    const raw = (text || '').toLowerCase();
+    if (!raw.includes('max_tokens')) return false;
+    return raw.includes('unknown') || raw.includes('invalid') || raw.includes('unsupported') || raw.includes('not support') || raw.includes('additional properties');
+};
+
+const 响应详情疑似不支持maxCompletionTokens参数 = (text: string): boolean => {
+    const raw = (text || '').toLowerCase();
+    if (!raw.includes('max_completion_tokens')) return false;
+    return raw.includes('unknown') || raw.includes('invalid') || raw.includes('unsupported') || raw.includes('not support') || raw.includes('additional properties');
+};
+
+const 响应详情疑似要求maxCompletionTokens参数 = (text: string): boolean => {
+    const raw = (text || '').toLowerCase();
+    return raw.includes('max_completion_tokens') && (raw.includes('required') || raw.includes('must') || raw.includes('need'));
 };
 
 const 包含JSON关键词 = (messages: 通用消息[]): boolean => {
@@ -180,6 +199,165 @@ const 解析JSONMode开关 = (setting: JSON模式设置 | undefined, apiConfig: 
     if (setting === 'on') return true;
     if (setting === 'off') return false;
     return 模型支持JSONMode(apiConfig);
+};
+
+const 读取自定义最大输出Token = (apiConfig: 当前可用接口结构): number | undefined => {
+    const raw = apiConfig.maxTokens;
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+        return Math.floor(raw);
+    }
+    return undefined;
+};
+
+const 读取自定义温度 = (apiConfig: 当前可用接口结构): number | undefined => {
+    const raw = apiConfig.temperature;
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+        return raw;
+    }
+    return undefined;
+};
+
+const 约束数值范围 = (value: number, min: number, max: number): number => {
+    return Math.min(max, Math.max(min, value));
+};
+
+const 估算文本Token = (text: string): number => {
+    if (!text) return 0;
+    let cjkCount = 0;
+    for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        if (code >= 0x4e00 && code <= 0x9fff) cjkCount += 1;
+    }
+    const nonCjkCount = Math.max(0, text.length - cjkCount);
+    return cjkCount + Math.ceil(nonCjkCount / 4);
+};
+
+const 估算消息Token = (messages: 通用消息[]): number => {
+    const overheadPerMessage = 8;
+    return messages.reduce((sum, msg) => sum + overheadPerMessage + 估算文本Token(msg.content || ''), 0);
+};
+
+const 模型名包含任一片段 = (model: string, fragments: string[]): boolean => {
+    return fragments.some(fragment => model.includes(fragment));
+};
+
+const 看起来是OpenAI推理模型 = (modelRaw: string): boolean => {
+    const model = 标准化模型名(modelRaw);
+    return model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4');
+};
+
+const 推断Gemini上下文窗口 = (_modelRaw: string): number => {
+    // Gemini 当前主流文本模型官方上下文窗口均为 1,048,576。
+    return 1_048_576;
+};
+
+const 推断Claude上下文窗口 = (_modelRaw: string): number => {
+    // Claude 4.x 默认 200K，上到 1M 需要额外 beta header，这里保守按默认值估算。
+    return 200_000;
+};
+
+const 推断DeepSeek上下文窗口 = (modelRaw: string): number => {
+    const model = 标准化模型名(modelRaw);
+    if (!model) return 128_000;
+
+    // 官方别名 deepseek-chat / deepseek-reasoner（v3.2 / r1-0528）已是 128K。
+    if (model === 'deepseek-chat' || model === 'deepseek-reasoner') return 128_000;
+    if (模型名包含任一片段(model, ['v3.2', 'r1-0528'])) return 128_000;
+
+    // 旧版 v3 / v3.1 / r1 系列按 64K 保守估算，避免超上下文失败。
+    if (模型名包含任一片段(model, ['deepseek-v3', 'v3.1', 'deepseek-r1', 'r1'])) return 64_000;
+    return 128_000;
+};
+
+const 推断OpenAI上下文窗口 = (modelRaw: string): number | null => {
+    const model = 标准化模型名(modelRaw);
+    if (!model) return null;
+    if (model.startsWith('gpt-5')) return 400_000;
+    if (model.startsWith('gpt-4.1')) return 1_047_576;
+    if (model.startsWith('gpt-4o')) return 128_000;
+    if (看起来是OpenAI推理模型(model)) return 200_000;
+    if (model.startsWith('gpt-4-turbo') || model.startsWith('gpt-4-0125') || model.startsWith('gpt-4-1106')) return 128_000;
+    if (model.startsWith('gpt-4')) return 8_192;
+    if (model.startsWith('gpt-3.5')) return 16_385;
+    return null;
+};
+
+const 推断Gemini默认最大输出Token = (modelRaw: string): number => {
+    const model = 标准化模型名(modelRaw);
+    if (!model) return 8_192;
+
+    if (模型名包含任一片段(model, ['2.0-flash-lite', '2.0-flash'])) return 8_192;
+    if (model.includes('tts')) return 16_384;
+    if (model.startsWith('gemini-2.5') || model.startsWith('gemini-3.')) return 65_536;
+    if (模型名包含任一片段(model, ['gemini-3-pro', 'gemini-3-flash', 'flash-latest', 'pro-latest'])) return 65_536;
+    return 8_192;
+};
+
+const 推断Claude默认最大输出Token = (modelRaw: string): number => {
+    const model = 标准化模型名(modelRaw);
+    if (!model) return 8_192;
+
+    if (模型名包含任一片段(model, ['opus-4.6', 'opus-4-6'])) return 128_000;
+    if (模型名包含任一片段(model, ['sonnet-4.6', 'sonnet-4-6', 'haiku-4.5', 'haiku-4-5'])) return 64_000;
+    if (模型名包含任一片段(model, ['sonnet-4', 'haiku-4', 'opus-4'])) return 64_000;
+    return 8_192;
+};
+
+const 推断DeepSeek默认最大输出Token = (modelRaw: string): number => {
+    const model = 标准化模型名(modelRaw);
+    if (!model) return 8_000;
+    if (model === 'deepseek-reasoner' || 模型看起来是DeepSeekReasoner(model)) return 64_000;
+    return 8_000;
+};
+
+const 推断OpenAI默认最大输出Token = (modelRaw: string): number => {
+    const model = 标准化模型名(modelRaw);
+    if (!model) return 8_192;
+    if (model.startsWith('gpt-5')) return 128_000;
+    if (model.startsWith('gpt-4.1')) return 32_768;
+    if (model.startsWith('gpt-4o')) return 16_384;
+    if (看起来是OpenAI推理模型(model)) return 100_000;
+    if (model.startsWith('gpt-4')) return 8_192;
+    if (model.startsWith('gpt-3.5')) return 4_096;
+    return 8_192;
+};
+
+const 推断上下文窗口 = (protocol: 请求协议类型, modelRaw: string): number | null => {
+    const model = 标准化模型名(modelRaw);
+    if (protocol === 'gemini') return 推断Gemini上下文窗口(model);
+    if (protocol === 'claude') return 推断Claude上下文窗口(model);
+    if (protocol === 'deepseek') return 推断DeepSeek上下文窗口(model);
+    return 推断OpenAI上下文窗口(model);
+};
+
+const 推断默认最大输出Token = (protocol: 请求协议类型, modelRaw: string): number => {
+    const model = 标准化模型名(modelRaw);
+    if (protocol === 'gemini') return 推断Gemini默认最大输出Token(model);
+    if (protocol === 'claude') return 推断Claude默认最大输出Token(model);
+    if (protocol === 'deepseek') return 推断DeepSeek默认最大输出Token(model);
+    return 推断OpenAI默认最大输出Token(model);
+};
+
+const 计算最大输出Token = (apiConfig: 当前可用接口结构, protocol: 请求协议类型, messages: 通用消息[]): number => {
+    const modelCap = 推断默认最大输出Token(protocol, apiConfig.model);
+    const requested = 读取自定义最大输出Token(apiConfig) ?? modelCap;
+    const safeRequested = Math.min(requested, modelCap);
+    const contextWindow = 推断上下文窗口(protocol, apiConfig.model);
+    if (!contextWindow) return Math.max(256, safeRequested);
+    const inputTokens = 估算消息Token(messages);
+    const available = Math.floor(contextWindow - inputTokens - 512);
+    if (!Number.isFinite(available) || available <= 0) return 256;
+    return Math.max(256, Math.min(safeRequested, available));
+};
+
+const 计算请求温度 = (apiConfig: 当前可用接口结构, protocol: 请求协议类型, fallback: number): number => {
+    const configured = 读取自定义温度(apiConfig);
+    const base = typeof configured === 'number' ? configured : fallback;
+    if (!Number.isFinite(base)) {
+        return protocol === 'claude' ? 0.7 : 0.7;
+    }
+    if (protocol === 'claude') return 约束数值范围(base, 0, 1);
+    return 约束数值范围(base, 0, 2);
 };
 
 const 提取OpenAI增量文本 = (payload: any): string => {
@@ -326,6 +504,21 @@ const 解析可能是JSON字符串 = (text: string): any | null => {
     }
 };
 
+const 构建OpenAI候选端点 = (baseUrlRaw: string): string[] => {
+    const base = 清理末尾斜杠(baseUrlRaw || '');
+    if (!base) return [];
+    const withoutEndpoint = base
+        .replace(/\/v1\/chat\/completions$/i, '')
+        .replace(/\/chat\/completions$/i, '');
+    const withoutV1Tail = withoutEndpoint.replace(/\/v1$/i, '');
+    const candidates = [
+        `${withoutV1Tail}/v1/chat/completions`,
+        `${withoutV1Tail}/chat/completions`,
+        `${withoutEndpoint}/chat/completions`
+    ].filter(Boolean);
+    return Array.from(new Set(candidates));
+};
+
 const 规范化Gemini基础地址 = (baseUrlRaw: string): string => {
     const base = 清理末尾斜杠(baseUrlRaw || '');
     const withoutOpenAIPath = base
@@ -445,22 +638,30 @@ const 请求OpenAI家族文本 = async (
     errorDetailLimit?: number
 ): Promise<string> => {
     if (!apiConfig.apiKey) throw new Error('Missing API Key');
-
-    const baseUrl = 清理末尾斜杠(apiConfig.baseUrl);
-    const endpoint = `${baseUrl}/chat/completions`;
+    const endpointCandidates = 构建OpenAI候选端点(apiConfig.baseUrl);
+    if (endpointCandidates.length === 0) throw new Error('Missing API Base URL');
     const enableStream = !!streamOptions?.stream;
 
     let useStream = enableStream;
     let useResponseFormat = responseFormatJsonObject && !(protocol === 'deepseek' && 模型看起来是DeepSeekReasoner(apiConfig.model));
     let requestMessages = useResponseFormat ? messages : (responseFormatJsonObject ? 添加JSON输出约束(messages) : messages);
+    let endpointIndex = 0;
+    let tokenFieldMode: 'max_tokens' | 'max_completion_tokens' | 'none' = 'max_tokens';
 
     for (let attempt = 0; attempt < 4; attempt++) {
+        const endpoint = endpointCandidates[Math.min(endpointIndex, endpointCandidates.length - 1)];
+        const maxOutputTokens = 计算最大输出Token(apiConfig, protocol, requestMessages);
         const body: Record<string, unknown> = {
             model: apiConfig.model,
             messages: requestMessages,
             temperature,
             stream: useStream
         };
+        if (tokenFieldMode === 'max_tokens') {
+            body.max_tokens = maxOutputTokens;
+        } else if (tokenFieldMode === 'max_completion_tokens') {
+            body.max_completion_tokens = maxOutputTokens;
+        }
         if (useResponseFormat) {
             body.response_format = { type: 'json_object' };
         }
@@ -477,6 +678,21 @@ const 请求OpenAI家族文本 = async (
 
         if (!response.ok) {
             const detail = await 读取失败详情文本(response, errorDetailLimit);
+            if ([404, 405].includes(response.status) && endpointIndex < endpointCandidates.length - 1) {
+                endpointIndex += 1;
+                continue;
+            }
+            if (
+                tokenFieldMode === 'max_tokens' &&
+                (响应详情疑似要求maxCompletionTokens参数(detail) || 响应详情疑似不支持maxTokens参数(detail))
+            ) {
+                tokenFieldMode = 'max_completion_tokens';
+                continue;
+            }
+            if (tokenFieldMode === 'max_completion_tokens' && 响应详情疑似不支持maxCompletionTokens参数(detail)) {
+                tokenFieldMode = 'none';
+                continue;
+            }
             if (useResponseFormat && 响应详情疑似不支持JSONMode(detail)) {
                 useResponseFormat = false;
                 requestMessages = 添加JSON输出约束(messages);
@@ -532,9 +748,11 @@ const 请求Gemini文本 = async (
     const baseUrl = 规范化Gemini基础地址(apiConfig.baseUrl);
     const path = `/v1beta/models/${encodeURIComponent(model)}:${useStream ? 'streamGenerateContent' : 'generateContent'}${useStream ? '?alt=sse' : ''}`;
     const { systemInstruction, contents } = 组装Gemini消息(messages, responseFormatJsonObject);
+    const maxOutputTokens = 计算最大输出Token(apiConfig, 'gemini', messages);
 
     const generationConfig: Record<string, unknown> = {
-        temperature
+        temperature,
+        maxOutputTokens
     };
     if (responseFormatJsonObject) {
         generationConfig.responseMimeType = 'application/json';
@@ -617,10 +835,11 @@ const 请求Claude文本 = async (
     let useStream = enableStream;
 
     const { system, list, prefillJsonBrace } = 组装Claude消息(messages, responseFormatJsonObject);
+    const maxOutputTokens = 计算最大输出Token(apiConfig, 'claude', messages);
 
     const buildBody = (stream: boolean) => ({
         model: apiConfig.model,
-        max_tokens: 8192,
+        max_tokens: maxOutputTokens,
         system: system || undefined,
         messages: list,
         temperature,
@@ -692,12 +911,13 @@ const 请求模型文本 = async (
 ): Promise<string> => {
     const protocol = 判定请求协议(apiConfig);
     const jsonMode = Boolean(options.responseFormatJsonObject);
+    const resolvedTemperature = 计算请求温度(apiConfig, protocol, options.temperature);
 
     if (protocol === 'gemini') {
         return 请求Gemini文本(
             apiConfig,
             messages,
-            options.temperature,
+            resolvedTemperature,
             options.signal,
             options.streamOptions,
             jsonMode,
@@ -709,7 +929,7 @@ const 请求模型文本 = async (
         return 请求Claude文本(
             apiConfig,
             messages,
-            options.temperature,
+            resolvedTemperature,
             options.signal,
             options.streamOptions,
             jsonMode,
@@ -722,7 +942,7 @@ const 请求模型文本 = async (
             apiConfig,
             'deepseek',
             messages,
-            options.temperature,
+            resolvedTemperature,
             options.signal,
             options.streamOptions,
             jsonMode,
@@ -734,7 +954,7 @@ const 请求模型文本 = async (
         apiConfig,
         'openai',
         messages,
-        options.temperature,
+        resolvedTemperature,
         options.signal,
         options.streamOptions,
         jsonMode,
@@ -820,11 +1040,17 @@ export const generateStoryResponse = async (
     const cotPseudoHistoryPrompt = typeof requestOptions?.cotPseudoHistoryPrompt === 'string'
         ? requestOptions.cotPseudoHistoryPrompt.trim()
         : 默认COT伪装历史消息提示词.trim();
+    const leadingAssistantPrompt = typeof requestOptions?.leadingAssistantPrompt === 'string'
+        ? requestOptions.leadingAssistantPrompt.trim()
+        : '';
     const styleAssistantPrompt = typeof requestOptions?.styleAssistantPrompt === 'string'
         ? requestOptions.styleAssistantPrompt.trim()
         : '';
     const lengthRequirementPrompt = typeof requestOptions?.lengthRequirementPrompt === 'string'
         ? requestOptions.lengthRequirementPrompt.trim()
+        : '';
+    const disclaimerRequirementPrompt = typeof requestOptions?.disclaimerRequirementPrompt === 'string'
+        ? requestOptions.disclaimerRequirementPrompt.trim()
         : '';
 
     const apiMessages: 通用消息[] = [];
@@ -834,24 +1060,32 @@ export const generateStoryResponse = async (
     if (normalizedContext) {
         apiMessages.push({ role: 'system', content: normalizedContext });
     }
-    apiMessages.push({
-        role: 'system',
-        content: `以下为用户最新输入：\n<用户输入>${playerInput}</用户输入>`
-    });
+    // 伪装首条模型消息：作为 assistant 第一条注入内容。
+    if (leadingAssistantPrompt) {
+        apiMessages.push({ role: 'assistant', content: leadingAssistantPrompt });
+    }
     if (lengthRequirementPrompt) {
         apiMessages.push({ role: 'user', content: lengthRequirementPrompt });
     }
     if (styleAssistantPrompt) {
         apiMessages.push({ role: 'assistant', content: styleAssistantPrompt });
     }
-    // 额外要求提示词固定放在卡COT前，作为倒数第二条注入消息。
+    // 免责声明输出要求作为 AI 角色消息，固定在额外要求提示词之前。
+    if (disclaimerRequirementPrompt) {
+        apiMessages.push({ role: 'assistant', content: disclaimerRequirementPrompt });
+    }
+    // 额外要求提示词固定放在免责声明输出要求后，作为倒数第三条注入消息。
     if (normalizedExtraPrompt) {
         apiMessages.push({ role: 'assistant', content: normalizedExtraPrompt });
     }
-    // 伪装COT历史消息必须始终放在本轮消息末尾，确保为最后一条注入消息。
+    // 伪装COT历史消息固定放在用户输入前，最后一条消息始终保留为用户输入。
     if (enableCotInjection && cotPseudoHistoryPrompt) {
         apiMessages.push({ role: 'assistant', content: cotPseudoHistoryPrompt });
     }
+    apiMessages.push({
+        role: 'user',
+        content: typeof playerInput === 'string' && playerInput.trim().length > 0 ? playerInput : '继续。'
+    });
 
     const normalizeGameResponse = (raw: any): GameResponse => {
         const logs = Array.isArray(raw?.logs)

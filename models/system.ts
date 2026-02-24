@@ -26,6 +26,8 @@ export interface 单接口配置结构 {
     baseUrl: string;
     apiKey: string;
     model: string;
+    maxTokens?: number;
+    temperature?: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -70,6 +72,7 @@ export interface 游戏设置结构 {
     启用多重思考: boolean; // Switch COT/format prompts to multi-thinking variants
     启用女主剧情规划: boolean; // Inject heroine planning prompts as optional addon
     启用防止说话: boolean; // Inject NoControl prompt to avoid speaking for player
+    启用免责声明输出: boolean; // Require a separate disclaimer block at the end
     剧情风格: 剧情风格类型; // Story style injected as assistant context before COT
     NTL后宫档位: NTL后宫档位; // NTL-only tier selector
     额外提示词: string; // Custom prompt injected at the end

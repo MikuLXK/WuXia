@@ -124,15 +124,24 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
             return null;
         }
         try {
-            const url = activeConfig.baseUrl.replace(/\/+$/, '') + '/models';
-            const res = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${activeConfig.apiKey}`
+            const base = activeConfig.baseUrl.replace(/\/+$/, '');
+            const normalized = base.replace(/\/v1$/i, '');
+            const candidateUrls = Array.from(new Set([
+                `${normalized}/v1/models`,
+                `${normalized}/models`,
+                `${base}/models`
+            ]));
+            for (const url of candidateUrls) {
+                const res = await fetch(url, {
+                    headers: {
+                        Authorization: `Bearer ${activeConfig.apiKey}`
+                    }
+                });
+                if (!res.ok) continue;
+                const data = await res.json();
+                if (data && Array.isArray(data.data)) {
+                    return data.data.map((m: any) => m?.id).filter(Boolean);
                 }
-            });
-            const data = await res.json();
-            if (data && Array.isArray(data.data)) {
-                return data.data.map((m: any) => m?.id).filter(Boolean);
             }
             setMessage('获取失败: 返回格式错误');
             return null;
@@ -244,6 +253,8 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                 `配置: ${activeConfig.名称 || activeConfig.id}`,
                 `供应商: ${供应商标签[activeConfig.供应商]}`,
                 `模型: ${modelForTest}`,
+                `最大输出Token: ${typeof activeConfig.maxTokens === 'number' ? activeConfig.maxTokens : '自动估算'}`,
+                `温度: ${typeof activeConfig.temperature === 'number' ? activeConfig.temperature : '按场景默认'}`,
                 `Base URL: ${activeConfig.baseUrl}`,
                 '',
                 '---',
@@ -413,6 +424,61 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                                     placeholder="sk-..."
                                     className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all"
                                 />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm text-wuxia-cyan font-bold">最大输出 Token（留空自动）</label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={typeof activeConfig.maxTokens === 'number' ? String(activeConfig.maxTokens) : ''}
+                                    onChange={(e) => {
+                                        const raw = e.target.value.trim();
+                                        if (!raw) {
+                                            updateActiveConfig({ maxTokens: undefined });
+                                            return;
+                                        }
+                                        const parsed = Number(raw);
+                                        updateActiveConfig({
+                                            maxTokens: Number.isFinite(parsed) && parsed > 0
+                                                ? Math.floor(parsed)
+                                                : undefined
+                                        });
+                                    }}
+                                    placeholder="留空按模型自动估算（推荐）"
+                                    className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all"
+                                />
+                                <div className="text-[11px] text-gray-400">
+                                    留空时系统按模型与上下文自动估算；填写后将固定使用该上限。
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm text-wuxia-cyan font-bold">温度 Temperature（留空自动）</label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={2}
+                                    step={0.1}
+                                    value={typeof activeConfig.temperature === 'number' ? String(activeConfig.temperature) : ''}
+                                    onChange={(e) => {
+                                        const raw = e.target.value.trim();
+                                        if (!raw) {
+                                            updateActiveConfig({ temperature: undefined });
+                                            return;
+                                        }
+                                        const parsed = Number(raw);
+                                        updateActiveConfig({
+                                            temperature: Number.isFinite(parsed) && parsed >= 0 && parsed <= 2
+                                                ? Math.round(parsed * 100) / 100
+                                                : undefined
+                                        });
+                                    }}
+                                    placeholder="留空按场景默认（主剧情0.7/世界0.8/回忆0.2）"
+                                    className="w-full bg-black/50 border-2 border-transparent focus:border-wuxia-gold p-3 text-white outline-none rounded-md transition-all"
+                                />
+                                <div className="text-[11px] text-gray-400">
+                                    OpenAI/Gemini/DeepSeek 范围 0-2；Claude 范围 0-1（超过 1 会自动按 1 发送）。
+                                </div>
                             </div>
                             <div className="pt-1">
                                 <GameButton

@@ -51,15 +51,24 @@ const RecallModelSettings: React.FC<Props> = ({ settings, onSave }) => {
             return null;
         }
         try {
-            const url = activeConfig.baseUrl.replace(/\/+$/, '') + '/models';
-            const res = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${activeConfig.apiKey}`
+            const base = activeConfig.baseUrl.replace(/\/+$/, '');
+            const normalized = base.replace(/\/v1$/i, '');
+            const candidateUrls = Array.from(new Set([
+                `${normalized}/v1/models`,
+                `${normalized}/models`,
+                `${base}/models`
+            ]));
+            for (const url of candidateUrls) {
+                const res = await fetch(url, {
+                    headers: {
+                        Authorization: `Bearer ${activeConfig.apiKey}`
+                    }
+                });
+                if (!res.ok) continue;
+                const data = await res.json();
+                if (data && Array.isArray(data.data)) {
+                    return data.data.map((m: any) => m?.id).filter(Boolean);
                 }
-            });
-            const data = await res.json();
-            if (data && Array.isArray(data.data)) {
-                return data.data.map((m: any) => m?.id).filter(Boolean);
             }
             setMessage('获取失败：返回格式错误。');
             return null;

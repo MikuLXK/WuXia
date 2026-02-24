@@ -10,6 +10,7 @@ type SendResult = {
     needRecallConfirm?: boolean;
     needRerollConfirm?: boolean;
     parseErrorMessage?: string;
+    parseErrorDetail?: string;
     errorDetail?: string;
     errorTitle?: string;
 };
@@ -78,10 +79,11 @@ const InputArea: React.FC<Props> = ({
             });
             if (result?.cancelled) {
                 if (result.needRerollConfirm) {
+                    const parseErrorText = result.parseErrorDetail || result.parseErrorMessage || '模型返回了非标准 JSON。';
                     const confirmed = requestConfirm
                         ? await requestConfirm({
                             title: '响应解析失败',
-                            message: `${result.parseErrorMessage || '模型返回了非标准 JSON。'}\n\n是否立即重ROLL并回填上一轮输入？`,
+                            message: `${parseErrorText}\n\n是否立即重ROLL并回填上一轮输入？`,
                             confirmText: '重ROLL',
                             cancelText: '取消'
                         })

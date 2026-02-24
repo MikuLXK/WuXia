@@ -251,6 +251,20 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
             <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
                 <div className="flex items-center justify-between gap-4">
                     <div>
+                        <div className="text-sm text-wuxia-cyan font-bold">免责声明输出要求</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后，AI 会在本回合最后追加独立免责声明段落；不会插入到正文中间。</div>
+                    </div>
+                    <ToggleSwitch
+                        checked={form.启用免责声明输出 !== false}
+                        onChange={(next) => 实时应用更新({ 启用免责声明输出: next })}
+                        ariaLabel="切换免责声明输出要求"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
                         <div className="text-sm text-wuxia-cyan font-bold">多重思考模式</div>
                         <div className="text-xs text-gray-400 mt-1">开启后自动切换到“多重思考版”COT与输出格式提示词。</div>
                     </div>
