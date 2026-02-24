@@ -11,7 +11,7 @@ interface Props {
 const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [form, setForm] = useState<游戏设置结构>(settings);
     const [showSuccess, setShowSuccess] = useState(false);
-    const [openMenu, setOpenMenu] = useState<'perspective' | 'style' | null>(null);
+    const [openMenu, setOpenMenu] = useState<'perspective' | 'style' | 'ntl' | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
 
     const 叙事人称选项: Array<{ value: 游戏设置结构['叙事人称']; label: string }> = [
@@ -26,6 +26,11 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
         { value: '修罗场', label: '修罗场' },
         { value: '纯爱', label: '纯爱' },
         { value: 'NTL后宫', label: 'NTL后宫' }
+    ];
+    const NTL后宫档位选项: Array<{ value: 游戏设置结构['NTL后宫档位']; label: string }> = [
+        { value: '禁止乱伦', label: '禁止乱伦' },
+        { value: '假乱伦', label: '假乱伦' },
+        { value: '无限制', label: '无限制' }
     ];
 
     useEffect(() => {
@@ -66,7 +71,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     };
 
     const 渲染内置下拉 = (params: {
-        menuKey: 'perspective' | 'style';
+        menuKey: 'perspective' | 'style' | 'ntl';
         value: string;
         options: Array<{ value: string; label: string }>;
         onChange: (value: string) => void;
@@ -171,6 +176,18 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                     })}
                     <div className="text-xs text-gray-400">将作为 AI 助手消息注入在本轮上下文末尾，并位于 COT 伪装消息之前。</div>
                 </div>
+                {form.剧情风格 === 'NTL后宫' && (
+                    <div className="space-y-2 md:col-span-2">
+                        <label className="text-sm text-wuxia-cyan font-bold">NTL后宫档位</label>
+                        {渲染内置下拉({
+                            menuKey: 'ntl',
+                            value: form.NTL后宫档位,
+                            options: NTL后宫档位选项,
+                            onChange: (value) => 实时应用更新({ NTL后宫档位: value as 游戏设置结构['NTL后宫档位'] })
+                        })}
+                        <div className="text-xs text-gray-400">用于控制“禁忌关系”强度，仅在 NTL 后宫风格下生效。</div>
+                    </div>
+                )}
             </div>
 
             <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
@@ -183,6 +200,20 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                         checked={form.启用行动选项 !== false}
                         onChange={(next) => 实时应用更新({ 启用行动选项: next })}
                         ariaLabel="切换行动选项功能"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border border-wuxia-gold/20 bg-black/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <div className="text-sm text-wuxia-cyan font-bold">防止说话（NoControl）</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后追加“防止说话/角色边界”提示词，禁止代写玩家言行。</div>
+                    </div>
+                    <ToggleSwitch
+                        checked={form.启用防止说话 !== false}
+                        onChange={(next) => 实时应用更新({ 启用防止说话: next })}
+                        ariaLabel="切换防止说话"
                     />
                 </div>
             </div>

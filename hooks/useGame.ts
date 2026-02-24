@@ -52,6 +52,7 @@ import { 核心_思维链_多重思考 } from '../prompts/core/cotMulti';
 import { 核心_输出格式_多重思考 } from '../prompts/core/formatMulti';
 import { 核心_女主剧情规划 } from '../prompts/core/heroinePlan';
 import { 核心_女主剧情规划_思考 } from '../prompts/core/heroinePlanCot';
+import { 写作_防止说话 } from '../prompts/writing/noControl';
 import {
     规范化环境信息,
     构建完整地点文本,
@@ -273,9 +274,15 @@ export const useGame = () => {
         启用女主剧情规划: raw?.启用女主剧情规划 === true
             ? true
             : (typeof gameConfig?.启用女主剧情规划 === 'boolean' ? gameConfig.启用女主剧情规划 : false),
+        启用防止说话: raw?.启用防止说话 === false
+            ? false
+            : (typeof gameConfig?.启用防止说话 === 'boolean' ? gameConfig.启用防止说话 : true),
         剧情风格: raw?.剧情风格 === '后宫' || raw?.剧情风格 === '修炼' || raw?.剧情风格 === '一般' || raw?.剧情风格 === '修罗场' || raw?.剧情风格 === '纯爱' || raw?.剧情风格 === 'NTL后宫'
             ? raw.剧情风格
             : (gameConfig?.剧情风格 || '一般'),
+        NTL后宫档位: raw?.NTL后宫档位 === '禁止乱伦' || raw?.NTL后宫档位 === '假乱伦' || raw?.NTL后宫档位 === '无限制'
+            ? raw.NTL后宫档位
+            : (gameConfig?.NTL后宫档位 || '禁止乱伦'),
         额外提示词: typeof raw?.额外提示词 === 'string'
             ? raw.额外提示词
             : (typeof gameConfig?.额外提示词 === 'string' ? gameConfig.额外提示词 : 默认额外系统提示词)
@@ -292,8 +299,12 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         }
         return 默认COT伪装历史消息提示词.trim();
     };
+    const 构建字数要求提示词 = (minLength: number): string => {
+        const safeValue = Number.isFinite(minLength) ? Math.max(50, Math.floor(minLength)) : 450;
+        return `<字数>本次"logs"内的正文**必须${safeValue}字**以上</字数>`;
+    };
     const 构建剧情风格助手消息 = (config: 游戏设置结构): string => {
-        const stylePrompt = 获取剧情风格提示词(config.剧情风格);
+        const stylePrompt = 获取剧情风格提示词(config.剧情风格, config?.NTL后宫档位);
         return `【剧情风格偏好】\n${stylePrompt}`;
     };
     const 格式化原始AI消息 = (rawText: string, fallbackStructured: GameResponse): string => {
@@ -595,18 +606,51 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             : [];
 
         const 规则约束Raw = planRaw?.规则约束 && typeof planRaw.规则约束 === 'object' ? planRaw.规则约束 : {};
-        const 登场队列 = Array.isArray(planRaw?.登场队列)
+        const rawQueue = Array.isArray(planRaw?.登场队列)
             ? planRaw.登场队列.map((id: any) => 纯文本(id)).filter(Boolean)
             : [];
+        const 去重保序 = (list: string[]) => {
+            const seen = new Set<string>();
+            const next: string[] = [];
+            list.forEach((item) => {
+                if (!item || seen.has(item)) return;
+                seen.add(item);
+                next.push(item);
+            });
+            return next;
+        };
+        const 登场队列 = 去重保序(rawQueue);
+        const 去重条目 = <T,>(items: T[], getKey: (item: T) => string) => {
+            const seen = new Set<string>();
+            const next: T[] = [];
+            items.forEach((item) => {
+                const key = getKey(item);
+                if (!key || seen.has(key)) return;
+                seen.add(key);
+                next.push(item);
+            });
+            return next;
+        };
+        const 去重女主条目 = 去重条目(女主条目 as any[], (item) => 纯文本((item as any)?.女主ID));
+        const 女主ID集合 = new Set<string>(去重女主条目.map((item: any) => 纯文本(item?.女主ID)).filter(Boolean));
+        const 互动排期候选 = (互动排期 as any[]).filter((item) => {
+            const 女主ID = 纯文本(item?.女主ID);
+            if (!女主ID) return false;
+            return 女主ID集合.has(女主ID) || 登场队列.includes(女主ID);
+        });
+        const 去重互动排期 = 去重条目(互动排期候选, (item) => 纯文本((item as any)?.事件ID));
+        const 去重群像镜头规划 = 去重条目(群像镜头规划 as any[], (item) => 纯文本((item as any)?.镜头ID));
+        const 当前焦点女主IDRaw = 纯文本(planRaw?.当前焦点女主ID);
+        const 当前焦点女主ID = 女主ID集合.has(当前焦点女主IDRaw) ? 当前焦点女主IDRaw : '';
 
         return {
             规划版本: 纯文本(planRaw?.规划版本) || 'v1',
             当前阶段: inSet(纯文本(planRaw?.当前阶段), ['开局铺垫', '并线发展', '冲突升级', '收束定局'] as const, '开局铺垫'),
-            当前焦点女主ID: 纯文本(planRaw?.当前焦点女主ID),
+            当前焦点女主ID,
             登场队列,
-            女主条目: 女主条目 as any,
-            互动排期: 互动排期 as any,
-            群像镜头规划: 群像镜头规划 as any,
+            女主条目: 去重女主条目 as any,
+            互动排期: 去重互动排期 as any,
+            群像镜头规划: 去重群像镜头规划 as any,
             规则约束: {
                 单回合主推进上限: 取整数(规则约束Raw?.单回合主推进上限, 1, 0, 5),
                 单回合次推进上限: 取整数(规则约束Raw?.单回合次推进上限, 1, 0, 5),
@@ -681,6 +725,30 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             剧情: 创建开场空白剧情(),
             女主剧情规划: undefined as 女主剧情规划结构 | undefined
         };
+    };
+
+    const 创建空记忆系统 = (): 记忆系统结构 => ({
+        回忆档案: [],
+        即时记忆: [],
+        短期记忆: [],
+        中期记忆: [],
+        长期记忆: []
+    });
+
+    const 应用开场基态 = (openingBase: ReturnType<typeof 创建开场基础状态>) => {
+        设置角色(规范化角色物品容器映射(openingBase.角色));
+        设置环境(规范化环境信息(openingBase.环境));
+        设置社交(规范化社交列表(openingBase.社交));
+        设置世界(openingBase.世界);
+        设置战斗(openingBase.战斗);
+        设置玩家门派(openingBase.玩家门派);
+        设置任务列表(openingBase.任务列表 || []);
+        设置约定列表(openingBase.约定列表 || []);
+        设置剧情(规范化剧情状态(openingBase.剧情, openingBase.环境));
+        设置女主剧情规划(undefined);
+        设置记忆系统(创建空记忆系统());
+        设置历史记录([]);
+        setWorldEvents([]);
     };
 
     const 构建系统提示词 = (
@@ -889,6 +957,20 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             }
             return nextPool;
         };
+        const 应用防止说话提示词切换 = (
+            pool: 提示词结构[],
+            enabled: boolean
+        ): 提示词结构[] => {
+            const hasNoControl = pool.some(p => p.id === 'write_no_control');
+            let nextPool = pool.map(p => {
+                if (p.id === 'write_no_control') return { ...p, 启用: enabled };
+                return p;
+            });
+            if (enabled && !hasNoControl) {
+                nextPool = [...nextPool, { ...写作_防止说话, 启用: true }];
+            }
+            return nextPool;
+        };
         let effectivePromptPool = 应用多重思考提示词切换(
             promptPool,
             normalizedGameConfig.启用多重思考 === true
@@ -896,6 +978,10 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
         effectivePromptPool = 应用女主剧情规划提示词切换(
             effectivePromptPool,
             normalizedGameConfig.启用女主剧情规划 === true
+        );
+        effectivePromptPool = 应用防止说话提示词切换(
+            effectivePromptPool,
+            normalizedGameConfig.启用防止说话 !== false
         );
         const selectedPerspectiveIdMap: Record<string, string> = {
             第一人称: 'write_perspective_first',
@@ -958,15 +1044,20 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             : `【中期记忆】\n${memoryData.中期记忆.join('\n') || '暂无'}`;
         const contextMemory = options?.禁用中期长期记忆 ? '' : `${longMemory}\n${midMemory}`;
         const contextNPCData = npcContext.在场数据块;
+        const ntlTierLine = normalizedGameConfig.剧情风格 === 'NTL后宫'
+            ? `NTL后宫档位: ${normalizedGameConfig.NTL后宫档位}`
+            : '';
         const contextSettings = [
             '【游戏设置】',
             `字数要求: ${normalizedGameConfig.字数要求}字`,
             `叙事人称: ${normalizedGameConfig.叙事人称}`,
             `剧情风格: ${normalizedGameConfig.剧情风格}`,
             `行动选项功能: ${normalizedGameConfig.启用行动选项 ? '开启' : '关闭'}`,
+            `防止说话: ${normalizedGameConfig.启用防止说话 ? '开启' : '关闭'}`,
             `COT伪装注入: ${normalizedGameConfig.启用COT伪装注入 ? '开启' : '关闭'}`,
             `多重思考模式: ${normalizedGameConfig.启用多重思考 ? '开启' : '关闭'}`,
             `女主剧情规划: ${normalizedGameConfig.启用女主剧情规划 ? '开启' : '关闭'}`,
+            ntlTierLine,
             '',
             '【对应叙事人称提示词】',
             activePerspectiveContent || '未配置',
@@ -1062,6 +1153,10 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             openingStreaming
         });
         清空重Roll快照();
+        重置自动存档状态();
+
+        const openingBase = 创建开场基础状态(charData, worldConfig);
+        应用开场基态(openingBase);
 
         if (openingStreaming) {
             const worldStreamMarker = Date.now();
@@ -1183,24 +1278,10 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             setPrompts(finalPrompts);
             await dbService.保存设置('prompts', finalPrompts);
 
-            // Build local opening base state.
-            // 注意：all 模式下不提前写入前端状态，全部交由开场 tavern_commands 落地。
-            const openingBase = 创建开场基础状态(charData, worldConfig);
-
             // Mode Handling
             if (mode === 'step') {
                 // step 模式用于手动初始化，仍需先把空白基态写入前端。
-                设置角色(规范化角色物品容器映射(openingBase.角色));
-                设置环境(规范化环境信息(openingBase.环境));
-                设置社交(规范化社交列表(openingBase.社交));
-                设置世界(openingBase.世界);
-                设置战斗(openingBase.战斗);
-                设置玩家门派(openingBase.玩家门派);
-                设置任务列表(openingBase.任务列表 || []);
-                设置约定列表(openingBase.约定列表 || []);
-                设置剧情(规范化剧情状态(openingBase.剧情, openingBase.环境));
-                设置记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] });
-                设置历史记录([]);
+                应用开场基态(openingBase);
                 setView('game');
                 setLoading(false);
                 alert("世界观提示词已写入。请在聊天框输入指令开始初始化。");
@@ -1318,6 +1399,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             }
 
             const openingGameConfig = 规范化游戏设置(gameConfig);
+            const openingLengthRequirementPrompt = 构建字数要求提示词(650);
             const aiResult = await aiService.generateStoryResponse(
                 openingContext.systemPrompt,
                 openingScriptContext,
@@ -1346,7 +1428,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 {
                     enableCotInjection: openingGameConfig.启用COT伪装注入 !== false,
                     styleAssistantPrompt: 构建剧情风格助手消息(openingGameConfig),
-                    cotPseudoHistoryPrompt: 构建COT伪装提示词(openingGameConfig)
+                    cotPseudoHistoryPrompt: 构建COT伪装提示词(openingGameConfig),
+                    lengthRequirementPrompt: openingLengthRequirementPrompt
                 }
             );
             const aiData = aiResult.response;
@@ -1591,7 +1674,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
             pushSection('recall_corpus', '剧情回忆检索回忆库', '回忆API', recallMemoryCorpus);
         }
         pushSection('script', '即时剧情回顾 (Script)', '历史', `【即时剧情回顾 (Script)】\n${historyScript}`);
-        pushSection('player_input', '玩家输入 (最近)', '用户', `<玩家输入>${latestUserInput}</玩家输入>`);
+        pushSection('player_input', '玩家输入 (最近)', '用户', `<用户输入>${latestUserInput}</用户输入>`);
         pushSection('style_assistant', '剧情风格助手消息', '系统', styleAssistantPrompt);
         // 额外要求提示词固定置于COT伪装历史消息之前（倒数第二段）。
         pushSection('extra_prompt', '额外要求提示词', '系统', extraPrompt);
@@ -1765,6 +1848,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
 
             // 6. Call AI Service
             const runtimeGameConfig = 规范化游戏设置(gameConfig);
+            const lengthRequirementPrompt = 构建字数要求提示词(runtimeGameConfig.字数要求);
             const aiResult = await aiService.generateStoryResponse(
                 builtContext.systemPrompt,
                 contextImmediate,
@@ -1792,7 +1876,8 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 {
                     enableCotInjection: runtimeGameConfig.启用COT伪装注入 !== false,
                     styleAssistantPrompt: 构建剧情风格助手消息(runtimeGameConfig),
-                    cotPseudoHistoryPrompt: 构建COT伪装提示词(runtimeGameConfig)
+                    cotPseudoHistoryPrompt: 构建COT伪装提示词(runtimeGameConfig),
+                    lengthRequirementPrompt
                 }
             );
             const aiData = aiResult.response;
@@ -1875,6 +1960,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
     const handleQuickRestart = async (mode: 快速重开模式 = 'all') => {
         if (loading || !最近开局配置) return;
         清空重Roll快照();
+        重置自动存档状态();
         const worldConfig = 深拷贝(最近开局配置.worldConfig);
         const charData = 深拷贝(最近开局配置.charData);
         const openingStreaming = 最近开局配置.openingStreaming;
@@ -1897,6 +1983,7 @@ t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc 
                 return;
             }
             const openingBase = 创建开场基础状态(charData, worldConfig);
+            应用开场基态(openingBase);
             if (view !== 'game') {
                 setView('game');
             }

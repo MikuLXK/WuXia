@@ -11,8 +11,9 @@ export const formatHistoryToScript = (historyItems: 聊天记录结构[]): strin
             const lines = logs
                 .filter((l) => l.sender !== '【判定】' && l.sender !== '【NSFW判定】')
                 .map((l) => `${l.sender}：${l.text}`).join('\n');
+            if (!lines.trim()) return '';
             return `${timeStr}${lines}`;
         }
         return '';
-    }).join('\n\n');
+    }).filter(item => item.trim().length > 0).join('\n\n');
 };

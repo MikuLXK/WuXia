@@ -58,6 +58,7 @@ export interface 视觉设置结构 {
 }
 
 export type 剧情风格类型 = '后宫' | '修炼' | '一般' | '修罗场' | '纯爱' | 'NTL后宫';
+export type NTL后宫档位 = '禁止乱伦' | '假乱伦' | '无限制';
 
 export interface 游戏设置结构 {
     字数要求: number; // Minimum logs body length
@@ -66,7 +67,9 @@ export interface 游戏设置结构 {
     启用COT伪装注入: boolean; // Inject pseudo historical COT message before latest user input
     启用多重思考: boolean; // Switch COT/format prompts to multi-thinking variants
     启用女主剧情规划: boolean; // Inject heroine planning prompts as optional addon
+    启用防止说话: boolean; // Inject NoControl prompt to avoid speaking for player
     剧情风格: 剧情风格类型; // Story style injected as assistant context before COT
+    NTL后宫档位: NTL后宫档位; // NTL-only tier selector
     额外提示词: string; // Custom prompt injected at the end
 }
 

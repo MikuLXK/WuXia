@@ -22,6 +22,7 @@ interface StoryRequestOptions {
     enableCotInjection?: boolean;
     cotPseudoHistoryPrompt?: string;
     styleAssistantPrompt?: string;
+    lengthRequirementPrompt?: string;
 }
 
 export interface StoryResponseResult {
@@ -726,6 +727,9 @@ export const generateStoryResponse = async (
     const styleAssistantPrompt = typeof requestOptions?.styleAssistantPrompt === 'string'
         ? requestOptions.styleAssistantPrompt.trim()
         : '';
+    const lengthRequirementPrompt = typeof requestOptions?.lengthRequirementPrompt === 'string'
+        ? requestOptions.lengthRequirementPrompt.trim()
+        : '';
 
     const apiMessages: 通用消息[] = [];
     if (normalizedSystemPrompt) {
@@ -734,7 +738,13 @@ export const generateStoryResponse = async (
     if (normalizedContext) {
         apiMessages.push({ role: 'system', content: normalizedContext });
     }
-    apiMessages.push({ role: 'user', content: `<玩家输入>${playerInput}</玩家输入>` });
+    apiMessages.push({
+        role: 'system',
+        content: `以下为用户最新输入：\n<用户输入>${playerInput}</用户输入>`
+    });
+    if (lengthRequirementPrompt) {
+        apiMessages.push({ role: 'user', content: lengthRequirementPrompt });
+    }
     if (styleAssistantPrompt) {
         apiMessages.push({ role: 'assistant', content: styleAssistantPrompt });
     }
@@ -813,13 +823,20 @@ export const generateStoryResponse = async (
         const parsed = parseJsonWithRepair<any>(content);
         if (parsed.value && typeof parsed.value === 'object') {
             const normalized = normalizeGameResponse(parsed.value);
+            const hasRenderableLogs = normalized.logs.some((log) => (
+                typeof log?.text === 'string' && log.text.trim().length > 0
+            ));
+            if (hasRenderableLogs) {
+                return normalized;
+            }
             const hasThinking = Object.keys(normalized).some((key) => {
                 const isThinkingField = key.startsWith('t_') || key === 'thinking_pre' || key === 'thinking_post';
                 return isThinkingField && typeof (normalized as any)[key] === 'string' && (normalized as any)[key].trim().length > 0;
             });
-            if (normalized.logs.length > 0 || hasThinking) {
-                return normalized;
-            }
+            const detail = hasThinking
+                ? '缺少 logs 正文（疑似响应截断）'
+                : '返回内容结构不完整';
+            throw new StoryResponseParseError(`返回内容非标准JSON（${detail}）`, content, detail);
         }
         const detail = parsed.error || '返回内容结构不完整';
         throw new StoryResponseParseError(`返回内容非标准JSON（${detail}）`, content, detail);
