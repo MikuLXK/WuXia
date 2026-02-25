@@ -33,6 +33,11 @@ const ChatList: React.FC<Props> = ({ history, loading, scrollRef, onUpdateHistor
         return map;
     }, [turnAnchors]);
 
+    const latestTurnAnchorIndex = React.useMemo(() => {
+        if (turnAnchors.length === 0) return -1;
+        return turnAnchors[turnAnchors.length - 1].index;
+    }, [turnAnchors]);
+
     // Slice by real turns (assistant structured responses), not by message count.
     const sliceIndex = React.useMemo(() => {
         if (turnAnchors.length <= normalizedRenderCount) return 0;
@@ -79,6 +84,7 @@ const ChatList: React.FC<Props> = ({ history, loading, scrollRef, onUpdateHistor
                             key={absoluteIdx} 
                             response={msg.structuredResponse} 
                             turnNumber={turnNum}
+                            isLatest={absoluteIdx === latestTurnAnchorIndex}
                             rawJson={msg.rawJson}
                             onSaveEdit={(newJson) => onUpdateHistory && onUpdateHistory(absoluteIdx, newJson)}
                         />

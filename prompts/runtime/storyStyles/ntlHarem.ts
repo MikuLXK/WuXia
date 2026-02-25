@@ -27,12 +27,7 @@ const NTL_TIER_PSEUDO = `
 - 真实血缘关系仍然禁止越界恋情。
 `.trim();
 
-const NTL_TIER_UNLIMITED = `
-【NTL后宫档位：无限制】
-- 不限制亲属身份设定，但仍需遵守角色动机与关系推进节奏，避免无因果越线。
-- 即便为高压关系，也必须有可追溯的事件链与心理转变。
-`.trim();
-
 export const 剧情风格提示词_NTL后宫_禁止乱伦 = `${NTL_BASE}\n${NTL_TIER_FORBID}`.trim();
 export const 剧情风格提示词_NTL后宫_假乱伦 = `${NTL_BASE}\n${NTL_TIER_PSEUDO}`.trim();
-export const 剧情风格提示词_NTL后宫_无限制 = `${NTL_BASE}\n${NTL_TIER_UNLIMITED}`.trim();
+// 无限制档位不追加额外限制提示，直接使用 NTL 基础风格。
+export const 剧情风格提示词_NTL后宫_无限制 = NTL_BASE;

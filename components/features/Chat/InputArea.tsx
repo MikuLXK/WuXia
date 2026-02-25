@@ -79,7 +79,7 @@ const InputArea: React.FC<Props> = ({
             });
             if (result?.cancelled) {
                 if (result.needRerollConfirm) {
-                    const parseErrorText = result.parseErrorDetail || result.parseErrorMessage || '模型返回了非标准 JSON。';
+                    const parseErrorText = result.parseErrorDetail || result.parseErrorMessage || '模型返回了不符合标签协议的内容。';
                     const confirmed = requestConfirm
                         ? await requestConfirm({
                             title: '响应解析失败',

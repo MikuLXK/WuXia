@@ -203,7 +203,7 @@ export const useGameState = () => {
         启用防止说话: true,
         启用免责声明输出: true,
         剧情风格: '一般',
-        NTL后宫档位: '禁止乱伦',
+        NTL后宫档位: '无限制',
         额外提示词: 默认额外系统提示词
     };
     const 规范化游戏设置 = (raw?: Partial<游戏设置结构> | null): 游戏设置结构 => ({

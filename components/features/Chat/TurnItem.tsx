@@ -3,19 +3,20 @@ import React, { useState } from 'react';
 import { GameResponse } from '../../../types';
 import { NarratorRenderer, CharacterRenderer, JudgmentRenderer } from './MessageRenderers';
 import GameButton from '../../ui/GameButton';
-import { formatJsonWithRepair, parseJsonWithRepair } from '../../../utils/jsonRepair';
+import { parseStoryRawText } from '../../../services/aiService';
 
 interface Props {
     response: GameResponse;
     turnNumber: number;
-    rawJson?: string; // Original raw string for editing
-    onSaveEdit: (newJson: string) => void;
+    isLatest?: boolean;
+    rawJson?: string; // Original raw text for viewing/editing
+    onSaveEdit: (newRawText: string) => void;
 }
 
-const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }) => {
+const TurnItem: React.FC<Props> = ({ response, turnNumber, isLatest = false, rawJson, onSaveEdit }) => {
     const formatRawJson = (raw?: string) => {
-        if (!raw) return JSON.stringify(response, null, 2);
-        return formatJsonWithRepair(raw, raw);
+        if (!raw) return '（该回合未记录原始文本）';
+        return raw;
     };
 
     const [showThinking, setShowThinking] = useState(false);
@@ -98,19 +99,80 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
     ] as Array<{ key: string; label: string; value: string; phase: 思考阶段 }>;
     const preThinkingBlocks = thinkingBlocks.filter(item => item.phase === 'pre');
     const postThinkingBlocks = thinkingBlocks.filter(item => item.phase === 'post');
-    const 正文文本 = response.logs.map(log => log.text || '').join('\n');
+    const isDisclaimerLog = (log: { sender?: string; text?: string }) => {
+        const sender = (log?.sender || '').trim();
+        const text = (log?.text || '').trim();
+        if (sender === 'disclaimer' || sender === '免责声明' || sender === '【免责声明】') return true;
+        return /^【\s*免责声明\s*】/.test(text);
+    };
+    const displayLogs = response.logs.filter(log => !isDisclaimerLog(log));
+    const 正文文本 = displayLogs.map(log => log.text || '').join('\n');
     const 中文计数 = (正文文本.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) || []).length;
+    const commands = Array.isArray(response.tavern_commands) ? response.tavern_commands : [];
+    const [showCommandChanges, setShowCommandChanges] = useState(false);
+    const [commandViewMode, setCommandViewMode] = useState<'compact' | 'full'>('compact');
+    const commandStats = commands.reduce(
+        (acc, cmd) => {
+            if (cmd?.action === 'set') acc.set += 1;
+            if (cmd?.action === 'add') acc.add += 1;
+            if (cmd?.action === 'push') acc.push += 1;
+            if (cmd?.action === 'delete') acc.delete += 1;
+            return acc;
+        },
+        { set: 0, add: 0, push: 0, delete: 0 }
+    );
+    const 命令标签映射: Record<'set' | 'add' | 'push' | 'delete', string> = {
+        set: 'SET',
+        add: 'ADD',
+        push: 'PUSH',
+        delete: 'DEL'
+    };
+    const 命令样式映射: Record<'set' | 'add' | 'push' | 'delete', string> = {
+        set: 'border-blue-500/40 text-blue-200 bg-blue-500/15',
+        add: 'border-emerald-500/40 text-emerald-200 bg-emerald-500/15',
+        push: 'border-violet-500/40 text-violet-200 bg-violet-500/15',
+        delete: 'border-rose-500/40 text-rose-200 bg-rose-500/15'
+    };
+    const 格式化命令值 = (value: unknown): string => {
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        if (value === null || value === undefined) return 'null';
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return String(value);
+        }
+    };
+    const 是否使用预格式化 = (value: unknown): boolean => {
+        if (value === null || value === undefined) return false;
+        if (typeof value === 'object') return true;
+        if (typeof value === 'string' && (value.includes('\n') || value.length > 80)) return true;
+        return false;
+    };
+    const 生成简约值文本 = (value: unknown): string => {
+        if (value === null || value === undefined) return 'null';
+        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        if (typeof value === 'string') {
+            const trimmed = value.replace(/\s+/g, ' ').trim();
+            return trimmed.length > 36 ? `${trimmed.slice(0, 36)}...` : trimmed;
+        }
+        if (Array.isArray(value)) return `数组(${value.length})`;
+        if (typeof value === 'object') {
+            const keys = Object.keys(value as Record<string, unknown>);
+            return `对象{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}}`;
+        }
+        return String(value);
+    };
+    const commandPanelTitle = isLatest ? '最新变量变化' : '本回合变量变化';
 
     const handleSave = () => {
-        const parsed = parseJsonWithRepair<GameResponse>(editValue);
-        if (!parsed.value) {
-            setParseError(parsed.error || 'JSON 修复失败，请继续检查。');
+        try {
+            parseStoryRawText(editValue);
+        } catch (error: any) {
+            setParseError(error?.message || '原文解析失败，请检查标签结构。');
             return;
         }
-
-        const formatted = JSON.stringify(parsed.value, null, 2);
-        onSaveEdit(formatted);
-        setEditValue(formatted);
+        onSaveEdit(editValue);
         setIsEditing(false);
         setParseError(null);
     };
@@ -118,7 +180,7 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
     if (isEditing) {
         return (
             <div className="w-full bg-black/80 border border-wuxia-gold p-4 my-4 relative z-50">
-                <h4 className="text-wuxia-gold mb-2 font-mono text-xs">/// DEBUG: EDIT RESPONSE JSON ///</h4>
+                <h4 className="text-wuxia-gold mb-2 font-mono text-xs">/// DEBUG: EDIT RESPONSE RAW TEXT ///</h4>
                 <textarea
                     className="w-full h-96 bg-gray-900 text-green-400 font-mono text-xs p-4 outline-none border border-gray-700 resize-y"
                     value={editValue}
@@ -127,7 +189,7 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
                 {parseError && <div className="text-red-500 text-xs mt-2">Error: {parseError}</div>}
                 <div className="flex justify-end gap-2 mt-2">
                     <GameButton variant="secondary" onClick={() => setIsEditing(false)} className="py-1 px-3 text-xs">取消</GameButton>
-                    <GameButton variant="primary" onClick={handleSave} className="py-1 px-3 text-xs">重解析渲染</GameButton>
+                    <GameButton variant="primary" onClick={handleSave} className="py-1 px-3 text-xs">保存并重解析</GameButton>
                 </div>
             </div>
         );
@@ -164,19 +226,36 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
                      </span>
                  </div>
 
-                 {/* Right: Edit/Source Icon */}
-                 <button 
-                    onClick={() => {
-                        setEditValue(formatRawJson(rawJson));
-                        setIsEditing(true);
-                    }}
-                    className="p-1.5 rounded-full border border-gray-700 text-gray-500 hover:text-wuxia-gold hover:border-wuxia-gold transition-all"
-                    title="查看/编辑原文"
-                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                    </svg>
-                 </button>
+                 {/* Right Actions */}
+                 <div className="flex items-center gap-2">
+                    {isLatest && commands.length > 0 && (
+                        <button
+                            onClick={() => setShowCommandChanges(prev => !prev)}
+                            className={`p-1.5 rounded-full border transition-all ${
+                                showCommandChanges
+                                    ? 'bg-emerald-500/15 border-emerald-500 text-emerald-200'
+                                    : 'border-emerald-700/70 text-emerald-300 hover:text-emerald-200 hover:border-emerald-500'
+                            }`}
+                            title={`查看${commandPanelTitle}`}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25h16.5m-16.5 6.75h16.5m-16.5 6.75h16.5" />
+                            </svg>
+                        </button>
+                    )}
+                    <button 
+                        onClick={() => {
+                            setEditValue(formatRawJson(rawJson));
+                            setIsEditing(true);
+                        }}
+                        className="p-1.5 rounded-full border border-gray-700 text-gray-500 hover:text-wuxia-gold hover:border-wuxia-gold transition-all"
+                        title="查看/编辑原文"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                        </svg>
+                    </button>
+                 </div>
             </div>
 
             {/* Thinking Process (Pre) - Collapsible */}
@@ -197,7 +276,7 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
 
             {/* Main Logs Rendering */}
             <div className="space-y-2">
-                {response.logs.map((log, idx) => {
+                {displayLogs.map((log, idx) => {
                     if (log.sender === '旁白') {
                         return <NarratorRenderer key={idx} text={log.text} />;
                     } else if (log.sender === '【判定】') {
@@ -221,6 +300,67 @@ const TurnItem: React.FC<Props> = ({ response, turnNumber, rawJson, onSaveEdit }
                                 <div>{block.value}</div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {showCommandChanges && isLatest && commands.length > 0 && (
+                <div className="mt-4 p-3 bg-gray-900/50 border-l border-emerald-500/30 text-xs text-gray-300 font-mono leading-relaxed">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                        <div>
+                            <div className="text-emerald-200 tracking-[0.08em]">{commandPanelTitle}</div>
+                            <div className="text-[10px] text-emerald-100/75">
+                                共 {commands.length} 条 | set:{commandStats.set} add:{commandStats.add} push:{commandStats.push} delete:{commandStats.delete}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCommandViewMode('compact')}
+                                className={`px-2 py-1 text-[10px] rounded border ${commandViewMode === 'compact' ? 'border-emerald-400 text-emerald-200 bg-emerald-500/15' : 'border-gray-700 text-gray-300 bg-black/20'}`}
+                            >
+                                简约显示
+                            </button>
+                            <button
+                                onClick={() => setCommandViewMode('full')}
+                                className={`px-2 py-1 text-[10px] rounded border ${commandViewMode === 'full' ? 'border-emerald-400 text-emerald-200 bg-emerald-500/15' : 'border-gray-700 text-gray-300 bg-black/20'}`}
+                            >
+                                完整显示
+                            </button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        {commands.map((cmd, idx) => {
+                            const valueText = 格式化命令值(cmd?.value);
+                            const compactValueText = 生成简约值文本(cmd?.value);
+                            const needPre = 是否使用预格式化(cmd?.value);
+                            return (
+                                <div key={`${cmd.action}-${cmd.key}-${idx}`} className="rounded-lg border border-emerald-500/20 bg-black/25 p-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`inline-flex px-1.5 py-0.5 rounded border text-[10px] font-mono tracking-wider ${命令样式映射[cmd.action]}`}>
+                                            {命令标签映射[cmd.action]}
+                                        </span>
+                                        <span className="font-mono text-[11px] text-gray-200 break-all">{cmd.key}</span>
+                                    </div>
+                                    {cmd.action !== 'delete' && (
+                                        commandViewMode === 'compact'
+                                            ? (
+                                                <div className="mt-2 rounded bg-black/35 border border-gray-800 px-2 py-1 text-[11px] text-gray-300 break-all">
+                                                    {compactValueText}
+                                                </div>
+                                            )
+                                            : (
+                                                needPre ? (
+                                                    <pre className="mt-2 rounded bg-black/40 border border-gray-800 p-2 text-[11px] leading-relaxed text-gray-300 whitespace-pre-wrap break-words overflow-x-auto">{valueText}</pre>
+                                                ) : (
+                                                    <div className="mt-2 rounded bg-black/40 border border-gray-800 px-2 py-1 text-[11px] text-gray-300 break-all">
+                                                        {valueText}
+                                                    </div>
+                                                )
+                                            )
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}

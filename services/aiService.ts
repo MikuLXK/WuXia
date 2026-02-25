@@ -21,11 +21,11 @@ interface StoryStreamOptions {
 interface StoryRequestOptions {
     enableCotInjection?: boolean;
     cotPseudoHistoryPrompt?: string;
-    leadingAssistantPrompt?: string;
+    leadingSystemPrompt?: string;
     styleAssistantPrompt?: string;
+    outputProtocolPrompt?: string;
     lengthRequirementPrompt?: string;
     disclaimerRequirementPrompt?: string;
-    jsonMode?: JSON模式设置;
     errorDetailLimit?: number;
 }
 
@@ -342,12 +342,8 @@ const 计算最大输出Token = (apiConfig: 当前可用接口结构, protocol: 
     const modelCap = 推断默认最大输出Token(protocol, apiConfig.model);
     const requested = 读取自定义最大输出Token(apiConfig) ?? modelCap;
     const safeRequested = Math.min(requested, modelCap);
-    const contextWindow = 推断上下文窗口(protocol, apiConfig.model);
-    if (!contextWindow) return Math.max(256, safeRequested);
-    const inputTokens = 估算消息Token(messages);
-    const available = Math.floor(contextWindow - inputTokens - 512);
-    if (!Number.isFinite(available) || available <= 0) return 256;
-    return Math.max(256, Math.min(safeRequested, available));
+    // 按用户要求：不根据输入上下文长度压缩输出，只控制输出上限本身。
+    return Math.max(256, safeRequested);
 };
 
 const 计算请求温度 = (apiConfig: 当前可用接口结构, protocol: 请求协议类型, fallback: number): number => {
@@ -360,11 +356,46 @@ const 计算请求温度 = (apiConfig: 当前可用接口结构, protocol: 请�
     return 约束数值范围(base, 0, 2);
 };
 
-const 提取OpenAI增量文本 = (payload: any): string => {
-    const delta = payload?.choices?.[0]?.delta;
-    if (typeof delta?.content === 'string' && delta.content) return delta.content;
-    const messageContent = payload?.choices?.[0]?.message?.content;
-    return typeof messageContent === 'string' ? messageContent : '';
+type 增量提取器 = ((payload: any) => string) & {
+    finalize?: () => string;
+};
+
+const 创建OpenAI流增量提取器 = (): 增量提取器 => {
+    let inReasoningPhase = false;
+    const extract = ((payload: any): string => {
+        const delta = payload?.choices?.[0]?.delta;
+        const reasoningContent = delta?.reasoning_content ?? delta?.reasoning ?? delta?.reasoning_text;
+        const hasReasoning = typeof reasoningContent === 'string' && reasoningContent.length > 0;
+        const content = typeof delta?.content === 'string'
+            ? delta.content
+            : (typeof payload?.choices?.[0]?.message?.content === 'string' ? payload.choices[0].message.content : '');
+
+        if (hasReasoning) {
+            if (!inReasoningPhase) {
+                inReasoningPhase = true;
+                return `<thinking>${reasoningContent}`;
+            }
+            return reasoningContent;
+        }
+
+        if (typeof content === 'string' && content.length > 0) {
+            if (inReasoningPhase) {
+                inReasoningPhase = false;
+                return `</thinking>${content}`;
+            }
+            return content;
+        }
+
+        return '';
+    }) as 增量提取器;
+
+    extract.finalize = () => {
+        if (!inReasoningPhase) return '';
+        inReasoningPhase = false;
+        return '</thinking>';
+    };
+
+    return extract;
 };
 
 const 提取OpenAI完整文本 = (payload: any): string => {
@@ -413,7 +444,7 @@ const 读取失败详情文本 = async (response: Response, maxLen = 600): Promi
 
 const 解析SSE文本 = async (
     response: Response,
-    extractDelta: (payload: any) => string,
+    extractDelta: 增量提取器 | ((payload: any) => string),
     onDelta?: (delta: string, accumulated: string) => void,
     emptyBodyError = 'Stream body is empty'
 ): Promise<string> => {
@@ -421,70 +452,126 @@ const 解析SSE文本 = async (
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
-    let buffer = '';
+    let rawBuffer = '';
     let accumulated = '';
     let rawStreamText = '';
     let sawSseFrame = false;
     let doneSignal = false;
+    let pendingJsonPayload = '';
 
-    while (!doneSignal) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunkText = decoder.decode(value, { stream: true });
-        rawStreamText += chunkText;
-        buffer += chunkText;
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+    const emitDelta = (delta: string) => {
+        if (!delta) return;
+        accumulated += delta;
+        onDelta?.(delta, accumulated);
+    };
+
+    const 尝试解析JSON并提取 = (payloadText: string): boolean => {
+        const payload = payloadText.trim();
+        if (!payload) return true;
+
+        try {
+            const json = JSON.parse(payload);
+            emitDelta(extractDelta(json));
+            return true;
+        } catch {
+            // 非 JSON 数据：若像普通文本流，直接当增量输出
+            if (!payload.startsWith('{') && !payload.startsWith('[')) {
+                emitDelta(payload);
+                return true;
+            }
+            return false;
+        }
+    };
+
+    const 处理事件块 = (eventBlock: string) => {
+        if (!eventBlock.trim()) return;
+        const lines = eventBlock.split(/\r?\n/);
+        const dataLines: string[] = [];
 
         for (const rawLine of lines) {
             const line = rawLine.trim();
+            if (!line) continue;
+            if (line.startsWith(':')) continue;
             if (!line.startsWith('data:')) continue;
             sawSseFrame = true;
-            const payload = line.slice(5).trim();
-            if (!payload) continue;
-            if (payload === '[DONE]') {
-                doneSignal = true;
-                break;
-            }
-
-            try {
-                const json = JSON.parse(payload);
-                const deltaContent = extractDelta(json);
-                if (deltaContent) {
-                    accumulated += deltaContent;
-                    onDelta?.(deltaContent, accumulated);
-                }
-            } catch {
-                // 忽略碎片化或非JSON帧
-            }
+            dataLines.push(line.slice(5).trim());
         }
-    }
 
-    if (buffer.trim()) {
-        const lines = buffer.split('\n').map(l => l.trim()).filter(Boolean);
-        for (const line of lines) {
-            if (!line.startsWith('data:')) continue;
-            sawSseFrame = true;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === '[DONE]') continue;
-            try {
-                const json = JSON.parse(payload);
-                const deltaContent = extractDelta(json);
-                if (deltaContent) {
-                    accumulated += deltaContent;
-                    onDelta?.(deltaContent, accumulated);
-                }
-            } catch {
-                // ignore malformed tail chunk
-            }
+        if (dataLines.length === 0) return;
+        const payload = dataLines.join('\n').trim();
+        if (!payload) return;
+        if (payload === '[DONE]') {
+            doneSignal = true;
+            return;
+        }
+
+        const joinedPayload = pendingJsonPayload
+            ? `${pendingJsonPayload}${payload}`
+            : payload;
+        if (尝试解析JSON并提取(joinedPayload)) {
+            pendingJsonPayload = '';
+            return;
+        }
+        pendingJsonPayload = joinedPayload;
+    };
+
+    const 刷新事件缓冲 = (flushAll: boolean) => {
+        const normalized = rawBuffer.replace(/\r\n/g, '\n');
+        const blocks = normalized.split('\n\n');
+        let tail = '';
+        if (!flushAll) {
+            rawBuffer = blocks.pop() || '';
+        } else {
+            tail = blocks.pop() || '';
+            rawBuffer = '';
+        }
+        for (const block of blocks) {
+            处理事件块(block);
+            if (doneSignal) break;
+        }
+        if (flushAll && tail.trim()) {
+            处理事件块(tail);
+        }
+    };
+
+    try {
+        while (!doneSignal) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            const chunkText = decoder.decode(value, { stream: true });
+            rawStreamText += chunkText;
+            rawBuffer += chunkText;
+            刷新事件缓冲(false);
+        }
+
+        const tail = decoder.decode();
+        if (tail) {
+            rawStreamText += tail;
+            rawBuffer += tail;
+        }
+        刷新事件缓冲(true);
+
+        if (pendingJsonPayload) {
+            尝试解析JSON并提取(pendingJsonPayload);
+            pendingJsonPayload = '';
+        }
+
+        if (typeof extractDelta.finalize === 'function') {
+            const tailDelta = extractDelta.finalize();
+            emitDelta(tailDelta);
+        }
+    } finally {
+        try {
+            reader.releaseLock();
+        } catch {
+            // ignore release errors
         }
     }
 
     if (!sawSseFrame) {
         const plainPayload = rawStreamText.trim();
         if (plainPayload) {
-            accumulated = plainPayload;
-            onDelta?.(plainPayload, accumulated);
+            emitDelta(plainPayload);
         }
     }
 
@@ -502,6 +589,297 @@ const 解析可能是JSON字符串 = (text: string): any | null => {
     } catch {
         return null;
     }
+};
+
+const 转义正则片段 = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const 提取标签内容列表 = (
+    text: string,
+    tag: string,
+    options?: { 兼容错误闭合?: boolean }
+): string[] => {
+    if (!text || !tag) return [];
+    const escapedTag = 转义正则片段(tag);
+    const closeTag = options?.兼容错误闭合
+        ? `(?:</${escapedTag}>|<${escapedTag}>)`
+        : `</${escapedTag}>`;
+    const regex = new RegExp(`<${escapedTag}>\\s*([\\s\\S]*?)\\s*${closeTag}`, 'gi');
+    const list: string[] = [];
+    let match: RegExpExecArray | null = null;
+    while ((match = regex.exec(text)) !== null) {
+        const payload = (match[1] || '').trim();
+        if (payload) list.push(payload);
+    }
+    return list;
+};
+
+const 提取首个标签内容 = (
+    text: string,
+    tag: string,
+    options?: { 兼容错误闭合?: boolean }
+): string => {
+    const list = 提取标签内容列表(text, tag, options);
+    return list[0] || '';
+};
+
+const 规范化日志发送者 = (senderRaw: string): string => {
+    const sender = (senderRaw || '').trim();
+    if (!sender) return '旁白';
+    if (sender === '判定' || sender === '【判定】') return '【判定】';
+    if (sender === 'NSFW判定' || sender === '【NSFW判定】') return '【NSFW判定】';
+    return sender;
+};
+
+const 解析正文日志 = (body: string): Array<{ sender: string; text: string }> => {
+    if (!body || !body.trim()) return [];
+    const lines = body.replace(/\r\n/g, '\n').split('\n');
+    const logs: Array<{ sender: string; text: string }> = [];
+    let current: { sender: string; text: string } | null = null;
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        const match = line.match(/^【\s*([^】]+?)\s*】\s*(.*)$/);
+        if (match) {
+            const sender = 规范化日志发送者(match[1]);
+            const text = (match[2] || '').trim();
+            current = { sender, text };
+            logs.push(current);
+            continue;
+        }
+
+        if (current) {
+            current.text = `${current.text}\n${line}`.trim();
+            continue;
+        }
+
+        current = { sender: '旁白', text: line };
+        logs.push(current);
+    }
+
+    return logs.filter(item => item.text.trim().length > 0);
+};
+
+const 解析命令值 = (rawValue: string | undefined): any => {
+    const text = (rawValue || '').trim();
+    if (!text) return null;
+
+    if (
+        (text.startsWith('"') && text.endsWith('"'))
+        || (text.startsWith("'") && text.endsWith("'"))
+    ) {
+        return text.slice(1, -1);
+    }
+
+    if (/^(true|false)$/i.test(text)) {
+        return text.toLowerCase() === 'true';
+    }
+    if (/^null$/i.test(text)) {
+        return null;
+    }
+    if (/^[+\-]?\d+(?:\.\d+)?$/.test(text)) {
+        const num = Number(text);
+        if (Number.isFinite(num)) return num;
+    }
+
+    const parsed = parseJsonWithRepair<any>(text);
+    if (parsed.value !== null) return parsed.value;
+    return text;
+};
+
+const 标准化命令对象 = (raw: any): { action: 'add' | 'set' | 'push' | 'delete'; key: string; value: any } | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const actionRaw = typeof raw.action === 'string' ? raw.action.trim().toLowerCase() : '';
+    if (actionRaw !== 'add' && actionRaw !== 'set' && actionRaw !== 'push' && actionRaw !== 'delete') {
+        return null;
+    }
+    const key = typeof raw.key === 'string' ? raw.key.trim() : '';
+    if (!key) return null;
+    const value = raw.value === undefined ? null : raw.value;
+    return {
+        action: actionRaw,
+        key,
+        value
+    };
+};
+
+const 解析命令块 = (commandBlock: string): Array<{ action: 'add' | 'set' | 'push' | 'delete'; key: string; value: any }> => {
+    const text = (commandBlock || '').trim();
+    if (!text) return [];
+    if (text === '无' || text.toLowerCase() === 'none') return [];
+
+    const parsed = parseJsonWithRepair<any>(text);
+    if (parsed.value !== null) {
+        if (Array.isArray(parsed.value)) {
+            return parsed.value
+                .map(标准化命令对象)
+                .filter((item): item is { action: 'add' | 'set' | 'push' | 'delete'; key: string; value: any } => Boolean(item));
+        }
+        if (parsed.value && Array.isArray(parsed.value.tavern_commands)) {
+            return parsed.value.tavern_commands
+                .map(标准化命令对象)
+                .filter((item): item is { action: 'add' | 'set' | 'push' | 'delete'; key: string; value: any } => Boolean(item));
+        }
+    }
+
+    const lines = text
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .filter(line => !line.startsWith('```'));
+    const commands: Array<{ action: 'add' | 'set' | 'push' | 'delete'; key: string; value: any }> = [];
+
+    for (const line of lines) {
+        const normalized = line.replace(/^[\-*]\s+/, '').trim();
+        const match = normalized.match(/^(add|set|push|delete)\s+([^\s=]+)(?:\s*(?:=\s*|\s+)([\s\S]+))?$/i);
+        if (!match) continue;
+        const action = match[1].toLowerCase() as 'add' | 'set' | 'push' | 'delete';
+        const key = (match[2] || '').trim();
+        if (!key) continue;
+        const value = action === 'delete' ? null : 解析命令值(match[3]);
+        commands.push({ action, key, value });
+    }
+
+    return commands;
+};
+
+const 解析行动选项块 = (optionsBlock: string): string[] => {
+    const text = (optionsBlock || '').trim();
+    if (!text) return [];
+    return text
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => line.replace(/^[-*]\s*/, '').replace(/^\d+\.\s*/, '').trim())
+        .filter(Boolean);
+};
+
+const 解析标签协议响应 = (content: string): GameResponse | null => {
+    const text = (content || '').trim();
+    if (!text) return null;
+
+    const thinkingParts = 提取标签内容列表(text, 'thinking');
+    const bodyBlock = 提取首个标签内容(text, '正文');
+    const shortTerm = 提取首个标签内容(text, '短期记忆', { 兼容错误闭合: true });
+    const commandBlock = 提取首个标签内容(text, '命令');
+    const actionOptionsBlock = 提取首个标签内容(text, '行动选项');
+
+    let logs = 解析正文日志(bodyBlock || '');
+    if (logs.length === 0) {
+        const stripped = text.replace(/<[^>]+>/g, '\n');
+        if (/【[^】]+】/.test(stripped)) {
+            logs = 解析正文日志(stripped);
+        }
+    }
+    const commands = 解析命令块(commandBlock);
+    const actionOptions = 解析行动选项块(actionOptionsBlock);
+    const thinking = thinkingParts.map(item => item.trim()).filter(Boolean).join('\n\n');
+
+    if (logs.length === 0) {
+        return null;
+    }
+
+    return {
+        thinking_pre: thinking ? `<thinking>${thinking}</thinking>` : undefined,
+        logs,
+        tavern_commands: commands.length > 0 ? commands : undefined,
+        shortTerm: shortTerm || undefined,
+        action_options: actionOptions.length > 0 ? actionOptions : undefined
+    };
+};
+
+const 归一化JSON结构响应 = (raw: any): GameResponse => {
+    const logs = Array.isArray(raw?.logs)
+        ? raw.logs
+            .map((item: any) => {
+                if (typeof item === 'string') {
+                    return { sender: '旁白', text: item };
+                }
+                if (item && typeof item === 'object') {
+                    return {
+                        sender: typeof item.sender === 'string' ? item.sender : '旁白',
+                        text: typeof item.text === 'string' ? item.text : String(item.text ?? '')
+                    };
+                }
+                return null;
+            })
+            .filter((item: any) => item && item.text.trim().length > 0)
+        : [];
+
+    const thinkingFieldKeys = [
+        't_input',
+        't_plan',
+        't_state',
+        't_branch',
+        't_precheck',
+        't_logcheck',
+        't_var',
+        't_npc',
+        't_cmd',
+        't_audit',
+        't_fix',
+        't_mem',
+        't_opts'
+    ] as const;
+    const normalizedThinkingFields = Object.fromEntries(
+        thinkingFieldKeys
+            .filter((key) => typeof raw?.[key] === 'string' && raw[key].trim().length > 0)
+            .map((key) => [key, raw[key]])
+    ) as Partial<GameResponse>;
+
+    return {
+        thinking_pre: typeof raw?.thinking_pre === 'string' ? raw.thinking_pre : undefined,
+        logs,
+        ...normalizedThinkingFields,
+        thinking_post: typeof raw?.thinking_post === 'string' ? raw.thinking_post : undefined,
+        tavern_commands: Array.isArray(raw?.tavern_commands) ? raw.tavern_commands : undefined,
+        shortTerm: typeof raw?.shortTerm === 'string' ? raw.shortTerm : undefined,
+        action_options: Array.isArray(raw?.action_options)
+            ? raw.action_options
+                .map((item: any) => {
+                    if (typeof item === 'string') return item.trim();
+                    if (typeof item === 'number' || typeof item === 'boolean') return String(item);
+                    if (item && typeof item === 'object') {
+                        const candidate = item.text ?? item.label ?? item.action ?? item.name ?? item.id;
+                        if (typeof candidate === 'string') return candidate.trim();
+                    }
+                    return '';
+                })
+                .filter((item: string) => item.trim().length > 0)
+            : undefined
+    };
+};
+
+export const parseStoryRawText = (content: string): GameResponse => {
+    const tagged = 解析标签协议响应(content);
+    if (tagged && tagged.logs.some(log => typeof log?.text === 'string' && log.text.trim().length > 0)) {
+        return tagged;
+    }
+
+    // 向后兼容：若模型仍返回 JSON，继续兼容解析。
+    const parsed = parseJsonWithRepair<any>(content);
+    if (parsed.value && typeof parsed.value === 'object') {
+        const normalized = 归一化JSON结构响应(parsed.value);
+        const hasRenderableLogs = normalized.logs.some((log) => (
+            typeof log?.text === 'string' && log.text.trim().length > 0
+        ));
+        if (hasRenderableLogs) {
+            return normalized;
+        }
+        const hasThinking = Object.keys(normalized).some((key) => {
+            const isThinkingField = key.startsWith('t_') || key === 'thinking_pre' || key === 'thinking_post';
+            return isThinkingField && typeof (normalized as any)[key] === 'string' && (normalized as any)[key].trim().length > 0;
+        });
+        const detail = hasThinking
+            ? '缺少 <正文> 有效内容（疑似响应截断）'
+            : '返回内容结构不完整（缺少 <正文> 或 logs）';
+        throw new StoryResponseParseError(detail, content, detail);
+    }
+    const detail = parsed.error || '返回内容结构不完整（未匹配标签协议，也无法解析 JSON）';
+    throw new StoryResponseParseError(detail, content, detail);
 };
 
 const 构建OpenAI候选端点 = (baseUrlRaw: string): string[] => {
@@ -724,7 +1102,7 @@ const 请求OpenAI家族文本 = async (
             return finalText;
         }
 
-        return 解析SSE文本(response, 提取OpenAI增量文本, streamOptions?.onDelta, 'Stream body is empty');
+        return 解析SSE文本(response, 创建OpenAI流增量提取器(), streamOptions?.onDelta, 'Stream body is empty');
     }
 
     throw new Error('API request failed after retries');
@@ -1040,11 +1418,14 @@ export const generateStoryResponse = async (
     const cotPseudoHistoryPrompt = typeof requestOptions?.cotPseudoHistoryPrompt === 'string'
         ? requestOptions.cotPseudoHistoryPrompt.trim()
         : 默认COT伪装历史消息提示词.trim();
-    const leadingAssistantPrompt = typeof requestOptions?.leadingAssistantPrompt === 'string'
-        ? requestOptions.leadingAssistantPrompt.trim()
+    const leadingSystemPrompt = typeof requestOptions?.leadingSystemPrompt === 'string'
+        ? requestOptions.leadingSystemPrompt.trim()
         : '';
     const styleAssistantPrompt = typeof requestOptions?.styleAssistantPrompt === 'string'
         ? requestOptions.styleAssistantPrompt.trim()
+        : '';
+    const outputProtocolPrompt = typeof requestOptions?.outputProtocolPrompt === 'string'
+        ? requestOptions.outputProtocolPrompt.trim()
         : '';
     const lengthRequirementPrompt = typeof requestOptions?.lengthRequirementPrompt === 'string'
         ? requestOptions.lengthRequirementPrompt.trim()
@@ -1060,15 +1441,19 @@ export const generateStoryResponse = async (
     if (normalizedContext) {
         apiMessages.push({ role: 'system', content: normalizedContext });
     }
-    // 伪装首条模型消息：作为 assistant 第一条注入内容。
-    if (leadingAssistantPrompt) {
-        apiMessages.push({ role: 'assistant', content: leadingAssistantPrompt });
+    // AI 角色身份声明改为 system 层注入。
+    if (leadingSystemPrompt) {
+        apiMessages.push({ role: 'system', content: leadingSystemPrompt });
     }
     if (lengthRequirementPrompt) {
         apiMessages.push({ role: 'user', content: lengthRequirementPrompt });
     }
     if (styleAssistantPrompt) {
         apiMessages.push({ role: 'assistant', content: styleAssistantPrompt });
+    }
+    // 最终输出协议作为系统层覆盖提示，优先级高于普通 assistant 注入。
+    if (outputProtocolPrompt) {
+        apiMessages.push({ role: 'system', content: outputProtocolPrompt });
     }
     // 免责声明输出要求作为 AI 角色消息，固定在额外要求提示词之前。
     if (disclaimerRequirementPrompt) {
@@ -1078,101 +1463,22 @@ export const generateStoryResponse = async (
     if (normalizedExtraPrompt) {
         apiMessages.push({ role: 'assistant', content: normalizedExtraPrompt });
     }
-    // 伪装COT历史消息固定放在用户输入前，最后一条消息始终保留为用户输入。
+
+    const normalizedPlayerInput = typeof playerInput === 'string' && playerInput.trim().length > 0
+        ? playerInput
+        : '开始任务。';
+    // 伪装COT历史消息改为放在 user:开始任务 之后。
     if (enableCotInjection && cotPseudoHistoryPrompt) {
+        apiMessages.push({ role: 'user', content: '开始任务。' });
         apiMessages.push({ role: 'assistant', content: cotPseudoHistoryPrompt });
     }
     apiMessages.push({
         role: 'user',
-        content: typeof playerInput === 'string' && playerInput.trim().length > 0 ? playerInput : '开始任务。'
+        content: normalizedPlayerInput
     });
 
-    const normalizeGameResponse = (raw: any): GameResponse => {
-        const logs = Array.isArray(raw?.logs)
-            ? raw.logs
-                .map((item: any) => {
-                    if (typeof item === 'string') {
-                        return { sender: '旁白', text: item };
-                    }
-                    if (item && typeof item === 'object') {
-                        return {
-                            sender: typeof item.sender === 'string' ? item.sender : '旁白',
-                            text: typeof item.text === 'string' ? item.text : String(item.text ?? '')
-                        };
-                    }
-                    return null;
-                })
-                .filter((item: any) => item && item.text.trim().length > 0)
-            : [];
-
-        const thinkingFieldKeys = [
-            't_input',
-            't_plan',
-            't_state',
-            't_branch',
-            't_precheck',
-            't_logcheck',
-            't_var',
-            't_npc',
-            't_cmd',
-            't_audit',
-            't_fix',
-            't_mem',
-            't_opts'
-        ] as const;
-        const normalizedThinkingFields = Object.fromEntries(
-            thinkingFieldKeys
-                .filter((key) => typeof raw?.[key] === 'string' && raw[key].trim().length > 0)
-                .map((key) => [key, raw[key]])
-        ) as Partial<GameResponse>;
-
-        return {
-            thinking_pre: typeof raw?.thinking_pre === 'string' ? raw.thinking_pre : undefined,
-            logs,
-            ...normalizedThinkingFields,
-            thinking_post: typeof raw?.thinking_post === 'string' ? raw.thinking_post : undefined,
-            tavern_commands: Array.isArray(raw?.tavern_commands) ? raw.tavern_commands : undefined,
-            shortTerm: typeof raw?.shortTerm === 'string' ? raw.shortTerm : undefined,
-            action_options: Array.isArray(raw?.action_options)
-                ? raw.action_options
-                    .map((item: any) => {
-                        if (typeof item === 'string') return item.trim();
-                        if (typeof item === 'number' || typeof item === 'boolean') return String(item);
-                        if (item && typeof item === 'object') {
-                            const candidate = item.text ?? item.label ?? item.action ?? item.name ?? item.id;
-                            if (typeof candidate === 'string') return candidate.trim();
-                        }
-                        return '';
-                    })
-                    .filter((item: string) => item.trim().length > 0)
-                : undefined
-        };
-    };
-
-    const parseJsonToGameResponse = (content: string): GameResponse => {
-        const parsed = parseJsonWithRepair<any>(content);
-        if (parsed.value && typeof parsed.value === 'object') {
-            const normalized = normalizeGameResponse(parsed.value);
-            const hasRenderableLogs = normalized.logs.some((log) => (
-                typeof log?.text === 'string' && log.text.trim().length > 0
-            ));
-            if (hasRenderableLogs) {
-                return normalized;
-            }
-            const hasThinking = Object.keys(normalized).some((key) => {
-                const isThinkingField = key.startsWith('t_') || key === 'thinking_pre' || key === 'thinking_post';
-                return isThinkingField && typeof (normalized as any)[key] === 'string' && (normalized as any)[key].trim().length > 0;
-            });
-            const detail = hasThinking
-                ? '缺少 logs 正文（疑似响应截断）'
-                : '返回内容结构不完整';
-            throw new StoryResponseParseError(`返回内容非标准JSON（${detail}）`, content, detail);
-        }
-        const detail = parsed.error || '返回内容结构不完整';
-        throw new StoryResponseParseError(`返回内容非标准JSON（${detail}）`, content, detail);
-    };
-
-    const responseFormatJsonObject = 解析JSONMode开关(requestOptions?.jsonMode, apiConfig);
+    // 剧情主链路已切换到标签文本协议，不再请求 JSON mode。
+    const responseFormatJsonObject = false;
     const rawText = await 请求模型文本(apiConfig, apiMessages, {
         temperature: 0.7,
         signal,
@@ -1182,7 +1488,7 @@ export const generateStoryResponse = async (
     });
 
     return {
-        response: parseJsonToGameResponse(rawText),
+        response: parseStoryRawText(rawText),
         rawText
     };
 };

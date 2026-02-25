@@ -11,7 +11,7 @@ interface Props {
 const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [form, setForm] = useState<游戏设置结构>(settings);
     const [showSuccess, setShowSuccess] = useState(false);
-    const [openMenu, setOpenMenu] = useState<'perspective' | 'style' | 'ntl' | 'json' | null>(null);
+    const [openMenu, setOpenMenu] = useState<'perspective' | 'style' | 'ntl' | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
 
     const 叙事人称选项: Array<{ value: 游戏设置结构['叙事人称']; label: string }> = [
@@ -32,12 +32,6 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
         { value: '假乱伦', label: '假乱伦' },
         { value: '无限制', label: '无限制' }
     ];
-    const JSON模式选项: Array<{ value: 游戏设置结构['JSON模式']; label: string }> = [
-        { value: 'auto', label: '自动 (Auto)' },
-        { value: 'on', label: '开启 (On)' },
-        { value: 'off', label: '关闭 (Off)' }
-    ];
-
     useEffect(() => {
         setForm(settings);
     }, [settings]);
@@ -76,7 +70,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
     };
 
     const 渲染内置下拉 = (params: {
-        menuKey: 'perspective' | 'style' | 'ntl' | 'json';
+        menuKey: 'perspective' | 'style' | 'ntl';
         value: string;
         options: Array<{ value: string; label: string }>;
         onChange: (value: string) => void;
@@ -171,17 +165,6 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                     })}
                 </div>
 
-                <div className="space-y-2">
-                    <label className="text-sm text-wuxia-cyan font-bold">JSON mode（结构化输出）</label>
-                    {渲染内置下拉({
-                        menuKey: 'json',
-                        value: form.JSON模式,
-                        options: JSON模式选项,
-                        onChange: (value) => 实时应用更新({ JSON模式: value as 游戏设置结构['JSON模式'] })
-                    })}
-                    <div className="text-xs text-gray-400">自动：按模型支持情况启用 JSON mode；开启：强制使用；关闭：只靠提示词约束。</div>
-                </div>
-
                 <div className="space-y-2 md:col-span-2">
                     <label className="text-sm text-wuxia-cyan font-bold">剧情风格</label>
                     {渲染内置下拉({
@@ -210,7 +193,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                 <div className="flex items-center justify-between gap-4">
                     <div>
                         <div className="text-sm text-wuxia-cyan font-bold">行动选项功能</div>
-                        <div className="text-xs text-gray-400 mt-1">开启后，将在上下文注入“行动选项规范”，并要求输出 \`action_options\`。</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后，将在上下文注入“行动选项规范”，并要求输出 \`&lt;行动选项&gt;\` 标签。</div>
                     </div>
                     <ToggleSwitch
                         checked={form.启用行动选项 !== false}
@@ -238,7 +221,7 @@ const GameSettings: React.FC<Props> = ({ settings, onSave }) => {
                 <div className="flex items-center justify-between gap-4">
                     <div>
                         <div className="text-sm text-wuxia-cyan font-bold">COT伪装历史消息注入</div>
-                        <div className="text-xs text-gray-400 mt-1">开启后，会在本轮上下文末尾追加一条伪装历史消息（最后一条注入消息），用于强化思考段输出习惯。</div>
+                        <div className="text-xs text-gray-400 mt-1">开启后，会在 \`user:开始任务\` 之后注入一条伪装历史消息，用于强化思考段输出习惯。</div>
                     </div>
                     <ToggleSwitch
                         checked={form.启用COT伪装注入 !== false}

@@ -27,7 +27,16 @@ export const 默认COT伪装历史消息提示词 = `<think>
 </think>
 
 好的，已确认要求。
-将遵循当前要求结构化输出约束：仅输出单一合法 JSON 对象。
+将遵循当前要求结构化输出约束：仅输出标签协议文本（<thinking>/<正文>/<短期记忆>/<命令>...）。
+接下来我将按要求输出内容：`;
+
+export const 默认多重思考COT伪装历史消息提示词 = `<think>
+本轮思考结束
+</think>
+
+好的，已确认多重思考模式。
+后续将使用独立字段输出思考：
+t_input / t_plan / t_state / t_branch / t_precheck / t_logcheck / t_var / t_npc / t_cmd / t_audit / t_fix / t_mem / t_opts。
 接下来我将按要求输出内容：`;
 
 export const 默认短期转中期提示词 = '请根据上述短期记忆，总结出关键事件的时间、地点和结果，去除琐碎对话。';

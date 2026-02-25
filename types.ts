@@ -53,7 +53,7 @@ export interface 聊天记录结构 {
     content: string; // Keep for backward compat or user input
     structuredResponse?: GameResponse; // The parsed object for assistant
     timestamp: number;
-    rawJson?: string; // To support editing
+    rawJson?: string; // Raw model text for source view/edit
     gameTime?: string; // Added gameTime
 }
 

@@ -12,14 +12,19 @@ const 风格提示词映射: Record<剧情风格类型, string> = {
     一般: 剧情风格提示词_一般,
     修罗场: 剧情风格提示词_修罗场,
     纯爱: 剧情风格提示词_纯爱,
-    NTL后宫: 剧情风格提示词_NTL后宫_禁止乱伦
+    NTL后宫: 剧情风格提示词_NTL后宫_无限制
 };
 
 export const 获取剧情风格提示词 = (style: 剧情风格类型, ntlTier?: NTL后宫档位): string => {
     if (style === 'NTL后宫') {
         if (ntlTier === '假乱伦') return 剧情风格提示词_NTL后宫_假乱伦;
         if (ntlTier === '无限制') return 剧情风格提示词_NTL后宫_无限制;
-        return 剧情风格提示词_NTL后宫_禁止乱伦;
+        if (ntlTier === '禁止乱伦') return 剧情风格提示词_NTL后宫_禁止乱伦;
+        return 剧情风格提示词_NTL后宫_无限制;
     }
     return 风格提示词映射[style] || 风格提示词映射['一般'];
+};
+
+export const 构建剧情风格助手提示词 = (style: 剧情风格类型, ntlTier?: NTL后宫档位): string => {
+    return `【剧情风格偏好】\n${获取剧情风格提示词(style, ntlTier)}`;
 };
